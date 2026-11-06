@@ -10,6 +10,8 @@
 // 공용 헤더(SiteHeader)는 여기가 아니라 랜딩(LandingPage)과 app/(domains)/layout.tsx 가 각자 붙인다.
 // 랜딩은 헤더 아래 자체 푸터까지 갖는 한 장짜리 화면이라 구성이 달라서다.
 import type { Metadata, Viewport } from "next";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { cookies } from "next/headers";
 import Script from "next/script";
 // 폰트는 npm 패키지(@fontsource)에서 온다. next/font/google 은 next build 도중
@@ -53,6 +55,21 @@ async function locale(): Promise<string> {
   const store = await cookies();
   const v = store.get("lore_locale")?.value;
   return v === "en" || v === "ja" ? v : "ko";
+}
+
+// 헤더의 Piece Maker 탭을 잠시 숨기는 스위치. 서버의 표시 파일 하나로 켜고 끈다.
+// 파일이 있으면 숨기고, 지우면 다시 보인다. 재배포·재시작 없이 다음 페이지 요청부터 바뀐다.
+// 이 레이아웃은 쿠키를 읽어 이미 요청마다 그려지므로 확인 비용은 파일 존재 검사 한 번이다.
+// /piece-maker 주소 자체는 그대로 열린다. 헤더 입구만 감춘다.
+// 켜고 끄는 명령은 webtoon/tools/piece-maker-tab.sh 이다.
+const SITE_FLAGS_DIR = process.env.LORE_SITE_FLAGS_DIR || "/opt/lore/flags";
+
+function pieceMakerTabHidden(): boolean {
+  try {
+    return existsSync(path.join(SITE_FLAGS_DIR, "hide-piece-maker"));
+  } catch {
+    return false;
+  }
 }
 
 // 구글 광고 측정 태그(AW-XXXXXXXX). 환경변수가 있을 때만 로드한다 —
@@ -115,7 +132,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang={await locale()}>
+    <html lang={await locale()} data-hide-piece-maker={pieceMakerTabHidden() ? "" : undefined}>
       <body>
         {/* ★ 클래리티가 없으면 예전과 **같은 한 자리**에 gtag 묶음만 놓는다. 자리를 하나 더 만들면
             보이는 HTML 은 같아도 RSC 페이로드에 `$undefined` 가 한 칸 늘어 출력이 달라진다. */}

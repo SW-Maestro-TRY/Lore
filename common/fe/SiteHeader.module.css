@@ -54,6 +54,13 @@
   background: var(--surface-hover);
 }
 
+/* 발표 기간 등에 Piece Maker 탭만 감춘다. 루트 레이아웃(apps/web/app/layout.tsx)이
+   서버의 표시 파일을 보고 <html data-hide-piece-maker> 를 단다. 서버가 그린 HTML 에
+   이미 들어 있어서 탭이 떴다 사라지는 깜빡임이 없다. */
+:global(html[data-hide-piece-maker]) .navLink[href="/piece-maker"] {
+  display: none;
+}
+
 /* 현재 보고 있는 탭 */
 .navLinkActive {
   color: var(--text);
