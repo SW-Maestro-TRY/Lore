@@ -167,7 +167,8 @@ def normalize(raw: dict) -> dict:
         **({"play": True} if raw.get("play") is True else {}),
         **({"canon": canon} if canon else {}),
         **({"canon_end": canon_end} if canon and canon_end else {}),
-        **({"groups": groups} if canon and groups else {}),
+        **({"groups": [split_group(g)[0] for g in groups]} if canon and groups else {}),
+        **({"group_ends": ends} if canon and (ends := {n: e for n, e in map(split_group, groups) if e}) else {}),
         **({"co": co} if (co := normalize_co(raw.get("co"))) else {}),
     }
 
@@ -521,6 +522,12 @@ def one_input_block(char: dict) -> str:
 CANON_MARK = "[원래 전개]"
 CANON_END_MARK = "[원래 결말]"
 GROUPS_MARK = "[갈래]"
+
+
+def split_group(item: str) -> tuple[str, str]:
+    """「이름 | 그 갈래로 묶인 결말」 -> (이름, 결말). 서버가 갈래마다 대표 결말을 붙여 보낸다(#989). 없으면 (이름, "")."""
+    name, _, end = str(item or "").partition(" | ")
+    return name.strip(), end.strip()
 
 
 def split_canon(settings: str) -> tuple[str, list[str], str, list[str]]:
@@ -1608,7 +1615,7 @@ def branch_char(run_dir: Path, char: dict) -> dict:
         return char
     got = read_json(path) or {}
     out = dict(char)
-    for k in ("canon", "canon_end", "groups"):
+    for k in ("canon", "canon_end", "groups", "group_ends"):
         if got.get(k):
             out[k] = got[k]
     return out
@@ -1627,10 +1634,17 @@ def stage_branch(run_dir: Path, char: dict, direction: dict, dry_run: bool,
         return None
     end = char.get("canon_end") or ""
     groups = [g for g in (char.get("groups") or []) if g]
+    ends = char.get("group_ends") if isinstance(char.get("group_ends"), dict) else {}
     lines = ["[원래 전개]", canon_lines(canon)]
     if end:
         lines += ["", "[원래 결말 이름]", end]
-    lines += ["", "[이미 있는 갈래]", "\n".join(f"- {g}" for g in groups) if groups else "없음"]
+
+    def group_line(g: str) -> str:
+        name, ending = split_group(g)
+        ending = ending or str(ends.get(name) or "").strip()
+        return f"- {name} — 이 갈래로 묶인 만화의 결말: {ending}" if ending else f"- {name}"
+
+    lines += ["", "[이미 있는 갈래]", "\n".join(group_line(g) for g in groups) if groups else "없음"]
     lines += ["", "[주인공]", char.get("name") or "", "", "[캐릭터 설명]", char.get("description") or "",
               "", "[이번 이야기]", f"제목: {direction.get('title') or ''}",
               str(direction.get("body") or direction.get("raw") or "")]
