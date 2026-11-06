@@ -243,19 +243,23 @@ def reset_issues(read: list[dict], fixed_narration: bool = False) -> list[dict]:
     }]
 
 
-def cover_issues(cover, title: str, checked: dict | None = None) -> list[dict]:
+def cover_issues(cover, title: str, checked: dict | None = None, genre: str = "") -> list[dict]:
     """모델이 센 `cover` -> issues. **표지인가는 코드가 정한다**(covercheck.judge).
 
-    그리는 자리의 표지 검수(covercheck)와 같은 기준을 쓴다 — 거기서 다시 그릴
-    횟수를 다 쓰고도 표지 모양이 아니었거나, 검수가 꺼져 있었던 경우를 여기서
-    한 번 더 잡는다. 잡히면 1페이지를 다시 그리게 한다(JobRunner 의 재생성
+    그리는 자리의 표지 검수(covercheck)와 같은 기준을 쓴다. 표지 검수가 지금 그림을
+    이미 봤으면 그 결정(통과든, 다시 그릴 횟수를 다 쓰고 그대로 둔 것이든)을 따르고
+    여기서는 아무것도 더하지 않는다. 표지 검수가 꺼져 있어 판정이 없을 때만 여기서
+    잡는다. 잡히면 1페이지를 다시 그리게 한다(JobRunner 의 재생성
     루프가 `--page 1` 로 부른다).
     """
     if checked is not None:
-        # 표지 검수가 지금 이 그림을 이미 봤다 — 그 판정을 따른다.
-        found = checked.get("issues") or []
-    elif isinstance(cover, dict):
-        found = covercheck.judge(cover, title)
+        # 표지 검수가 지금 이 그림을 이미 봤다 — 그 판정을 따른다. 통과면 그대로, 걸렸는데 그림이
+        # 바뀌지 않았다면 표지 검수가 다시 그릴 횟수를 다 쓰고 「그대로 둔다」로 끝낸 것이다. 여기서
+        # 다시 그리게 하면 1페이지를 그릴 때마다 표지 검수가 또 돌아 같은 기준으로 또 걸린다 — 실제로
+        # 표지 하나를 여섯 번 그렸다(#992). 표지 검수가 내린 결정을 여기서 뒤집지 않는다.
+        return []
+    if isinstance(cover, dict):
+        found = covercheck.judge(cover, title, genre)
     else:
         return []
     if not found:
@@ -315,7 +319,7 @@ def repeat_issues(repeat, total: int) -> list[dict]:
     return out
 
 
-def parse(text: str, *, title: str = "", cover_attached: bool = True,
+def parse(text: str, *, title: str = "", genre: str = "", cover_attached: bool = True,
           cover_checked: dict | None = None, page_count: int = 0,
           fixed_narration: bool = False) -> dict:
     """검수 응답(JSON) -> 판정.
@@ -391,7 +395,7 @@ def parse(text: str, *, title: str = "", cover_attached: bool = True,
     issues += repeat_issues(obj.get("repeat"), len(read))
     issues += reset_issues(read, fixed_narration)
     if cover_attached:
-        issues += cover_issues(obj.get("cover"), title, cover_checked)
+        issues += cover_issues(obj.get("cover"), title, cover_checked, genre)
     if page_count:
         for one in issues:
             bad = [n for n in one["pages"] if not 1 <= n <= page_count]
@@ -477,7 +481,8 @@ def review_episode(run_dir: Path, dry_run: bool = False) -> tuple[dict | None, d
     meta["pages"] = len(images)
     try:
         scenes = (read_json(run_dir / "scenes.json") or {}).get("scenes") or []
-        review = parse(text, title=covercheck.title_of(run_dir), cover_attached=cover_attached,
+        review = parse(text, title=covercheck.title_of(run_dir), genre=covercheck.genre_of(run_dir),
+                       cover_attached=cover_attached,
                        cover_checked=covercheck.latest_review(run_dir),
                        page_count=len(pages_of(run_dir)),
                        fixed_narration=any(isinstance(sc, dict) and sc.get("narration") is not None
