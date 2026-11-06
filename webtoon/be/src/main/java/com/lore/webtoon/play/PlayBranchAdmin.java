@@ -139,7 +139,9 @@ public class PlayBranchAdmin {
             Map<String, Object> input = new LinkedHashMap<>();
             input.put("canon", canon);
             input.put("canon_end", PlayWorldService.text(event.get("canon_end"), 60));
-            input.put("groups", played.groupsOf(eventId));
+            Map<String, String> groupEnds = played.groupEndsOf(eventId);
+            input.put("groups", new ArrayList<>(groupEnds.keySet()));
+            input.put("group_ends", groupEnds);
             mapper.writeValue(dir.resolve("branch_input.json").toFile(), input);
             int code = harness.run(null, List.of("--run-id", runId, "--branch"), Map.of(),
                     line -> log.info("[갈림 정리 {}] {}", runId, line));
