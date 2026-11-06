@@ -854,6 +854,19 @@ public class PlayWorldService {
      * 새 만화를 그 갈래 가운데 하나로 넣거나 새 갈래를 짓는다(같은 선택끼리 화면에서 한 묶음으로 보인다).
      */
     static String withCanon(String situation, Map<?, ?> event, List<String> groups) {
+        Map<String, String> named = new LinkedHashMap<>();
+        for (String g : groups == null ? List.<String>of() : groups) {
+            named.put(g, "");
+        }
+        return withCanon(situation, event, named);
+    }
+
+    /**
+     * 위와 같고, 갈래마다 그 갈래로 묶인 만화의 결말 한 줄을 「- 이름 | 결말」로 붙인다(2026-11-07, #989). 이름만
+     * 넘기면 갈림 정리가 이름의 낱말만 보고 묶는다 — 「직접 정리한다」(가족을 직접 죽였다)에 가족과 함께 갇힌
+     * 만화가 들어간 일이 있었다. 원래 결말 이름에는 원래 전개의 마지막 줄을 붙인다.
+     */
+    static String withCanon(String situation, Map<?, ?> event, Map<String, String> groupEnds) {
         List<String> canon = canon(event.get("canon"));
         if (canon.isEmpty()) {
             return situation;
@@ -866,19 +879,25 @@ public class PlayWorldService {
         if (!end.isEmpty()) {
             s.append("\n[원래 결말] ").append(end);
         }
-        List<String> named = new ArrayList<>();
+        Map<String, String> named = new LinkedHashMap<>();
         if (!end.isEmpty()) {
-            named.add(end);
+            named.put(end, canon.get(canon.size() - 1));
         }
-        for (String g : groups) {
-            String t = text(g, 60);
-            if (!t.isEmpty() && !named.contains(t)) {
-                named.add(t);
+        for (Map.Entry<String, String> g : (groupEnds == null ? Map.<String, String>of() : groupEnds).entrySet()) {
+            String t = oneLine(text(g.getKey(), 60));
+            if (!t.isEmpty() && !named.containsKey(t)) {
+                named.put(t, g.getValue() == null ? "" : g.getValue());
             }
         }
         if (!named.isEmpty()) {
             s.append("\n[갈래]");
-            named.forEach(g -> s.append("\n- ").append(g));
+            named.forEach((g, ending) -> {
+                String e = oneLine(text(ending, 200));
+                s.append("\n- ").append(g);
+                if (!e.isEmpty()) {
+                    s.append(" | ").append(e);
+                }
+            });
         }
         return s.toString();
     }
@@ -1166,6 +1185,11 @@ public class PlayWorldService {
                 to.put(k, k.equals(name) ? s : text(s, 600));
             }
         }
+    }
+
+    /** 갈래 줄 한 줄에 담는다 — 줄바꿈과 구분자(|)를 뺀다. */
+    private static String oneLine(String s) {
+        return s.replaceAll("[\\r\\n|]+", " ").replaceAll(" {2,}", " ").trim();
     }
 
     static String text(Object value, int max) {

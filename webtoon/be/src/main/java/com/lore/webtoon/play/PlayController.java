@@ -197,7 +197,7 @@ public class PlayController {
         String situation = !edited && catalog.world(form.worldId()) != null
                 ? catalogSituation(world, event, name)
                 : PlayWorldService.situation(event, Map.of());
-        situation = PlayWorldService.withCanon(situation, event, played.groupsOf(form.eventId()));
+        situation = PlayWorldService.withCanon(situation, event, played.groupEndsOf(form.eventId()));
         ResponseEntity<Map<String, Object>> started = jobs.createPlay(request, new JobService.CreateRequest(
                 name, null, (String) world.get("genre"), null, form.style(), null, null, null,
                 form.agreeIp(), false, form.uid(), form.characterId(), null, form.quality(), form.language(),
