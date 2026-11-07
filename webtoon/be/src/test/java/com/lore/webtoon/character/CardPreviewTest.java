@@ -43,6 +43,7 @@ class CardPreviewTest {
     @MockitoBean JwtProvider jwtProvider;
     @MockitoBean GuestGate guests;
     @MockitoBean CharacterTrash characterTrash;
+    @MockitoBean ZzalCharacterImport zzalImport;
 
     private WebtoonCharacter card(String artUrl) {
         WebtoonCharacter one = mock(WebtoonCharacter.class);
