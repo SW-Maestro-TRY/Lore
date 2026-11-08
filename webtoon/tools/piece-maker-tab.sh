@@ -40,8 +40,9 @@ OUT=$($AWS ssm get-command-invocation --command-id "$CMD" --instance-id "$INSTAN
   --query "[Status,StandardOutputContent,StandardErrorContent]" --output text)
 echo "서버($ENV_NAME): $OUT"
 
-# 실제 사이트가 그린 HTML 로 한 번 더 본다.
-if curl -s --max-time 15 "$HOST/" | grep -q 'data-hide-piece-maker'; then
+# 실제 사이트가 그린 HTML 로 한 번 더 본다. <html> 태그만 본다 — 탭이 보일 때도 페이지 데이터에
+# "data-hide-piece-maker":"$undefined" 글자가 실려 있어서 전체를 grep 하면 늘 숨김으로 읽힌다.
+if curl -s --max-time 15 "$HOST/" | grep -o '<html[^>]*>' | head -1 | grep -q 'data-hide-piece-maker'; then
   echo "사이트($HOST): Piece Maker 탭 숨김"
 else
   echo "사이트($HOST): Piece Maker 탭 보임"
