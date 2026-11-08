@@ -100,6 +100,9 @@ story.CHARSHEET_RATIOS.setdefault(PAGE_KIND, canvas_for("gemini"))
 #   **아무도 모르는 채 한 달 가까이 high 로 돌며 편당 원가가 2.2배**가 됐다.
 #   `llm.py` 의 DEFAULT_PROVIDER 도 같은 사고를 겪고 같은 처방을 했다.
 DEFAULT_IMAGE_QUALITY = "medium"
+# 시트(주인공·조연)는 모드와 상관없이 이 화질. backend_for 참고.
+SHEET_STAGES = ("SHEET_IMAGE", "CAST_SHEET_IMAGE")
+SHEET_IMAGE_QUALITY = "medium"
 
 
 def backend_for(stage: str) -> tuple[str, str, str]:
@@ -109,8 +112,13 @@ def backend_for(stage: str) -> tuple[str, str, str]:
     if not ok:
         raise SystemExit(why)
     model = llm.model_for(stage, provider) or default_model
-    quality = (llm.env("OPENAI_IMAGE_QUALITY")
-               or DEFAULT_IMAGE_QUALITY).strip().lower()
+    if stage.upper() in SHEET_STAGES:
+        # 시트는 참조용이라 사람이 고른 화질(파도·너울)을 따르지 않는다 — 어느 모드든 medium.
+        # 바꾸려면 SHEET_IMAGE_QUALITY 하나만(2026-11-08, 시트 실험 뒤).
+        quality = (llm.env("SHEET_IMAGE_QUALITY") or SHEET_IMAGE_QUALITY).strip().lower()
+    else:
+        quality = (llm.env("OPENAI_IMAGE_QUALITY")
+                   or DEFAULT_IMAGE_QUALITY).strip().lower()
     return provider, model, quality
 
 

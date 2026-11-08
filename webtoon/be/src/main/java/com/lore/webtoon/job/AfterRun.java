@@ -99,9 +99,24 @@ public class AfterRun {
             if (characterId.isBlank()) {
                 return;
             }
-            characters.adoptSheetArt(characterId, runsDir.resolve(runId).resolve("sheet.png"));
+            Path runDir = runsDir.resolve(runId);
+            characters.adoptSheetArt(characterId, runDir.resolve("sheet.png"));
+            // 같은 캐릭터의 다음 작품이 시트를 다시 안 그리게(2026-11-08). 체험은 옷이 세계에 맞춰 바뀐 시트라 뺀다.
+            characters.keepSheet(characterId, runDir.resolve("sheet.png"), runDir.resolve("sheet_spec.json"),
+                    isPlay(runDir));
         } catch (Exception e) {                     // noqa: 카드 그림은 덤이다 — 작품을 실패로 만들지 않는다
             log.warn("캐릭터 카드 그림을 못 채웠습니다 (run={})", runId, e);
+        }
+    }
+
+    /** 세계관 체험 작업인가 — run 의 input.json(play=true). 못 읽으면 아니다. JobRunner.isPlay 와 같다. */
+    static boolean isPlay(Path runDir) {
+        Path file = runDir.resolve("input.json");
+        try {
+            return java.nio.file.Files.isRegularFile(file)
+                    && new com.fasterxml.jackson.databind.ObjectMapper().readTree(file.toFile()).path("play").asBoolean(false);
+        } catch (Exception e) {
+            return false;
         }
     }
 

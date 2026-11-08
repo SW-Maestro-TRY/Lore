@@ -52,7 +52,7 @@ class JobResumeTest {
         when(harness.runsDir()).thenReturn(runs);
         runner = new JobRunner(harness, mock(JobProgress.class), store,
                 mock(StoryStore.class), mock(AfterRun.class), mock(WorkLedger.class),
-                credits, mock(GuestGate.class), mock(JobNotice.class),
+                credits, mock(GuestGate.class), mock(JobNotice.class), mock(com.lore.webtoon.character.CharacterService.class),
                 1, 1, jobs.toString());
     }
 

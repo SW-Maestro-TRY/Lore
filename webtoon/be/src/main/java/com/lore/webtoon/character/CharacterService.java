@@ -295,6 +295,68 @@ public class CharacterService {
     }
 
     /**
+     * 다 만들어진 작품의 캐릭터 시트를 캐릭터에 기억해 둔다(2026-11-08) — 같은 캐릭터의 다음 작품은
+     * {@link #seedSheet} 로 가져다 쓰고 시트 단계(사양 + 그림)를 건너뛴다. 세계관 체험(play)은 옷을 그 세계에
+     * 맞게 바꾼 시트라 기억하지 않는다. 이미 기억한 시트가 있으면 그대로 둔다(첫 시트가 기준이다).
+     * 작품은 이미 다 만들어진 뒤라 여기서 죽지 않는다.
+     */
+    @Transactional
+    public void keepSheet(String characterPublicId, Path sheetPng, Path specJson, boolean play) {
+        if (play || characterPublicId == null || characterPublicId.isBlank()
+                || sheetPng == null || !Files.isRegularFile(sheetPng)) {
+            return;
+        }
+        WebtoonCharacter one = characters.findByPublicId(characterPublicId).orElse(null);
+        if (one == null || one.hasSheet()) {
+            return;
+        }
+        try {
+            String key = art.upload(Files.readAllBytes(sheetPng), "image/png", false);
+            if (key == null) {
+                return;
+            }
+            String spec = specJson != null && Files.isRegularFile(specJson) ? Files.readString(specJson) : null;
+            one.keepSheet(key, spec, "work", Instant.now(clock));
+            characters.save(one);
+            log.info("캐릭터 시트를 기억했습니다 (character={})", characterPublicId);
+        } catch (Exception e) {                     // noqa: 시트 기억은 덤이다 — 작품을 실패로 만들지 않는다
+            log.warn("캐릭터 시트를 못 기억했습니다 (character={})", characterPublicId, e);
+        }
+    }
+
+    /**
+     * 기억해 둔 시트를 새 작품의 run 폴더에 심는다(sheet.png · sheet_spec.json). 하네스는 둘이 있으면
+     * 사양도 그림도 다시 만들지 않는다(run.py _sheet_attempt 의 「이미 있습니다」). 세계관 체험(play)은
+     * 옷을 세계에 맞게 새로 그려야 하므로 심지 않는다. 심었으면 참.
+     */
+    @Transactional(readOnly = true)
+    public boolean seedSheet(String characterPublicId, boolean play, Path runDir) {
+        if (play || characterPublicId == null || characterPublicId.isBlank() || runDir == null) {
+            return false;
+        }
+        WebtoonCharacter one = characters.findByPublicId(characterPublicId).orElse(null);
+        if (one == null || !one.hasSheet()) {
+            return false;
+        }
+        try {
+            byte[] png = art.read(one.getSheetKey());
+            if (png == null || png.length == 0) {
+                return false;
+            }
+            Files.createDirectories(runDir);
+            Files.write(runDir.resolve("sheet.png"), png);
+            if (one.getSheetSpec() != null && !one.getSheetSpec().isBlank()) {
+                Files.writeString(runDir.resolve("sheet_spec.json"), one.getSheetSpec());
+            }
+            log.info("기억해 둔 캐릭터 시트를 심었습니다 (character={}, run={})", characterPublicId, runDir.getFileName());
+            return true;
+        } catch (Exception e) {                     // noqa: 못 심으면 하네스가 새로 그린다 — 예전과 같다
+            log.warn("기억해 둔 캐릭터 시트를 못 심었습니다 (character={})", characterPublicId, e);
+            return false;
+        }
+    }
+
+    /**
      * 그림 없이 저장한 캐릭터({@link WebtoonCharacter#described})에 첫 작품의 캐릭터 시트를 카드 그림으로
      * 넣는다(2026-10-27). 이미 그림이 있으면 아무것도 안 한다. 작품은 이미 다 만들어진 뒤라 여기서 죽지 않는다.
      */

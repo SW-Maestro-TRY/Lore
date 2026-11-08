@@ -2298,11 +2298,36 @@ def _sheet_with_retry(run_dir: Path, char: dict, paths: dict, attempt) -> None:
             raise SystemExit(f"{label}가 두 번 연속 안전 검사에 걸렸습니다({', '.join(cats)})") from exc
 
 
+def play_outfit_lines(char: dict) -> list[str]:
+    """세계관 체험(play)의 시트 — 옷은 그 세계에 맞게, 신원은 사진 그대로.
+
+    사진 속 옷을 그대로 옮기는 것이 시트의 원칙이지만, 체험은 다른 세계의 사건에 내 캐릭터를 넣는 것이라
+    로판 예복을 입은 채 방공호에 서 있게 된다(2026-11-08 실험: 이 블록 한 줄로 옷만 바뀌고 얼굴·머리·점은
+    유지됐다). 빙의물처럼 옷을 지켜야 하는 세계는 세계 설정에 「옷차림은 그대로」라고 적으면 그 말을 따른다.
+    """
+    if not char.get("play"):
+        return []
+    book = {}
+    lore = char.get("lorebook")
+    if isinstance(lore, dict):
+        books = lore.get("books") or []
+        book = books[0] if books and isinstance(books[0], dict) else lore
+    world = str(book.get("name") or "").strip()
+    fixed = str(book.get("fixed_settings") or "").strip()
+    lines = ["", "## 옷차림 — 이 세계에 맞게",
+             "이 캐릭터는 자기 세계가 아니라 아래 세계의 사건에 들어간다. 사진·설명 속 옷차림이 이 세계와 맞지 않으면 "
+             "옷·장신구·소지품은 이 세계의 사람에게 어울리게 바꾼다. 얼굴·머리(색·길이·모양)·눈·피부·체형·점·흉터 같은 "
+             "신원 특징은 사진 그대로 지킨다. 세계 설정에 「옷차림은 그대로」 같은 말이 있으면 바꾸지 않는다."]
+    if world or fixed:
+        lines.append(f"세계: {world} — {fixed}" if world and fixed else (world or fixed))
+    return lines
+
+
 def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, spec_only: bool,
                    note: str, safety: str, paths: dict | None = None) -> None:
     paths = paths or sheet_paths(run_dir)
     photos = char["photos"]
-    block = input_block(char)
+    block = input_block(char) + "\n".join(play_outfit_lines(char))
     note = (note or "").strip()
     if note:
         # 다시 만들기에서 남긴 한 번짜리 요청 — character.json 을 고치지 않고
