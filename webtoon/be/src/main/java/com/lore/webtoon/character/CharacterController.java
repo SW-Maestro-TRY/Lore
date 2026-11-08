@@ -55,15 +55,55 @@ public class CharacterController {
     private final Admins admins;
     private final GuestGate guests;
     private final CharacterTrash trash;
+    private final ZzalCharacterImport zzal;
 
     public CharacterController(CharacterService characters, CharacterOwner who, ShareReward shareReward,
-                               Admins admins, GuestGate guests, CharacterTrash trash) {
+                               Admins admins, GuestGate guests, CharacterTrash trash, ZzalCharacterImport zzal) {
         this.characters = characters;
         this.who = who;
         this.shareReward = shareReward;
         this.admins = admins;
         this.guests = guests;
         this.trash = trash;
+        this.zzal = zzal;
+    }
+
+    @Operation(summary = "짤 캐릭터 목록", description = """
+            짤(키우기)에서 부화를 마친 내 캐릭터. 가져오기 창이 고를 목록이다. 로그인 안 했으면 빈 목록.
+            image_url 은 사용자가 올린 원본 그림, sheet_url 은 짤이 만든 캐릭터 시트다.
+            description 은 가져오면 웹툰 캐릭터 설정이 될 글이다. 짤 캐릭터의 상태는 바꾸지 않는다.""")
+    @GetMapping("/zzal")
+    public Map<String, Object> zzalCharacters() {
+        Long me = CreditGate.currentUser();
+        List<Map<String, Object>> out = zzal.mine(me).stream().map(p -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("pet_id", p.petId());
+            m.put("name", p.name());
+            m.put("description", p.description());
+            m.put("image_url", zzal.previewUrl(p.imageKey()));
+            m.put("sheet_url", zzal.previewUrl(p.sheetKey()));
+            return m;
+        }).toList();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("characters", out);
+        body.put("logged_in", me != null);
+        return body;
+    }
+
+    /** 짤 캐릭터 가져오기 본문. image 는 "sheet"(캐릭터 시트) 또는 그 밖(원본 그림). */
+    public record ZzalImportRequest(String image) { }
+
+    @Operation(summary = "짤 캐릭터 가져오기", description = """
+            짤 캐릭터의 이름·설정과 그림 한 장(원본 그림 또는 캐릭터 시트)으로 웹툰 내 캐릭터를 만든다.
+            원본 등록과 같은 종류라 AI 호출·크레딧 차감이 없다. 로그인이 필요하다.""")
+    @PostMapping("/zzal/{petId}")
+    public Map<String, Object> importZzal(@PathVariable long petId,
+            @RequestBody(required = false) ZzalImportRequest form,
+            @RequestHeader(value = UID_HEADER, required = false) String uid) {
+        Long me = CreditGate.currentUser();
+        boolean sheet = form != null && "sheet".equals(form.image());
+        WebtoonCharacter made = zzal.importOne(me, petId, sheet);
+        return view(made, me, who.uidsOf(me, uid));
     }
 
     @Operation(summary = "캐릭터 휴지통", description = """
