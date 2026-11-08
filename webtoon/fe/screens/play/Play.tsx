@@ -6,7 +6,7 @@ import { cancelJob, thumbUrl, eventPlayRuns, type PlayRunCard, listCharacters, r
 import { useAuth } from "@common/auth/useAuth";
 import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
-import { IconClose, IconComment, IconDownload, IconEdit, IconHeart, IconPlus, IconShare, IconZoom } from "../../ui/Icons";
+import { IconClose, IconComment, IconDownload, IconEdit, IconHeart, IconPlus, IconShare, IconZoom, IconLock } from "../../ui/Icons";
 import QualitySampleZoom from "../../ui/QualitySampleZoom";
 import InstallInvite from "../../ui/InstallInvite";
 import CreditShort, { isCreditShort } from "../../ui/CreditShort";
@@ -56,6 +56,7 @@ function CastView({ p, onClose }: { p: PlayPerson; onClose: () => void }) {
           <b>{t(p.name)}</b>
           {p.role && <em>{t(p.role)}</em>}
           {p.desc && <p>{t(p.desc)}</p>}
+          {p.secret && <p className="pl-secret"><IconLock />{p.secret}</p>}
         </div>
       </div>
     </div>
@@ -115,6 +116,7 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
           <div className="tx">
             <div className="t">{t(w.name)}</div>
             <p>{t(w.one)}</p>
+            {w.secret && <p className="pl-secret"><IconLock />{w.secret}</p>}
           </div>
           {w.cast.length > 0 && (
             <div className="who">
@@ -269,6 +271,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
             <div className="l">
               <div className="meta"><b>{t(w.name)}</b>{e.place && <> · {t(e.place)}</>}</div>
               <p className="sit">{t(e.situation)}</p>
+              {e.secret && <p className="pl-secret"><IconLock />{e.secret}</p>}
               {castBlock && <div className="cast-l">{castBlock}</div>}
               <div className="mine-m">{mine}</div>
               {stories && <div className="stories-m">{stories}</div>}
