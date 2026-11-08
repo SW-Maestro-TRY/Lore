@@ -10,7 +10,7 @@ export interface PlayPerson { id?: string; name: string; role?: string; desc?: s
 export interface PlayWorld { id: string; name: string; genre: string; one: string; cover_url: string | null; spot: string; cast: PlayPerson[]; events: PlayEvent[]; examples?: string[]; mine?: boolean; rule?: string; secret?: string }
 
 /* 세계관 만들기의 글 — 저장 API(POST /play/worlds)에 그대로 보낸다 */
-/* secret — 비공개 설정: 만든 사람만 보고, 세계관 페이지와 AI 에는 안 나간다(세계 · 인물 · 사건 모두) */
+/* secret — 비공개 설정: 만든 사람만 본다(세계 · 인물 · 사건). 체험 이야기는 알되 드러내지 않는다(서버 withSecrets) */
 export interface DraftPerson { id: string; name: string; role: string; desc: string; face?: string; character_id?: string; secret?: string }
 export interface DraftEvent { id: string; title: string; line: string; situation: string; place: string; spot: string; cast: string[]; examples: string[]; example_people?: DraftPerson[]; image?: string; secret?: string }
 export interface WorldDraft { id?: string; cover?: string; name: string; genre: string; one: string; rule: string; secret?: string; cast: DraftPerson[]; events: DraftEvent[]; examples: string[]; visibility: "public" | "private"; lorebook_id?: string }

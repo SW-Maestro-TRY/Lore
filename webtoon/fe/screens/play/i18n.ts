@@ -11,7 +11,7 @@ const dict: Dict = {
   "규칙": { en: "Rule", ja: "ルール", zh: "规则" },
   "등장인물": { en: "Characters", ja: "登場人物", zh: "登场人物" },
   "비공개 설정": { en: "Private notes", ja: "非公開設定", zh: "私密设定" },
-  "나만 보기 · AI 에 안 넘김": { en: "Only you see this · not sent to the AI", ja: "自分だけ · AIには渡さない", zh: "仅自己可见 · 不交给 AI" },
+  "나만 보기 · AI 는 알되 드러내지 않음": { en: "Only you see this · the AI knows it but never reveals it", ja: "自分だけ · AIは知っても明かさない", zh: "仅自己可见 · AI 知道但不会揭示" },
   "닫기": { en: "Close", ja: "閉じる", zh: "关闭" },
   "내 캐릭터 넣기": { en: "Add my character", ja: "自分のキャラを入れる", zh: "放入我的角色" },
   "수정": { en: "Edit", ja: "編集", zh: "编辑" },

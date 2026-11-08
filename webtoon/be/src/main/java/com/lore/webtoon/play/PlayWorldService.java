@@ -828,24 +828,41 @@ public class PlayWorldService {
         out.put("id", row.id);
         out.put("events", events);
         out.put("lorebook", lorebook(doc, readList(row.booksJson)));
-        dropSecrets(out);
-        return out;
+        return out;                 // 비공개 설정(secret)은 그대로 — 체험 시작이 withSecrets 로 이야기에만 넘긴다
     }
 
+    /** 사건 글 뒤에 비공개 설정을 다는 표시. 하네스(run.py split_secrets)가 이 줄에서 갈라 읽는다. */
+    static final String SECRETS_MARK = "[비공개 설정]";
+
     /**
-     * 비공개 설정(세계 · 인물 · 사건)을 지운다 — 체험을 시작할 때 하네스로 가는 세계에서. 설정집({@link #lorebook})도 규칙과
-     * 인물 설명만 담으니, 비공개 설정은 만든 사람의 화면 말고는 어디에도 안 나간다(2026-11-08).
+     * 체험을 시작할 때 사건 글 뒤에 비공개 설정(세계 · 이 사건에 나오는 인물 · 이 사건)을 단다(2026-11-08).
+     * 하네스는 이것을 이야기·장면·나레이션 단계에 「알고는 있되 본문·대사·나레이션·그림에 드러내지 않는다」로
+     * 주고, 장 그림 단계에는 주지 않는다 — 비밀을 모르면 복선과 인물의 행동이 비밀과 어긋나고, 알려 주되 숨기라고
+     * 해야 뒤에 뒤집힐 설정을 지킨다(하은, 11/08). 남에게 가는 세계 화면(view)에는 여전히 안 나간다.
      */
-    @SuppressWarnings("unchecked")
-    static void dropSecrets(Map<String, Object> world) {
-        world.remove("secret");
-        for (String key : List.of("cast", "events")) {
-            for (Object x : list(world.get(key))) {
-                if (x instanceof Map<?, ?> m) {
-                    ((Map<String, Object>) m).remove("secret");
+    static String withSecrets(String settings, Map<String, Object> world, Map<?, ?> event) {
+        List<String> lines = new ArrayList<>();
+        String w = text(world.get("secret"), SECRET_WORLD);
+        if (!w.isEmpty()) {
+            lines.add("- 세계: " + oneLine(w));
+        }
+        List<String> who = ids(event.get("cast"));
+        for (Object c : list(world.get("cast"))) {
+            if (c instanceof Map<?, ?> p) {
+                String id = text(p.get("id"), 40), name = text(p.get("name"), 30), sec = text(p.get("secret"), SECRET_PERSON);
+                if (!sec.isEmpty() && !name.isEmpty() && (who.isEmpty() || who.contains(id) || who.contains(name))) {
+                    lines.add("- " + name + ": " + oneLine(sec));
                 }
             }
         }
+        String e = text(event.get("secret"), SECRET_EVENT);
+        if (!e.isEmpty()) {
+            lines.add("- 이번 사건: " + oneLine(e));
+        }
+        if (lines.isEmpty()) {
+            return settings;
+        }
+        return settings + "\n\n" + SECRETS_MARK + "\n" + String.join("\n", lines);
     }
 
     /** 사건의 원래 전개 — 줄마다 한 문장, 마지막 줄이 원래 결말. 없으면 빈 목록(예전 사건은 그대로 간다). */

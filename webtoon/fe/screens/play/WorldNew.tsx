@@ -171,7 +171,7 @@ function PersonForm({ p, onDone, onCancel, onDelete }: { p: Person; onDone: (p: 
       <label><span className="lab">{t("이름")}</span><input value={v.name} maxLength={30} onChange={(e) => setV({ ...v, name: e.target.value })} /></label>
       <label><span className="lab">{t("역할")}</span><input value={v.role} maxLength={40} onChange={(e) => setV({ ...v, role: e.target.value })} /></label>
       <label><span className="lab">{t("설정")}</span><textarea rows={3} value={v.desc} maxLength={500} onChange={(e) => setV({ ...v, desc: e.target.value })} /></label>
-      <label><span className="lab wn-secret"><IconLock />{t("비공개 설정")}<small>{t("나만 보기 · AI 에 안 넘김")}</small></span><textarea rows={3} value={v.secret || ""} maxLength={600} onChange={(e) => setV({ ...v, secret: e.target.value })} /></label>
+      <label><span className="lab wn-secret"><IconLock />{t("비공개 설정")}<small>{t("나만 보기 · AI 는 알되 드러내지 않음")}</small></span><textarea rows={3} value={v.secret || ""} maxLength={600} onChange={(e) => setV({ ...v, secret: e.target.value })} /></label>
       <div className="acts">
         {onDelete && <button type="button" className="wn-del" onClick={onDelete}>{t("삭제")}</button>}
         <button type="button" className="pl-btn wn-w sm" onClick={onCancel}>{t("취소")}</button>
@@ -196,7 +196,7 @@ function EventForm({ e, no, cast, onDone, onCancel, onDelete, onLive }: { e: Ev;
         <input placeholder={t("한 줄 소개")} aria-label={t("한 줄 소개")} value={v.line} maxLength={120} onChange={(x) => setV({ ...v, line: x.target.value })} />
         <textarea rows={6} placeholder={t("상황")} aria-label={t("상황")} value={v.situation} maxLength={2000} onChange={(x) => setV({ ...v, situation: x.target.value })} />
         <input placeholder={t("장소")} aria-label={t("장소")} value={v.place} maxLength={80} onChange={(x) => setV({ ...v, place: x.target.value })} />
-        <label className="wn-lab"><span className="lab wn-secret"><IconLock />{t("비공개 설정")}<small>{t("나만 보기 · AI 에 안 넘김")}</small></span><textarea rows={3} value={v.secret || ""} maxLength={1500} onChange={(x) => setV({ ...v, secret: x.target.value })} /></label>
+        <label className="wn-lab"><span className="lab wn-secret"><IconLock />{t("비공개 설정")}<small>{t("나만 보기 · AI 는 알되 드러내지 않음")}</small></span><textarea rows={3} value={v.secret || ""} maxLength={1500} onChange={(x) => setV({ ...v, secret: x.target.value })} /></label>
         {cast.length > 0 && (
           <div><span className="lab">{t("이 사건에 나오는 인물")}</span>
             <div className="wn-chips">{cast.map((p) => {
@@ -367,7 +367,7 @@ function Desk({ go, editId }: { go: Go; editId?: string }) {
           <Genre d={d} set={set} />
           <textarea className="wn-one" rows={2} placeholder={t("한 줄 소개")} aria-label={t("한 줄 소개")} value={d.one} maxLength={160} onChange={(e) => set({ one: e.target.value })} />
           <label className="wn-lab"><span className="lab">{t("세계 규칙")}</span><textarea className="wn-one" rows={6} value={d.rule} maxLength={2000} onChange={(e) => set({ rule: e.target.value })} /></label>
-          <label className="wn-lab"><span className="lab wn-secret"><IconLock />{t("비공개 설정")}<small>{t("나만 보기 · AI 에 안 넘김")}</small></span><textarea className="wn-one" rows={4} value={d.secret || ""} maxLength={4000} onChange={(e) => set({ secret: e.target.value })} /></label>
+          <label className="wn-lab"><span className="lab wn-secret"><IconLock />{t("비공개 설정")}<small>{t("나만 보기 · AI 는 알되 드러내지 않음")}</small></span><textarea className="wn-one" rows={4} value={d.secret || ""} maxLength={4000} onChange={(e) => set({ secret: e.target.value })} /></label>
           {phone && <div className="wn-bar"><button type="button" className="pl-btn" disabled={!s1ok} onClick={() => { keep(); setStep(1); }}>{t("다음 · {name}", { name: t("등장인물") })}</button></div>}
         </div>}
         {(!phone || step === 1) && <div className="wn-s1-r">
