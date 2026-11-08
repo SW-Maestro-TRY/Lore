@@ -50,7 +50,7 @@ class SheetCheckpointTest {
         store = mock(JobStore.class);
         runner = new JobRunner(harness, mock(JobProgress.class), store,
                 mock(StoryStore.class), mock(AfterRun.class), mock(WorkLedger.class),
-                mock(CreditGate.class), mock(GuestGate.class), mock(JobNotice.class),
+                mock(CreditGate.class), mock(GuestGate.class), mock(JobNotice.class), mock(com.lore.webtoon.character.CharacterService.class),
                 1, 1, tmp.resolve("jobs").toString());
         Path run = Files.createDirectories(tmp.resolve("runs").resolve("run-1"));
         Files.writeString(run.resolve("scenes.json"), "{\"scenes\": [{\"n\": 1, \"where\": \"곳\"}]}");

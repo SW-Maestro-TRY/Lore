@@ -45,7 +45,7 @@ class JobCancelTest {
         when(harness.runsDir()).thenReturn(Path.of("runs").toAbsolutePath());
         runner = new JobRunner(harness, mock(JobProgress.class), store,
                 mock(StoryStore.class), mock(AfterRun.class), mock(WorkLedger.class),
-                credits, guests, mock(JobNotice.class),
+                credits, guests, mock(JobNotice.class), mock(com.lore.webtoon.character.CharacterService.class),
                 1, 1, "jobs");                  // 취소를 보는 검사라 한 줄로 둔다
     }
 
