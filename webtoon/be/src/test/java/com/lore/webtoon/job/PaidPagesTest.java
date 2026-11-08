@@ -39,7 +39,7 @@ class PaidPagesTest {
         when(harness.runsDir()).thenReturn(Path.of("runs").toAbsolutePath());
         runner = new JobRunner(harness, mock(JobProgress.class), mock(JobStore.class),
                 mock(StoryStore.class), mock(AfterRun.class), mock(WorkLedger.class),
-                credits, mock(GuestGate.class), mock(JobNotice.class),
+                credits, mock(GuestGate.class), mock(JobNotice.class), mock(com.lore.webtoon.character.CharacterService.class),
                 1, 1, "jobs");
     }
 
@@ -112,7 +112,7 @@ class PaidPagesTest {
         when(harness.runsDir()).thenReturn(Path.of("runs").toAbsolutePath());
         JobRunner withStore = new JobRunner(harness, mock(JobProgress.class), store,
                 mock(StoryStore.class), mock(AfterRun.class), mock(WorkLedger.class),
-                credits, mock(GuestGate.class), mock(JobNotice.class),
+                credits, mock(GuestGate.class), mock(JobNotice.class), mock(com.lore.webtoon.character.CharacterService.class),
                 1, 1, "jobs");
         WebtoonJob job = 작업(7L, "swell");
         when(store.byId(1L)).thenReturn(job);

@@ -44,7 +44,7 @@ class SceneHistoryTest {
         when(harness.runsDir()).thenReturn(tmp.resolve("runs"));
         runner = new JobRunner(harness, mock(JobProgress.class), mock(JobStore.class),
                 mock(StoryStore.class), mock(AfterRun.class), mock(WorkLedger.class),
-                mock(CreditGate.class), mock(GuestGate.class), mock(JobNotice.class),
+                mock(CreditGate.class), mock(GuestGate.class), mock(JobNotice.class), mock(com.lore.webtoon.character.CharacterService.class),
                 1, 1, tmp.resolve("jobs").toString());
         Path run = Files.createDirectories(tmp.resolve("runs").resolve("run-1"));
         scenes = run.resolve("scenes.json");
