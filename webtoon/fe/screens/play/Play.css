@@ -988,3 +988,10 @@
 }
 /* 결말 카드 줄이 왼쪽 칸 너비를 밀어내지 않게(폰에서 사건 글이 오른쪽으로 잘리던 것) */
 .wt .pl-modal .cols > .l, .wt .pl-modal .stories-m, .wt .pl-modal .stories-pc, .wt .pl-modal .ends { min-width: 0; }
+
+/* 비공개 설정 — 만든 사람에게만 오는 칸(서버가 남에게는 안 준다). 자물쇠 + 흐린 글 */
+.wt .pl-secret { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--pl-apricot); color: var(--muted); font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+.wt .pl-secret svg { flex: none; width: 16px; height: 16px; margin-top: 3px; }
+.wt .wn-secret { display: inline-flex; align-items: center; gap: 6px; }
+.wt .wn-secret svg { width: 14px; height: 14px; }
+.wt .wn-secret small { font-weight: 400; opacity: .8; }

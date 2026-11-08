@@ -57,6 +57,8 @@ public class PlayWorldService {
     private static final Logger log = LoggerFactory.getLogger(PlayWorldService.class);
     private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
     static final int MAX_EXAMPLES = 2, MAX_EVENTS = 12, MAX_CAST = 12, MAX_CANON = 8;
+    /** 비공개 설정 한도 — 세계 · 인물 · 사건. 만든 사람만 보고 AI 에는 안 넘긴다. */
+    static final int SECRET_WORLD = 4000, SECRET_PERSON = 600, SECRET_EVENT = 1500;
     /** 만들기가 이만큼 넘게 RUNNING 이면 서버가 그사이 꺼진 것이다 — 멈춘 것으로 본다. */
     private static final long STALE_SECONDS = 300;
 
@@ -826,7 +828,24 @@ public class PlayWorldService {
         out.put("id", row.id);
         out.put("events", events);
         out.put("lorebook", lorebook(doc, readList(row.booksJson)));
+        dropSecrets(out);
         return out;
+    }
+
+    /**
+     * 비공개 설정(세계 · 인물 · 사건)을 지운다 — 체험을 시작할 때 하네스로 가는 세계에서. 설정집({@link #lorebook})도 규칙과
+     * 인물 설명만 담으니, 비공개 설정은 만든 사람의 화면 말고는 어디에도 안 나간다(2026-11-08).
+     */
+    @SuppressWarnings("unchecked")
+    static void dropSecrets(Map<String, Object> world) {
+        world.remove("secret");
+        for (String key : List.of("cast", "events")) {
+            for (Object x : list(world.get(key))) {
+                if (x instanceof Map<?, ?> m) {
+                    ((Map<String, Object>) m).remove("secret");
+                }
+            }
+        }
     }
 
     /** 사건의 원래 전개 — 줄마다 한 문장, 마지막 줄이 원래 결말. 없으면 빈 목록(예전 사건은 그대로 간다). */
@@ -936,6 +955,9 @@ public class PlayWorldService {
         out.put("genre", text(doc.get("genre"), 40));
         out.put("one", text(doc.get("one"), 300));
         out.put("rule", text(doc.get("rule"), 4000));
+        if (mine) {
+            out.put("secret", text(doc.get("secret"), SECRET_WORLD));
+        }
         List<?> events = list(doc.get("events"));
         out.put("spot", events.isEmpty() || !(events.get(0) instanceof Map<?, ?> first) ? "" : text(first.get("spot"), 60));
         List<Map<String, Object>> cast = new ArrayList<>();
@@ -944,6 +966,9 @@ public class PlayWorldService {
                 Map<String, Object> m = new LinkedHashMap<>();
                 v.forEach((k, val) -> m.put(String.valueOf(k), val));
                 m.put("face_url", urlOf(m.remove("face_art")));
+                if (!mine) {
+                    m.remove("secret");
+                }
                 cast.add(m);
             }
         }
@@ -976,6 +1001,9 @@ public class PlayWorldService {
                 Map<String, Object> m = new LinkedHashMap<>();
                 v.forEach((k, val) -> m.put(String.valueOf(k), val));
                 m.put("examples", ids(v.get("examples")).stream().filter(known::containsKey).toList());
+                if (!mine) {
+                    m.remove("secret");
+                }
                 String image = urlOf(m.remove("image_art"));
                 if (image != null) {
                     m.put("image_url", image);
@@ -1078,6 +1106,7 @@ public class PlayWorldService {
         out.put("genre", text(raw.get("genre"), 40));
         out.put("one", text(raw.get("one"), 300));
         out.put("rule", text(raw.get("rule"), 4000));
+        out.put("secret", text(raw.get("secret"), SECRET_WORLD));            // 비공개 설정 — 만든 사람만 본다(아래 view)
         out.put("visibility", "public".equals(raw.get("visibility")) ? "public" : "private");
         carry(raw, out, "cover");
         out.put("lorebook_id", text(raw.get("lorebook_id"), 40));
@@ -1097,6 +1126,7 @@ public class PlayWorldService {
                 m.put("name", text(p.get("name"), 30));
                 m.put("role", text(p.get("role"), 60));
                 m.put("desc", text(p.get("desc"), 600));
+                m.put("secret", text(p.get("secret"), SECRET_PERSON));
                 carry(p, m, "face");
                 cast.add(m);
             }
@@ -1146,6 +1176,7 @@ public class PlayWorldService {
             ev.put("canon_end", text(v.get("canon_end"), 60));
             ev.put("place", text(v.get("place"), 60));
             ev.put("spot", text(v.get("spot"), 60));
+            ev.put("secret", text(v.get("secret"), SECRET_EVENT));
             ev.put("cast", who);
             ev.put("examples", ids(v.get("examples")).stream().limit(8).toList());   // 둘까지 고르는 것은 내 캐릭터인지 본 뒤에
             List<Map<String, Object>> people = new ArrayList<>();
