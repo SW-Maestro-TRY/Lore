@@ -1061,6 +1061,27 @@ export function saveOriginalCharacter(body: {name:string;description:string;phot
   });
 }
 
+/** 짤(키우기)에서 키운 캐릭터 — 가져오기 창이 고를 목록. 짤 캐릭터 상태는 안 바뀐다. */
+export interface ZzalCharacter {
+  pet_id: number;
+  name: string;
+  /** 가져오면 웹툰 캐릭터 설정이 될 글. */
+  description: string;
+  /** 사용자가 올린 원본 그림. */
+  image_url: string | null;
+  /** 짤이 만든 캐릭터 시트. */
+  sheet_url: string | null;
+}
+
+export function listZzalCharacters(): Promise<{ characters: ZzalCharacter[]; logged_in: boolean }> {
+  return call<{ characters: ZzalCharacter[]; logged_in: boolean }>("/characters/zzal");
+}
+
+/** 짤 캐릭터를 웹툰 내 캐릭터로 가져온다. AI 호출·크레딧 없음. */
+export function importZzalCharacter(petId: number, image: "image" | "sheet"): Promise<Character> {
+  return post<Character>(`/characters/zzal/${petId}`, { image });
+}
+
 export function renameCharacter(id: string, name: string, description: string) {
   return call<Character>(`/characters/${encodeURIComponent(id)}`, {
     method: "PATCH",
