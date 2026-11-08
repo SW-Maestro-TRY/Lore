@@ -48,6 +48,12 @@ public class PlayController {
         this.owner = owner;
     }
 
+    @Operation(summary = "세계관 사건 생성 크레딧", description = "오픈 세일 적용가와 할인 전 값을 함께 돌려준다.")
+    @GetMapping("/allowance")
+    public Map<String, Object> allowance(HttpServletRequest request) {
+        return jobs.playAllowance(request);
+    }
+
     @Operation(summary = "내가 체험한 만화", description = "/play/runs 로 시작해 그림까지 나온 작품. 로그인이면 계정과 이어진 브라우저, "
             + "아니면 X-Lore-Uid 브라우저. 카드는 둘러보기와 같은 모양에 world_id · world_name · event_id · event_title 이 붙는다.")
     @GetMapping("/runs/mine")
@@ -168,7 +174,7 @@ public class PlayController {
         made.delete(id, CreditGate.currentUser());
     }
 
-    /** 세계·사건·캐릭터로 바로 만든다. 값·크레딧·안전 검사는 /nh/create 그대로다. */
+    /** 세계·사건·캐릭터로 바로 만든다. 안전 검사는 /nh/create 와 같고 사건 할인 값을 받는다. */
     @Operation(summary = "세계관 체험 시작", description = "응답의 id 는 일반 작업 id 다. 후보 고르기 없이 끝까지 간다.")
     @PostMapping("/runs")
     public ResponseEntity<Map<String, Object>> start(HttpServletRequest request, @RequestBody RunRequest form) {
@@ -191,8 +197,8 @@ public class PlayController {
         String situation = !edited && catalog.world(form.worldId()) != null
                 ? catalogSituation(world, event, name)
                 : PlayWorldService.situation(event, Map.of());
-        situation = PlayWorldService.withCanon(situation, event, played.groupsOf(form.eventId()));
-        ResponseEntity<Map<String, Object>> started = jobs.create(request, new JobService.CreateRequest(
+        situation = PlayWorldService.withCanon(situation, event, played.groupEndsOf(form.eventId()));
+        ResponseEntity<Map<String, Object>> started = jobs.createPlay(request, new JobService.CreateRequest(
                 name, null, (String) world.get("genre"), null, form.style(), null, null, null,
                 form.agreeIp(), false, form.uid(), form.characterId(), null, form.quality(), form.language(),
                 null, situation, null, null, lorebook, (List<String>) null, true));

@@ -89,6 +89,25 @@ def test_clean_branch_clamps_and_defaults_group():
     assert same["group"] == "진다"           # 안 갈렸으면 원래 결말 갈래
 
 
+def test_branch_groups_carry_their_ending():
+    """서버가 「이름 | 결말」로 보낸 갈래는 이름만 groups 에, 결말은 group_ends 에 들어가고, 갈림 정리 입력에 결말이 붙는다(#989)."""
+    import tempfile
+    situation, canon, end, groups = R.split_canon("상황\n\n[원래 전개]\n1. 가\n2. 나\n[원래 결말] 끝\n[갈래]\n- 끝 | 나\n- 직접 끝낸다 | 가족을 직접 죽인다")
+    assert groups == ["끝 | 나", "직접 끝낸다 | 가족을 직접 죽인다"]
+    assert R.split_group(groups[1]) == ("직접 끝낸다", "가족을 직접 죽인다")
+    assert R.split_group("이름만") == ("이름만", "")
+    with tempfile.TemporaryDirectory() as t:
+        d = Path(t)
+        R.write_json(d / "branch_input.json", {"canon": ["가", "나"], "canon_end": "끝",
+                                               "groups": ["직접 끝낸다"], "group_ends": {"직접 끝낸다": "가족을 직접 죽인다"}})
+        got = R.branch_char(d, {"name": "x"})
+        assert got["group_ends"] == {"직접 끝낸다": "가족을 직접 죽인다"}
+        R.stage_branch(d, got, {"title": "t", "body": "b"}, dry_run=True)
+        prompt = (d / "branch_prompt.txt").read_text(encoding="utf-8")
+        assert "- 직접 끝낸다 — 이 갈래로 묶인 만화의 결말: 가족을 직접 죽인다" in prompt
+        assert "이름의 낱말이 아니라" in prompt
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

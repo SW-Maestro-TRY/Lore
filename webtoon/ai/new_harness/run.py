@@ -167,7 +167,8 @@ def normalize(raw: dict) -> dict:
         **({"play": True} if raw.get("play") is True else {}),
         **({"canon": canon} if canon else {}),
         **({"canon_end": canon_end} if canon and canon_end else {}),
-        **({"groups": groups} if canon and groups else {}),
+        **({"groups": [split_group(g)[0] for g in groups]} if canon and groups else {}),
+        **({"group_ends": ends} if canon and (ends := {n: e for n, e in map(split_group, groups) if e}) else {}),
         **({"co": co} if (co := normalize_co(raw.get("co"))) else {}),
     }
 
@@ -521,6 +522,12 @@ def one_input_block(char: dict) -> str:
 CANON_MARK = "[원래 전개]"
 CANON_END_MARK = "[원래 결말]"
 GROUPS_MARK = "[갈래]"
+
+
+def split_group(item: str) -> tuple[str, str]:
+    """「이름 | 그 갈래로 묶인 결말」 -> (이름, 결말). 서버가 갈래마다 대표 결말을 붙여 보낸다(#989). 없으면 (이름, "")."""
+    name, _, end = str(item or "").partition(" | ")
+    return name.strip(), end.strip()
 
 
 def split_canon(settings: str) -> tuple[str, list[str], str, list[str]]:
@@ -1608,7 +1615,7 @@ def branch_char(run_dir: Path, char: dict) -> dict:
         return char
     got = read_json(path) or {}
     out = dict(char)
-    for k in ("canon", "canon_end", "groups"):
+    for k in ("canon", "canon_end", "groups", "group_ends"):
         if got.get(k):
             out[k] = got[k]
     return out
@@ -1627,10 +1634,17 @@ def stage_branch(run_dir: Path, char: dict, direction: dict, dry_run: bool,
         return None
     end = char.get("canon_end") or ""
     groups = [g for g in (char.get("groups") or []) if g]
+    ends = char.get("group_ends") if isinstance(char.get("group_ends"), dict) else {}
     lines = ["[원래 전개]", canon_lines(canon)]
     if end:
         lines += ["", "[원래 결말 이름]", end]
-    lines += ["", "[이미 있는 갈래]", "\n".join(f"- {g}" for g in groups) if groups else "없음"]
+
+    def group_line(g: str) -> str:
+        name, ending = split_group(g)
+        ending = ending or str(ends.get(name) or "").strip()
+        return f"- {name} — 이 갈래로 묶인 만화의 결말: {ending}" if ending else f"- {name}"
+
+    lines += ["", "[이미 있는 갈래]", "\n".join(group_line(g) for g in groups) if groups else "없음"]
     lines += ["", "[주인공]", char.get("name") or "", "", "[캐릭터 설명]", char.get("description") or "",
               "", "[이번 이야기]", f"제목: {direction.get('title') or ''}",
               str(direction.get("body") or direction.get("raw") or "")]
@@ -1972,6 +1986,22 @@ def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) 
         lines.append(f"- 고른 캐릭터 카드: {charcard.short(charcard.for_story(char))} (원래 설명과 다르면 카드를 따른다)")
     for k, v in (char.get("fields") or {}).items():
         lines.append(f"- {k}: {v}")
+    # 장면 단계가 시트의 색을 모르면 본문에 없던 드레스 색을 새로 지어낸다.
+    # 그 look 이 다음 그림 단계에서 "시트보다 먼저"로 전달되어 실제 시트를
+    # 매 장 첨부해도 색이 바뀐다(2026-11-06 클로에: 분홍 시트 → 청색 장면).
+    if run_dir is not None:
+        sheet_spec = read_json(run_dir / "sheet_spec.json") or {}
+        details = [str(x).strip() for x in (sheet_spec.get("design_details") or []) if str(x).strip()]
+        props = [str(x).strip() for x in (sheet_spec.get("props") or []) if str(x).strip()]
+        palette = sheet_spec.get("color_palette") or {}
+        if details or props or palette:
+            lines += ["", "[주인공 캐릭터 시트 — 외형과 복장의 기준]",
+                      "본문에서 옷을 갈아입거나 덧입는 일이 명시되지 않았다면 아래 시트의 복장과 색을 유지한다. "
+                      "조명·오염·손상은 적되 다른 색 옷으로 바꾸지 않는다. 의도적인 변화만 「겉모습·소지품·동행」에 적는다."]
+            lines += [f"- {x}" for x in details]
+            lines += [f"- 소지품: {x}" for x in props]
+            if palette.get("outfit_main"):
+                lines.append(f"- 기본 의상 색: {palette['outfit_main']}")
     if co_protagonists(char):
         lines += co_scene_lines(char)
         lines += ["", f"이 웹툰의 주인공은 {', '.join(protagonist_names(char))}이다. 장면 지시에서 「주인공」은 이 "

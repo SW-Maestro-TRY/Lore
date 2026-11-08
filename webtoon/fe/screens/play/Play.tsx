@@ -2,19 +2,23 @@
 /* 세계관 체험 — 세계 → 사건 → 내 캐릭터 → 만화. 화면 하나에 주소(world · ep · stage)로 갈린다.
  * 카드를 눌러도 크레딧이 나가지 않는다. 나가는 곳은 내 캐릭터 화면의 「넣기」 하나뿐이다. */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { cancelJob, thumbUrl, eventPlayRuns, type PlayRunCard, listCharacters, readCharacter, startPlayRun, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
+import { cancelJob, thumbUrl, eventPlayRuns, type PlayRunCard, listCharacters, readPlayAllowance, readCharacter, startPlayRun, type Allowance, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
 import { useLang, useT } from "../../lib/i18n";
 import type { Go } from "../../lib/nav";
-import { IconClose, IconComment, IconDownload, IconEdit, IconHeart, IconPlus, IconShare } from "../../ui/Icons";
+import { IconClose, IconComment, IconDownload, IconEdit, IconHeart, IconPlus, IconShare, IconZoom } from "../../ui/Icons";
+import QualitySampleZoom from "../../ui/QualitySampleZoom";
+import InstallInvite from "../../ui/InstallInvite";
 import CreditShort, { isCreditShort } from "../../ui/CreditShort";
 import { track } from "../../lib/track";
 import { CharacterEditDialog } from "../character/OriginalCharacter";
 import "../character/i18n";
 import { usePhone } from "../landing/usePhone";
 import { loadWorlds, type PlayEvent, type PlayPerson, type PlayWorld } from "./playData";
+import "../wizard/i18n";
 import "./i18n";
 import "./Play.css";
+import { QUALITY_INFO, worldPlayQualitySamples, WORLD_PLAY_QUALITY_THUMB, type WizardQuality } from "../../lib/wizardData";
 
 /* 모바일에서만 보이는 얇은 줄 — 이전 · 제목 · 오른쪽 글(시안 mobile.html 의 .mtop). PC 에서는 CSS 가 숨긴다. */
 function MTop({ back, onBack, title, right }: { back?: string; onBack?: () => void; title: string; right?: string }) {
@@ -205,7 +209,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const openRun = (run: string) => go("play", { world: w.id, ep: e.id, stage: "done", run });
   const cover = (r: (typeof made)[number]) => r.cover_src || (r.cover_page ? thumbUrl(r.run_id) : "");
   /* 캐릭터별 결말 — 첫 카드는 사건의 원래 결말, 그다음부터 만화마다 그 주인공이 고른 결말(2026-11-04, 체험 갈림 최종 시안).
-   * PC 는 카드 위에 장면 사진, 폰은 글만. 갈림 정리 전의 옛 작품은 제목만. 여섯 편부터 「더 둘러보기」. */
+   * PC 는 카드 위에 장면 사진, 폰은 글만. 갈림 정리 전의 옛 작품은 제목만. 「더 둘러보기」는 편수와 상관없이 늘 둔다(최종 시안, 11/05 하은). */
   const canonEnd = e.canon && e.canon.length > 0 ? e.canon[e.canon.length - 1] : "";
   const endCard = (r: (typeof made)[number]) => (
     <button type="button" key={r.run_id} className="ec" onClick={() => openRun(r.run_id)}>
@@ -220,7 +224,7 @@ function EventView({ w, e, go }: { w: PlayWorld; e: PlayEvent; go: Go }) {
   const stories = made.length > 0 && (
     <div className="stories ends">
       <div className="hd"><div><b>{t("캐릭터별 결말")}</b><small>{t("같은 사건, 서로 다른 이야기")}</small></div>
-        {made.length > 5 && <button type="button" className="all" onClick={() => go("play", { world: w.id, ep: e.id, stage: "stories" })}>{t("더 둘러보기")} ›</button>}</div>
+        <button type="button" className="all" onClick={() => go("play", { world: w.id, ep: e.id, stage: "stories" })}>{t("더 둘러보기")} ›</button></div>
       <SnapRow>
         {canonEnd && (
           <div className="ec orig">
@@ -292,6 +296,28 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
   const [edit, setEdit] = useState<Character | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [quality, setQuality] = useState<WizardQuality>("surf");
+  const [previewQuality, setPreviewQuality] = useState<WizardQuality | null>(null);
+  const [allow, setAllow] = useState<Allowance | null>(null);
+  const [allowError, setAllowError] = useState(false);
+  const [allowRetry, setAllowRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    readPlayAllowance().then((value) => { if (active) { setAllow(value); setAllowError(false); } })
+      .catch(() => { if (active) setAllowError(true); });
+    return () => { active = false; };
+  }, [authenticated, allowRetry]);
+  useEffect(() => {
+    const remaining = Date.parse("2026-11-15T15:00:00Z") - Date.now();
+    if (remaining <= 0) return;
+    const timer = window.setTimeout(() => setAllowRetry(n => n + 1), remaining + 100);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const choice = allow?.qualities?.find((q) => q.key === quality);
+  const previews = worldPlayQualitySamples();
+  const guestFree = !authenticated && !allowError && (!allow || (!allow.logged_in && !allow.blocked && (allow.free_left ?? 0) > 0));
+  const blocked = !!allow?.blocked || (!allow?.logged_in && allow?.free_left != null && allow.free_left <= 0)
+    || (!!allow?.logged_in && choice != null && allow.balance != null && allow.balance < choice.credits);
   /* 어떤 캐릭터를 넣었나 — 세계가 정한 예시 · 운영 자료의 예시 주인공 · 기본 견본 · 내 캐릭터. id 는 예시 주인공처럼 한글이 섞이면 안 남는다 */
   const kindOfSel = () => !sel ? undefined : sel.startsWith("example:") ? "example_person" : mode === "ex" ? "example"
     : pool?.find((c) => c.id === sel)?.builtin ? "builtin" : "mine";
@@ -301,7 +327,7 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
     const base = { world: w.id, event: e.id, kind: kindOfSel(), character: sel, logged_in: authenticated };
     track("play_start", base);
     try {
-      const r = await startPlayRun({ world_id: w.id, event_id: e.id, character_id: sel, agree_ip: ok, language: lang });
+      const r = await startPlayRun({ world_id: w.id, event_id: e.id, character_id: sel, agree_ip: ok, quality, language: lang });
       track("play_started", { ...base, job: r.id });
       go("play", { world: w.id, ep: e.id, stage: "making", job: r.id, character: sel });
     } catch (x) {
@@ -358,6 +384,7 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
   const ctx = <p className="pl-ctx">{t(w.name)}<i /><b>{e.no} {t(e.title)}</b></p>;
   return (
     <div className="pl-who">
+      {previewQuality && previews && <QualitySampleZoom src={previews[previewQuality]} label={t(QUALITY_INFO.find(q => q.key === previewQuality)?.label || "")} sample="school" onClose={() => setPreviewQuality(null)} />}
       <MTop back={e.no} onBack={() => go("play", { world: w.id, ep: e.id })} title={t("내 캐릭터")} />
       {ctx}
       <h1>{t("누구를 넣을까요?")}</h1>
@@ -402,8 +429,32 @@ function PickChar({ w, e, go, authenticated, preset }: { w: PlayWorld; e: PlayEv
           {cur && <p className="pl-desc"><small>{nameOf(cur)} · {t("설명")}</small>{descOf(cur)}</p>}
         </>
       )}
+      {cur && <div className="pl-quality" role="group" aria-label={t("그리기 방식")}>
+        <b>{t("그리기 방식")}</b>
+        <div className="choices">{QUALITY_INFO.map((q) => {
+          const price = allow?.qualities?.find((x) => x.key === q.key);
+          const cost = price?.credits;
+          const regular = price?.regular_credits;
+          const onSale = regular != null && cost != null && regular > cost;
+          return <div key={q.key} className={`choice${quality === q.key ? " on" : ""}`}>
+            {previews && <button type="button" className="preview" aria-label={t("{mode} 예시 그림 크게 보기", { mode: t(q.label) })} onClick={() => setPreviewQuality(q.key)}>
+              <img src={WORLD_PLAY_QUALITY_THUMB[q.key]} alt="" loading="lazy" decoding="async" />
+              <span className="zoom" aria-hidden="true"><IconZoom size={17} /></span>
+            </button>}
+            <button type="button" className="pick" aria-pressed={quality === q.key} onClick={() => setQuality(q.key)}>
+              {previews && <small className="sample-style">{t("예시 그림체 · 일반 웹툰")}</small>}
+              <strong>{t(q.label)}</strong><span>{t(q.lede)}</span>
+              <em>{guestFree ? t("무료 이벤트 중!") : cost == null ? t("크레딧 확인 중") : <>{onSale && regular != null && <del>{t("{n}크레딧", { n: regular })}</del>}{t("{n}크레딧", { n: cost })}</>}</em>
+              {!guestFree && allow?.logged_in && onSale && <small className="sale-note">11.06 ~ 11.15 {t("오픈 세일중")}</small>}
+            </button>
+          </div>;
+        })}</div>
+        {guestFree && allow?.free_left != null && <small className="free-left">{t("남은 무료 횟수 {n}회", { n: allow.free_left })}</small>}
+        {allowError && <small role="alert">{t("크레딧 정보를 불러오지 못했어요.")} <button type="button" onClick={() => setAllowRetry((n) => n + 1)}>{t("다시 확인")}</button></small>}
+        {blocked && <small role="alert">{allow?.blocked || (allow?.logged_in ? t("크레딧이 부족해요.") : t("오늘 무료 횟수를 모두 사용했어요."))}</small>}
+      </div>}
       {cur && <label className="pl-chk"><input type="checkbox" checked={ok} onChange={(v) => setOk(v.target.checked)} />{t("업로드한 사진·설정에 대한 저작권 문제가 없음을 확인합니다")}</label>}
-      {cur && <button type="button" className="pl-btn" disabled={!ok || busy} onClick={begin}>{t("{name} 넣기", { name: nameOf(cur) })}</button>}
+      {cur && <button type="button" className="pl-btn" disabled={!ok || busy || !allow || !choice || blocked} onClick={begin}>{t("{name} 넣기", { name: nameOf(cur) })}</button>}
       {err && <p className="pl-err">{err}</p>}
             {edit && <CharacterEditDialog character={edit} authenticated={authenticated} hideCard onSaved={() => { setEdit(null); void load(); }} onDeleted={() => { setEdit(null); void load(); }} onClose={() => setEdit(null)} />}
     </div>
@@ -533,6 +584,7 @@ function Making({ w, e, job, character, go }: { w: PlayWorld; e: PlayEvent; job?
   ];
   return (
     <div className="pl-making">
+      <InstallInvite active={!!job} where="play" job={job} />
       <MTop title={t("만드는 중")} right={name} />
       <div className="steps"><span className="done"><i>✓</i>{name || t("캐릭터")}</span><span className="on"><i>2</i>{t("만들기")}</span></div>
       <div className="card main">
@@ -701,6 +753,14 @@ export default function Play({ go, authenticated, world, ep, stage, job, run, ch
     const hit = ep ? worlds.find((v) => v.events.some((x) => x.id === ep)) : undefined;
     const where = hit ? (stage || "event") : worlds.some((v) => v.id === world) ? "world" : "worlds";
     track("play_view", { where, world: hit?.id || world, event: hit ? ep : undefined, run, job, count: worlds.length, logged_in: authenticated });
+    /* 그 칸에 얼마나 머물렀나 — 다음 칸으로 옮기거나 체험을 떠날 때 남긴다(page_leave 는 체험 전체 시간만 안다) */
+    const at = Date.now();
+    const props = { where, world: hit?.id || world, event: hit ? ep : undefined };
+    let sent = false;
+    const leave = (how: string) => { if (sent) return; sent = true; track("play_leave", { ...props, ms: Date.now() - at, how }); };
+    const onHide = () => leave("close");
+    window.addEventListener("pagehide", onHide);
+    return () => { window.removeEventListener("pagehide", onHide); leave("move"); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [worlds, failed, world, ep, stage, run]);
   if (failed) return <div className="pl"><div className="pl-wrap"><h1 className="pl-h1">{t("세계관을 불러오지 못했어요")}</h1></div></div>;

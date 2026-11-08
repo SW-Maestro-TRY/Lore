@@ -161,7 +161,7 @@ DEFAULT_PROVIDER = "openai"
 # OpenRouter 키가 없으면 전처럼 NH_PROVIDER(운영은 openai) 의 gpt-5.1 로 돈다.
 STAGE_DEFAULT_PROVIDERS = {"STORY_REVIEW": "openrouter", "PAGE_REVIEW": "openrouter",
                            "COVER_REVIEW": "openrouter", "FULL_REVIEW": "openrouter",
-                           "SCENE": "openrouter"}
+                           "SCENE": "openrouter", "PAGE_IMAGE": "openai"}
 
 
 def _has_key(provider: str) -> bool:
@@ -246,13 +246,15 @@ STAGE_DEFAULT_MODELS[("SCENE", "openrouter")] = "google/gemini-3.8-flash"
 # 검수 넷도 예외 — 위 실험에 쓴 모델 그대로(STAGE_DEFAULT_PROVIDERS 의 검수 참고).
 for _review in ("STORY_REVIEW", "PAGE_REVIEW", "COVER_REVIEW", "FULL_REVIEW"):
     STAGE_DEFAULT_MODELS[(_review, "openrouter")] = "google/gemini-3.5-flash"
+# 본편 장면 그림만 Flare로 그린다. 시트와 조연 시트는 기존 이미지 모델을 유지한다.
+STAGE_DEFAULT_MODELS[("PAGE_IMAGE", "openai")] = "gpt-image-2.5-flare"
 
 
 def model_for(stage: str, provider: str) -> str:
     """이 단계가 쓸 모델 이름."""
     if stage.upper() in IMAGE_STAGES:
         model, _ = _pick(stage, "MODEL", ("NH_IMAGE_MODEL",))
-        return model or image_default(provider)
+        return model or STAGE_DEFAULT_MODELS.get((stage.upper(), provider)) or image_default(provider)
     model, where = _pick(stage, "MODEL", ("NH_MODEL",))
     # 전체 모델 설정(NH_MODEL)은 전체 프로바이더의 모델 이름이다. 검수처럼 코드가 다른
     # 프로바이더로 돌린 단계에 그 이름을 넘기면 없는 모델이 된다.

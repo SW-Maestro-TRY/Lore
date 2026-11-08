@@ -332,6 +332,9 @@ public class RegenService {
             String quality = one.getQuality() == null ? qualityOf(runId) : one.getQuality();
             env.put("OPENAI_IMAGE_QUALITY",
                     com.lore.webtoon.job.WebtoonQuality.harnessValue(quality));
+            env.put("PAGE_IMAGE_MODEL", one.getQuality() == null
+                    ? com.lore.webtoon.job.WebtoonQuality.pageImageModelOf(runner.runDir(runId))
+                    : com.lore.webtoon.job.WebtoonQuality.pageImageModel(quality));
 
             /* 완성본에서 고친 제목은 DB 에만 있다. 넘기지 않으면 표지에 처음 제목을 다시 그린다. */
             stories.chosenOf(runId).map(com.lore.webtoon.story.WebtoonStory::displayTitle)
@@ -398,9 +401,30 @@ public class RegenService {
         }
         Path vdir = versionsDir(runId);
         Files.createDirectories(vdir);
+        /* 지금 그림이 이미 있는 판과 똑같으면 또 남기지 않는다(#993). 「이 판으로 바꾸기」는 그 판을
+           복사해 지금 그림으로 걸기 때문에, 다른 판을 누를 때마다 방금 건 그림이 새 번호로 한 장씩
+           늘었다 — 판을 오가기만 해도 같은 그림이 줄줄이 쌓였다. */
+        if (sameAsAVersion(src, vdir, pageNo)) {
+            return;
+        }
         int next = versionsOf(runId, pageNo).stream()
                 .mapToInt(row -> (int) row.get("version")).max().orElse(0) + 1;
         Files.copy(src, vdir.resolve("page%02d.v%d.png".formatted(pageNo, next)));
+    }
+
+    /** 이 장의 남긴 판 가운데 {@code src} 와 바이트까지 같은 것이 있는가. */
+    private static boolean sameAsAVersion(Path src, Path vdir, int pageNo) throws IOException {
+        long size = Files.size(src);
+        try (var found = Files.list(vdir)) {
+            for (Path p : found.toList()) {
+                Matcher m = VERSION_FILE.matcher(p.getFileName().toString());
+                if (m.matches() && Integer.parseInt(m.group(1)) == pageNo
+                        && Files.size(p) == size && Files.mismatch(src, p) == -1L) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private Path pageFile(String runId, int pageNo) {

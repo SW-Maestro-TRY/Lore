@@ -186,7 +186,7 @@ export interface Allowance {
   free_per_day?: number;
   balance?: number;
   blocked?: string | null;
-  qualities?: { key: string; label: string; credits: number; base_pages?: number; extra_page_credits?: number }[];
+  qualities?: { key: string; label: string; credits: number; regular_credits?: number; base_pages?: number; extra_page_credits?: number }[];
   quality_default?: string;
   /** 함께 주인공 한 사람당 값(조연 시트 값과 같다)과 고를 수 있는 수(#899). */
   co_sheet_credits?: number;
@@ -195,6 +195,10 @@ export interface Allowance {
 
 export function readAllowance(): Promise<Allowance> {
   return call<Allowance>("/nh/allowance");
+}
+
+export function readPlayAllowance(): Promise<Allowance> {
+  return call<Allowance>("/play/allowance");
 }
 
 /** 딱지 한 줄. 적을 것이 없으면 빈 문자열. */
@@ -423,7 +427,7 @@ export function savePlayWorld(body: object, id?: string): Promise<{ id: string }
 }
 
 /** 세계관 체험 시작. 실패하면 서버 문구 그대로 WebtoonApiError 로 던진다(402 · 429 · 400). */
-export function startPlayRun(body: { world_id: string; event_id: string; character_id: string; agree_ip: boolean; language: string }): Promise<{ id: string; queue_position?: number }> {
+export function startPlayRun(body: { world_id: string; event_id: string; character_id: string; agree_ip: boolean; quality: string; language: string }): Promise<{ id: string; queue_position?: number }> {
   return post("/play/runs", { ...body, uid: getUid() });
 }
 
@@ -541,6 +545,11 @@ export function pushSubscribe(sub: PushSubscriptionJSON, lang: string): Promise<
 
 export function pushUnsubscribe(endpoint: string): Promise<{ ok: boolean }> {
   return post("/push/unsubscribe", { endpoint });
+}
+
+/** 앱 출시 알림 신청(출시날 50크레딧, #981). 같은 이메일은 한 번만 적힌다 — already 가 true 면 이미 있던 이메일. */
+export function joinAppWaitlist(email: string, where: string, device?: string, lang?: string): Promise<{ ok: boolean; already: boolean }> {
+  return post("/app-waitlist", { email, where, device, lang, uid: getUid() });
 }
 
 export function notifyByEmail(id: string, email: string): Promise<{ email: string | null }> {

@@ -169,11 +169,13 @@ class RegenServiceTest {
         시작("", "surf", null);
         큐를_바로_돌린다();
         assertThat(env.getValue().get("OPENAI_IMAGE_QUALITY")).isEqualTo("medium");
+        assertThat(env.getValue().get("PAGE_IMAGE_MODEL")).isEqualTo("gpt-image-2.5-flare");
 
         org.mockito.Mockito.clearInvocations(runner);
         시작("", null, null);
         큐를_바로_돌린다();
         assertThat(env.getValue().get("OPENAI_IMAGE_QUALITY")).isEqualTo("high");
+        assertThat(env.getValue().get("PAGE_IMAGE_MODEL")).isEqualTo("gpt-image-2");
     }
 
     @Test
@@ -284,6 +286,22 @@ class RegenServiceTest {
         // 되돌리기 전 그림(v2)도 판본으로 남아서, 되돌린 것을 다시 되돌릴 수 있다.
         assertThat(after).extracting(row -> row.get("version")).contains(1, 2);
         verify(bakery).invalidate("run-1", 1);
+    }
+
+    @Test
+    @DisplayName("판을 오가기만 하면 판본이 늘지 않는다 — 지금 그림이 이미 있는 판과 같으면 또 남기지 않는다")
+    void 판을_오가도_복제되지_않는다() throws IOException {
+        페이지파일(1, "v3 (지금)".getBytes());
+        Path vdir = Files.createDirectories(runsDir.resolve("run-1/pages/versions"));
+        Files.writeString(vdir.resolve("page01.v1.png"), "v1");
+        Files.writeString(vdir.resolve("page01.v2.png"), "v2");
+
+        service.revert("run-1", 1, 1);                       // 지금(v3) 은 처음이라 판으로 남는다 → v1·v2·v3
+        service.revert("run-1", 1, 2);                       // 지금은 v1 과 같다 — 또 남기지 않는다
+        List<Map<String, Object>> after = service.revert("run-1", 1, 3);   // 지금은 v2 와 같다
+
+        assertThat(Files.readString(runsDir.resolve("run-1/pages/page01.png"))).isEqualTo("v3 (지금)");
+        assertThat(after).extracting(row -> row.get("version")).containsExactly(3, 2, 1);
     }
 
     @Test

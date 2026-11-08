@@ -60,7 +60,7 @@ export type WizardMode = "simple" | "expert";
 /** 얼마나 촘촘히 그릴까. 값은 서버(WebtoonQuality)가 아는 이름과 같아야 한다. */
 export type WizardQuality = "wave" | "surf" | "swell";
 
-/* 화질 셋 — 이름 · 한 줄 · 설명.
+/* 새 생성에서 고르는 두 방식. wave는 옛 작업 호환을 위해 타입에 남긴다.
  *
  * **크레딧 값은 여기 안 적는다.** 서버가 `/nh/allowance` 의 `qualities` 로
  * 내려 준다(WebtoonQuality). 여기에도 적어 두면 한쪽만 고치는 순간 화면이
@@ -75,44 +75,52 @@ export const QUALITY_INFO: {
   desc: string[];
 }[] = [
   {
-    key: "wave",
-    label: "물결",
-    lede: "약 6분 · 가장 빠른 생성",
-    desc: ["굵고 단순한 선으로 가볍게 표현해요.", "배경과 소품은 필요한 만큼만 담아요."],
-  },
-  {
     key: "surf",
     label: "파도",
-    lede: "약 8분 · 자연스러운 디테일",
+    lede: "약 8분 · 빠른 기본 생성",
     desc: ["인물과 배경을 가장 자연스럽게 표현해요."],
   },
   {
     key: "swell",
     label: "너울",
-    lede: "약 15분 · 가장 섬세한 표현",
+    lede: "약 15분 · 더 오래 걸리는 섬세한 표현",
     desc: ["가는 선과 풍부한 디테일로 표현해요.", "배경과 소품까지 깊이 있게 담아내요."],
   },
 ];
 
 export const QUALITY_DEFAULT: WizardQuality = "surf";
 
-/* 화질 견본 — 화질별로 실제 그린 작품의 표지를 그림만 보이게 잘라 쓴다(2026-11-03, 윤지환 멘토링 「차이를 그림으로」).
- *
- * 같은 장면은 아니다(물결·너울로 그린 같은 장면이 저장소에 없다). 그래서 셋 다 인물 위주로 같은 비율(4:3)로
- * 잘라 비교가 쉽게 했다. 화질은 webtoon_job.quality(운영) · run 의 quality.txt 로 확인한 것만 쓴다.
- * 그림은 webtoon/fe/static/gallery/quality/ 에 두고(images.md — sync-landing.sh 가 /static/gallery 로 옮긴다)
- * 주소만 여기에 적는다. 셋을 다 갖췄을 때만 화면에 띄운다(하나라도 비면 아무것도 안 그린다). */
-export const QUALITY_SAMPLE: Partial<Record<WizardQuality, string>> = {
-  wave: "/static/gallery/quality/wave.jpg",   // 「신전이 고른 죄인」(20261026T131102-d81183, wave) 표지
-  surf: "/static/gallery/quality/surf.jpg",   // 「대기실 밖에서는」(20260919T125314-423cf5, surf) 표지
-  swell: "/static/gallery/quality/swell.jpg", // 「도시의 히어로 핑크가루」(20261018T133719-c46a5b, swell) 표지
+/** 일반 웹툰 만들기: 「토끼 귀가 떨린 날」 아르카나 page02, 로판 그림체의 동일 장면 비교. */
+const QUALITY_SAMPLE: Record<WizardQuality, string> = {
+  wave: "/static/gallery/quality/wave.jpg", // 옛 작업 호환용. 새 선택지에는 표시하지 않는다.
+  surf: "/static/gallery/quality/arcana-page02-flare.png",
+  swell: "/static/gallery/quality/arcana-page02-gpt-image-2.jpg",
 };
 
-/** 세 화질 견본이 다 있을 때만 그 주소들. */
 export function qualitySamples(): Record<WizardQuality, string> | null {
-  const all = QUALITY_INFO.every((q) => !!QUALITY_SAMPLE[q.key]);
-  return all ? (QUALITY_SAMPLE as Record<WizardQuality, string>) : null;
+  return QUALITY_SAMPLE;
 }
+
+/** 세계관 체험: 「밤에 노래하는 학교」 1화 page04, 일반 웹툰 그림체의 동일 장면 비교. */
+export function worldPlayQualitySamples(): Record<WizardQuality, string> {
+  return {
+    wave: QUALITY_SAMPLE.wave,
+    surf: "/static/gallery/quality/school-corridor-page04-flare.png",
+    swell: "/static/gallery/quality/school-corridor-page04-gpt-image-2.png",
+  };
+}
+
+/** 카드에 작게 보이는 같은 장면 얼굴 컷. 그림체를 나란히 비교하고, 누르면 위의 페이지 전체가 열린다. */
+export const QUALITY_THUMB: Record<WizardQuality, string> = {
+  wave: QUALITY_SAMPLE.wave,
+  surf: "/static/gallery/quality/arcana-page02-flare-face.jpg",
+  swell: "/static/gallery/quality/arcana-page02-gpt-image-2-face.jpg",
+};
+export const WORLD_PLAY_QUALITY_THUMB: Record<WizardQuality, string> = {
+  wave: QUALITY_SAMPLE.wave,
+  surf: "/static/gallery/quality/school-corridor-page04-flare-face.jpg",
+  swell: "/static/gallery/quality/school-corridor-page04-gpt-image-2-face.jpg",
+};
 
 export interface WizardForm {
   lorebook?: import("./api").LoreBook | null;

@@ -73,7 +73,18 @@ def _norm(s: str) -> str:
 
 # -------------------------------------------------------------------- 판정
 
-def judge(facts: dict, title: str) -> list[dict]:
+def _title_with_genre(got: str, want: str, genre: str) -> bool:
+    """제목 앞뒤에 장르 이름만 더 붙은 것인가(#991). 그림 모델이 「장르: 미스터리」를 보고 제목 밑에
+    「- 미스터리 -」를 부제처럼 그린 표지를, 검수가 제목에 붙여 읽어 여섯 번 다시 그린 일이 있었다.
+    장르 표시는 제목을 바꾼 것이 아니다 — 제목 글자는 그대로 있으니 통과로 본다."""
+    if not want or not got or want not in got:
+        return False
+    rest = got.replace(want, "", 1)
+    parts = {_norm(genre)} | {_norm(p) for p in re.split(r"[·,/|]", genre or "")}
+    return rest in {p for p in parts if p}
+
+
+def judge(facts: dict, title: str, genre: str = "") -> list[dict]:
     """센 값 -> 지적 목록. 비어 있으면 통과다.
 
     facts : {"panels", "bubbles", "title_text"} — 검수 모델이 센 것.
@@ -99,19 +110,19 @@ def judge(facts: dict, title: str) -> list[dict]:
     if want and not got:
         issues.append({"kind": "제목", "what": f"표지에 제목이 없다. 「{title}」를 "
                        "글자 그대로 넣어야 한다."})
-    elif want and got != want:
+    elif want and got != want and not _title_with_genre(got, want, genre):
         issues.append({"kind": "제목", "what": f"표지 제목이 「{_text(facts.get('title_text'))}」"
                        f"로 그려졌다. 「{title}」를 글자 그대로 써야 한다."})
     return issues
 
 
-def parse(text: str, title: str) -> dict:
+def parse(text: str, title: str, genre: str = "") -> dict:
     obj = story.extract_json(text)
     if not isinstance(obj, dict):
         raise story.ParseFailure("표지 검수 결과가 JSON 객체가 아닙니다.")
     facts = {"panels": _int(obj.get("panels")), "bubbles": _int(obj.get("bubbles")),
              "title_text": _text(obj.get("title_text")), "what": _text(obj.get("what"))}
-    issues = judge(facts, title)
+    issues = judge(facts, title, genre)
     return {"verdict": "재생성" if issues else "통과", **facts, "issues": issues}
 
 
@@ -151,16 +162,24 @@ def latest_review(run_dir: Path) -> dict | None:
     return got if isinstance(got, dict) and got.get("verdict") else None
 
 
-def title_of(run_dir: Path) -> str:
-    """이 run 에서 고른 방향의 제목."""
+def _chosen(run_dir: Path) -> dict:
     def read(name):
         p = run_dir / name
         return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
     pick = read("pick.json") or {}
     directions = read("directions.json") or []
-    one = next((d for d in directions if d.get("n") == pick.get("n")), None) \
+    return next((d for d in directions if d.get("n") == pick.get("n")), None) \
         or (directions[0] if directions else {})
-    return _text(one.get("title"))
+
+
+def title_of(run_dir: Path) -> str:
+    """이 run 에서 고른 방향의 제목."""
+    return _text(_chosen(run_dir).get("title"))
+
+
+def genre_of(run_dir: Path) -> str:
+    """이 run 에서 고른 방향의 장르 — 표지에 장르 표시가 더 그려져도 제목 판정을 흔들지 않게(#991)."""
+    return _text(_chosen(run_dir).get("genre"))
 
 
 # -------------------------------------------------------------------- 호출 한 번
@@ -202,7 +221,7 @@ def review_cover(run_dir: Path, title: str, *, dry_run: bool = False,
     (dest / f"page01.review{suffix}.txt").write_text(text, encoding="utf-8")
     meta["page"] = 1
     try:
-        review = parse(text, title)
+        review = parse(text, title, genre_of(run_dir))
     except Exception as exc:                                          # noqa: BLE001
         meta["error"] = f"{type(exc).__name__}: {exc}"
         log(f"  [표지 검수] 응답을 읽지 못했습니다 — {meta['error']} (원문은 남았습니다)")

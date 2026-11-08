@@ -76,8 +76,18 @@ public class PlayRuns {
      */
     @Transactional(readOnly = true)
     public List<String> groupsOf(String eventId) {
+        return new ArrayList<>(groupEndsOf(eventId).keySet());
+    }
+
+    /**
+     * 위와 같은 갈래 이름(많이 묶인 순)마다 그 갈래의 결말 한 줄. 그 이름을 처음 지은 만화(label 이 갈래 이름과 같은 것)의
+     * 결말을 먼저 쓰고, 없으면 가장 최근 만화의 결말을 쓴다. 갈림 정리가 이름의 낱말이 아니라 실제로 고른 길을 보고
+     * 묶게 한다(#989).
+     */
+    @Transactional(readOnly = true)
+    public Map<String, String> groupEndsOf(String eventId) {
         if (eventId == null || eventId.isBlank()) {
-            return List.of();
+            return Map.of();
         }
         List<Map<String, Object>> rows = sql.queryForList("""
                 select w.run_id from webtoon_job j join webtoon_work w on w.job_id = j.public_id
@@ -85,13 +95,24 @@ public class PlayRuns {
                  order by j.created_at desc limit %d""".formatted(LIMIT),
                 new MapSqlParameterSource().addValue("e", eventId));
         Map<String, Integer> count = new LinkedHashMap<>();
+        Map<String, String> ends = new LinkedHashMap<>();
+        Map<String, Boolean> namer = new LinkedHashMap<>();
         for (Map<String, Object> row : rows) {
             Map<String, Object> b = branches.of(String.valueOf(row.get("run_id")));
             if (b != null && b.get("group") instanceof String g && !g.isBlank()) {
                 count.merge(g, 1, Integer::sum);
+                String end = b.get("end") instanceof String e ? e.trim() : "";
+                boolean named = g.equals(b.get("label"));
+                if (!end.isEmpty() && (!ends.containsKey(g) || (named && !namer.getOrDefault(g, false)))) {
+                    ends.put(g, end);
+                    namer.put(g, named);
+                }
             }
         }
-        return count.entrySet().stream().sorted((a, b) -> b.getValue() - a.getValue()).map(Map.Entry::getKey).toList();
+        Map<String, String> out = new LinkedHashMap<>();
+        count.entrySet().stream().sorted((a, b) -> b.getValue() - a.getValue())
+                .forEach(e -> out.put(e.getKey(), ends.getOrDefault(e.getKey(), "")));
+        return out;
     }
 
     /**
