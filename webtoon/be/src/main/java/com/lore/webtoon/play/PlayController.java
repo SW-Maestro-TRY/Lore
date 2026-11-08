@@ -198,6 +198,7 @@ public class PlayController {
                 ? catalogSituation(world, event, name)
                 : PlayWorldService.situation(event, Map.of());
         situation = PlayWorldService.withCanon(situation, event, played.groupEndsOf(form.eventId()));
+        situation = PlayWorldService.withSecrets(situation, world, event);   // 비공개 설정 — 이야기만 안다(2026-11-08)
         ResponseEntity<Map<String, Object>> started = jobs.createPlay(request, new JobService.CreateRequest(
                 name, null, (String) world.get("genre"), null, form.style(), null, null, null,
                 form.agreeIp(), false, form.uid(), form.characterId(), null, form.quality(), form.language(),
