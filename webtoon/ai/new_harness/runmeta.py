@@ -15,11 +15,18 @@ from __future__ import annotations
 
 import fcntl
 import json
+import os
 from pathlib import Path
 
 
 def append_call(run_dir: Path, call_meta: dict) -> None:
     """meta.json 의 calls 에 한 줄 더한다. 파일이 없으면 만든다."""
+    if (os.environ.get("WEBTOON_CODEX_PROXY", "").lower() in ("1", "true", "yes", "on")
+            and call_meta.get("provider") == "openai"):
+        # 구독에 포함된 호출은 API 사용량 청구로 기록하지 않는다. 토큰 수는 남긴다.
+        cost = dict(call_meta.get("cost") or {})
+        cost.update(total=0.0, total_krw=0, cost_basis="codex_subscription")
+        call_meta = {**call_meta, "cost": cost}
     path = run_dir / "meta.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     # a+ 는 파일이 없으면 만들고, 있으면 안 지운다 — 잠금을 걸 대상이
