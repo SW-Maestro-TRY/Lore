@@ -133,6 +133,9 @@ def paint(stage: str, prompt: str, out_path: Path, refs=None,
         data, meta = painter(prompt, kind)
         seconds = round(time.monotonic() - started, 2)
         cost_info = cost.cost_fields(provider, model, quality, (meta or {}).get("usage_dict"))
+        if llm.CODEX_PROXY_ENABLED:
+            cost_info = {**cost_info, "total": 0.0, "total_krw": 0,
+                         "cost_basis": "codex_subscription"}
         if span is not None:
             span.set_attribute("seconds", seconds)
             span.set_attribute("bytes", len(data))
