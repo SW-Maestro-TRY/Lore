@@ -42,6 +42,7 @@ public class OpsWatch {
     private final OpsAlert alert;
     private final JdbcTemplate db;
     private final String openrouterKey;
+    private final boolean codexProxy;
     private final double minUsd;
     private final double openaiBudget;
     private final String openaiSince;
@@ -51,6 +52,7 @@ public class OpsWatch {
 
     public OpsWatch(OpsAlert alert, DataSource dataSource,
                     @Value("${HAEUN_OPENROUTER_API_KEY:${OPENROUTER_API_KEY:}}") String openrouterKey,
+                    @Value("${WEBTOON_CODEX_PROXY:false}") boolean codexProxy,
                     @Value("${lore.webtoon.alert.openrouter-min-usd:20}") double minUsd,
                     @Value("${lore.webtoon.alert.openai-budget-usd:0}") double openaiBudget,
                     @Value("${lore.webtoon.alert.openai-budget-since:}") String openaiSince) {
@@ -58,6 +60,7 @@ public class OpsWatch {
         this.db = new JdbcTemplate(dataSource);
         this.db.setQueryTimeout(5);
         this.openrouterKey = openrouterKey == null ? "" : openrouterKey.trim();
+        this.codexProxy = codexProxy;
         this.minUsd = minUsd;
         this.openaiBudget = openaiBudget;
         this.openaiSince = openaiSince == null ? "" : openaiSince.trim();
@@ -65,7 +68,7 @@ public class OpsWatch {
 
     @Scheduled(initialDelayString = "PT4M", fixedDelayString = "PT1H")
     public void checkOpenAi() {
-        if (!alert.enabled() || openaiBudget <= 0 || openaiSince.isEmpty()) {
+        if (!alert.enabled() || codexProxy || openaiBudget <= 0 || openaiSince.isEmpty()) {
             return;
         }
         try {
@@ -107,7 +110,7 @@ public class OpsWatch {
 
     @Scheduled(initialDelayString = "PT3M", fixedDelayString = "PT1H")
     public void checkOpenRouter() {
-        if (!alert.enabled() || openrouterKey.isEmpty()) {
+        if (!alert.enabled() || codexProxy || openrouterKey.isEmpty()) {
             return;
         }
         try {
