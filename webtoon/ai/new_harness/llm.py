@@ -52,6 +52,17 @@ def load_dotenv(path: Path) -> None:
 # setdefault 라 먼저 읽힌 쪽이 이기고, 이미 있는 환경변수는 덮어쓰지 않는다.
 load_dotenv(HERE / ".env")
 
+# 서버별 Codex 프록시 전환. Java moderation 은 WEBTOON_API_KEY 로 공식 API 를
+# 계속 사용한다(무료 엔드포인트). 생성 파이썬에만 별도 프록시 키를 적용한다.
+CODEX_PROXY_ENABLED = os.environ.get("WEBTOON_CODEX_PROXY", "").lower() in ("1", "true", "yes", "on")
+if CODEX_PROXY_ENABLED:
+    proxy_key = os.environ.get("CODEX_PROXY_API_KEY", "").strip()
+    proxy_url = os.environ.get("CODEX_PROXY_BASE_URL", "").strip()
+    if not proxy_key or not proxy_url:
+        raise SystemExit("WEBTOON_CODEX_PROXY 에 CODEX_PROXY_API_KEY 와 CODEX_PROXY_BASE_URL 이 필요합니다")
+    os.environ["OPENAI_API_KEY"] = proxy_key
+    os.environ["OPENAI_BASE_URL"] = proxy_url
+
 # 운영 서버(EC2)는 Parameter Store 에서 키 하나(WEBTOON_API_KEY)만 받는다
 # (/opt/lore/load-secrets.sh → systemd EnvironmentFile → 자바 프로세스 →
 # 이 스크립트를 자식 프로세스로 부르며 환경을 그대로 물려준다).
@@ -176,6 +187,8 @@ def _stage_default_provider(stage: str) -> str:
 
 def provider_for(stage: str) -> str:
     """이 단계가 쓸 프로바이더. 모르는 이름이면 거기서 멈춘다."""
+    if CODEX_PROXY_ENABLED:
+        return "openai"
     name, where = _pick(stage, "PROVIDER", ())
     if not name:
         name = _stage_default_provider(stage)
@@ -252,6 +265,8 @@ STAGE_DEFAULT_MODELS[("PAGE_IMAGE", "openai")] = "gpt-image-2.5-flare"
 
 def model_for(stage: str, provider: str) -> str:
     """이 단계가 쓸 모델 이름."""
+    if CODEX_PROXY_ENABLED and stage.upper() not in IMAGE_STAGES:
+        return env("CODEX_PROXY_TEXT_MODEL", "gpt-6-sol")
     if stage.upper() in IMAGE_STAGES:
         model, _ = _pick(stage, "MODEL", ("NH_IMAGE_MODEL",))
         return model or STAGE_DEFAULT_MODELS.get((stage.upper(), provider)) or image_default(provider)
@@ -307,6 +322,10 @@ class Call:
                 self.model, prompt, temp if self.temp_ok else None, limit, images=images or None)
             usage = _add_usage(first, usage)
         cost = story.cost_of(self.model, usage)
+        if CODEX_PROXY_ENABLED:
+            cost = {"input": 0.0, "output": 0.0, "cache_read": 0.0,
+                    "cache_write": 0.0, "total": 0.0, "total_krw": 0,
+                    "cost_basis": "codex_subscription"}
         # 원화도 같이 박는다 — 그림 호출(cost.cost_fields)은 이미 넣고 있어서,
         # 글만 빠지면 한 run 의 비용을 더할 때 두 단위가 섞인다. 환율은 호출
         # 시점 값으로 **박아서** 남긴다(나중에 다시 계산하지 않는다).

@@ -25,6 +25,7 @@ SDK(openai 패키지) 대신 requests 를 쓰는 것은 이 하네스의 방식�
 from __future__ import annotations
 
 import base64
+import os
 from typing import Any
 
 import requests
@@ -109,6 +110,10 @@ class OpenAIProvider(ImageProvider):
 
     def generate(self, req: GenRequest) -> GenResult:
         self._note_unsupported()
+        # OPENAI_BASE_URL 이 없으면 기존 공식 API 주소를 그대로 쓴다.
+        base_url = (os.environ.get("OPENAI_BASE_URL") or "").rstrip("/")
+        generate_url = f"{base_url}/images/generations" if base_url else GENERATE_URL
+        edit_url = f"{base_url}/images/edits" if base_url else EDIT_URL
         timeout = float(self.options.get("timeout_sec", 300))
         headers = {"Authorization": f"Bearer {self.api_key or ''}"}
         is_gpt_image = str(self.model).startswith("gpt-image")
@@ -132,14 +137,14 @@ class OpenAIProvider(ImageProvider):
                     for p in req.images
                 ]
                 resp = requests.post(
-                    EDIT_URL, headers=headers, timeout=timeout,
+                    edit_url, headers=headers, timeout=timeout,
                     data={k: str(v) for k, v in fields.items()}, files=files)
             else:
                 if not is_gpt_image:
                     # dall-e-3 는 기본이 URL 이라 base64 를 따로 요구해야 한다.
                     fields["response_format"] = "b64_json"
                 resp = requests.post(
-                    GENERATE_URL,
+                    generate_url,
                     headers={**headers, "Content-Type": "application/json"},
                     timeout=timeout, json=fields)
         except requests.RequestException as exc:
