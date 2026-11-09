@@ -200,6 +200,11 @@ services:
       # 하네스가 그림·이야기를 부를 때 쓰는 열쇠. 자바 프로세스 환경으로 들어가 파이썬이
       # 물려받고, llm.py 가 OPENAI_API_KEY 로 풀어 쓴다. 비우면 만들기가 그 자리에서 멈춘다.
       WEBTOON_API_KEY: ${WEBTOON_API_KEY:-}
+      # 웹툰 생성 파이썬만 Codex 프록시로 전환. 기존 키는 moderation 용으로 유지한다.
+      WEBTOON_CODEX_PROXY: ${WEBTOON_CODEX_PROXY:-false}
+      CODEX_PROXY_API_KEY: ${CODEX_PROXY_API_KEY:-}
+      CODEX_PROXY_BASE_URL: ${CODEX_PROXY_BASE_URL:-}
+      CODEX_PROXY_TEXT_MODEL: ${CODEX_PROXY_TEXT_MODEL:-gpt-6-sol}
       # 하네스 모델 호출 추적(Logfire, webtoon/ai/new_harness/tracing.py). 파이썬이 물려받는다.
       # 비우면 추적이 꺼진 채로 똑같이 돈다. 켜면 캐릭터 설명·사진이 프롬프트째 Logfire 로 나간다.
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
