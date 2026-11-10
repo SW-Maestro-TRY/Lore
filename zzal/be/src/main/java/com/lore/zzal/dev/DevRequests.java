@@ -22,7 +22,19 @@ public final class DevRequests {
 
             @Schema(description = "당길 초", example = "60") Long seconds,
 
-            @Schema(description = "당길 분", example = "240") Long minutes) {
+            @Schema(description = "당길 분", example = "240") Long minutes,
+
+            @Schema(description = "방문으로 칠까(기본 true). false 면 정산만 하고 방문으로 안 친다 — 결석 떠남 재현용",
+                    example = "true") Boolean visit) {
+
+        public AdvanceClock(Long seconds, Long minutes) {
+            this(seconds, minutes, null);
+        }
+
+        /** 방문으로 칠까. 안 주면 예전처럼 방문이다. */
+        public boolean visits() {
+            return visit == null || visit;
+        }
 
         /** ★ 넘치면 예외 — 조용히 음수로 감기면 30일 상한을 우회한다(리뷰 주입: minutes=Long.MAX). */
         public Duration toDuration() {
@@ -48,7 +60,18 @@ public final class DevRequests {
 
             @Schema(description = "부화 뒤 몇 분", example = "40") Integer sinceHatchMinutes,
 
-            @Schema(description = "오늘(KST) HH:mm", example = "19:00") String localTime) {
+            @Schema(description = "오늘(KST) HH:mm", example = "19:00") String localTime,
+
+            @Schema(description = "방문으로 칠까(기본 true). false 면 정산만 한다", example = "true") Boolean visit) {
+
+        public SetClock(Instant at, Integer sinceHatchMinutes, String localTime) {
+            this(at, sinceHatchMinutes, localTime, null);
+        }
+
+        /** 방문으로 칠까. 안 주면 예전처럼 방문이다. */
+        public boolean visits() {
+            return visit == null || visit;
+        }
 
         public int given() {
             return (at != null ? 1 : 0) + (sinceHatchMinutes != null ? 1 : 0) + (localTime != null ? 1 : 0);

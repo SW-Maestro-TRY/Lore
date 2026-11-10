@@ -1,0 +1,418 @@
+"use client";
+/* 세계관 만들기 — PC 는 「세계 안」 화면 모양에서 바로 고치기(시안 3), 폰은 네 걸음(세계 → 인물 → 사건 → 확인, 시안 2).
+ * 시안: haeun/브랜드-UX-2026-11-02/시안-세계관만들기/index.html.
+ * - 등장인물(사건에 같이 나오는 인물)과 예시 캐릭터(체험하는 사람이 바로 넣어 볼 캐릭터, 최대 2)는 만드는 사람이 정한다.
+ * - 내 설정집에서 가져와 채울 수 있고, 다시 가져오면 덮어쓴다.
+ * - 「AI로 채우기」는 POST /play/worlds/make — 빈 칸과 예시 캐릭터 둘을 서버가 지어 준다. 한 번 지은 뒤엔 「다시 만들기」.
+ * - 「올리기」는 POST /play/worlds(이미 id 가 있으면 PUT). 서버 길은 lore-23 의 feature/world-create.
+ * - 장르 칩은 운영 웹툰 만들기와 같은 목록(GENRE_QUICK) + 직접 입력.
+ * - PC 는 두 걸음(1 설정 · 등장인물, 2 사건), 폰은 세 걸음(1 설정, 2 등장인물, 3 사건) — 하은 11/03.
+ * - 적는 대로 이 브라우저에 자동 저장한다(사진 포함 — 긴 변 900px jpeg). 다른 화면에 다녀와도 그대로다.
+ * - 예시 캐릭터는 사건마다 등장인물처럼 그 자리에서 사진 · 이름 · 설정으로 만든다(최대 둘). 서버가 사진 그대로 캐릭터로 만든다.
+ * - 사진은 data URL 로 서버에 보낸다(창고에 올려 주소로 돌려준다). */
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import AuthModal from "@common/auth/AuthModal";
+import { useAuth } from "@common/auth/useAuth";
+import { listLorebooks, listPlayWorlds, readPlayWorld, WebtoonApiError, type LoreBook } from "../../lib/api";
+import { track } from "../../lib/track";
+import { GENRE_QUICK } from "../../lib/wizardData";
+import { useT } from "../../lib/i18n";
+import type { Go } from "../../lib/nav";
+import { IconClose, IconEdit, IconPlus } from "../../ui/Icons";
+import { usePhone } from "../landing/usePhone";
+import { fromServer, makeWorld, saveWorld, type ServerWorld, type WorldDraft, type DraftPerson as Person, type DraftEvent as Ev } from "./playData";
+import "../wizard/i18n";
+import "./i18n";
+import "./Play.css";
+
+type Draft = WorldDraft & { cover?: string };
+const DRAFT_KEY = "lore-world-draft";
+const empty: Draft = { name: "", genre: "", one: "", rule: "", cast: [], events: [], examples: [], visibility: "public" };
+const uid = () => Math.random().toString(36).slice(2, 10);
+const epNo = (i: number) => `EP ${String(i + 1).padStart(2, "0")}`;
+const MAX_EXAMPLES = 2;
+/* AI로 채우기 — 서버 길(/play/worlds/make)은 있지만 모델 호출 · 그림 비용을 아직 확인 못 해 닫아 둔다 */
+const AI_FILL_ON = false;
+/* 저장소가 차면 사진을 빼고 글만이라도 남긴다 */
+const strip = (d: Draft): Draft => ({ ...d, cover: undefined, cast: d.cast.map((p) => ({ ...p, face: undefined })),
+  events: d.events.map((e) => ({ ...e, image: undefined, example_people: (e.example_people || []).map((x) => ({ ...x, face: undefined })) })) });
+const newPerson = (): Person => ({ id: uid(), name: "", role: "", desc: "" });
+const newEvent = (): Ev => ({ id: uid(), title: "", line: "", situation: "", place: "", spot: "", cast: [], examples: [], example_people: [] });
+
+/* 설정집 → 세계관 칸(하은 11/03): 설정집 제목은 세계 이름으로, 안의 항목은 전부(고정 설정 포함) 세계 규칙으로 */
+function fromBook(b: LoreBook, d: Draft): Draft {
+  const books = b.books?.length ? b.books : [b];
+  const entries = books.flatMap((x) => x.entries || []).filter((x) => x.enabled !== false);
+  const rule = [...books.map((x) => x.fixed_settings).filter(Boolean), ...entries.map((x) => `${x.title}: ${x.content}`)].join("\n");
+  return { ...d, name: b.name || d.name, rule: rule || d.rule, lorebook_id: b.library_id || b.id };
+}
+
+/* 편집(editId)이면 서버의 그 세계를 불러와 칸을 채우고, 고치던 글은 그 세계 전용 칸에 따로 남긴다(새로 만들던 글과 안 섞이게) */
+function useDraft(editId?: string) {
+  const [d, setD] = useState<Draft>(empty);
+  const [saved, setSaved] = useState(false);
+  const [loadErr, setLoadErr] = useState("");
+  const KEY = editId ? `${DRAFT_KEY}:${editId}` : DRAFT_KEY;
+  useEffect(() => {
+    let local: Draft | null = null;
+    try { const raw = localStorage.getItem(KEY); if (raw) local = { ...empty, ...JSON.parse(raw) }; } catch { /* 저장소가 막힌 브라우저 */ }
+    if (local) { setD(local); return; }
+    /* 한 세계 읽기(/play/worlds/{id})가 운영 세계를 안 주면 목록에서 찾는다 */
+    if (editId) void readPlayWorld<ServerWorld>(editId)
+      .catch(() => listPlayWorlds<ServerWorld>().then((r) => { const w = r.worlds.find((x) => x.id === editId); if (!w) throw new Error(); return w; }))
+      .then((w) => setD({ ...fromServer(w, empty), id: w.id, cover: w.cover_url || undefined }))
+      .catch(() => setLoadErr("이 세계관을 불러오지 못했어요"));
+  }, [KEY]);
+  const loaded = useRef(false);
+  useEffect(() => { loaded.current = true; }, []);
+  const write = (x: Draft) => {
+    try { localStorage.setItem(KEY, JSON.stringify(x)); return true; } catch { /* 가득 찼으면 글만 */ }
+    try { localStorage.setItem(KEY, JSON.stringify(strip(x))); return true; } catch { return false; }
+  };
+  /* 적는 대로 0.5초 뒤 저장 — 다른 화면에 다녀오거나 창을 닫아도 남는다 */
+  useEffect(() => {
+    if (!loaded.current || d === empty) return;
+    const h = window.setTimeout(() => { if (write(d)) setSaved(true); }, 500);
+    return () => window.clearTimeout(h);
+  }, [d]);
+  const set = (p: Partial<Draft>) => { setD((o) => ({ ...o, ...p })); setSaved(false); };
+  const keep = () => { if (write(d)) setSaved(true); };
+  const clear = () => { try { localStorage.removeItem(KEY); } catch { /* 저장소가 막힌 브라우저 */ } };
+  return { d, set, setD, keep, saved, clear, loadErr };
+}
+
+/* 장르 — 운영 만들기와 같은 칩 + 직접 입력 */
+function Genre({ d, set, scroll }: { d: Draft; set: (p: Partial<Draft>) => void; scroll?: boolean }) {
+  const t = useT();
+  const [typing, setTyping] = useState(false);
+  const custom = typing || (!!d.genre && !GENRE_QUICK.includes(d.genre));
+  return (
+    <div className="wn-genre">
+      <div className={`wn-chips${scroll ? " scroll" : ""}`}>
+        {GENRE_QUICK.map((g) => <button type="button" key={g} className={d.genre === g && !typing ? "on" : ""} onClick={() => { setTyping(false); set({ genre: d.genre === g ? "" : g }); }}>{t(g)}</button>)}
+        <button type="button" className={custom ? "on" : ""} onClick={() => { setTyping(true); if (GENRE_QUICK.includes(d.genre)) set({ genre: "" }); }}>{t("직접 입력")}</button>
+      </div>
+      {custom && <input className="wn-in" aria-label={t("장르 직접 입력")} value={d.genre} maxLength={30} onChange={(e) => set({ genre: e.target.value })} />}
+    </div>
+  );
+}
+
+/* AI 로 채우기 · 다시 만들기 — 적어 둔 칸은 두고 빈 칸 · 예시 캐릭터 둘을 서버가 짓는다 */
+function AiFill({ d, setD }: { d: Draft; setD: (d: Draft) => void }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const run = async () => {
+    /* 11/03 하은: 아직 실제로 돌려 보지 않은 기능이라 누르면 안내만 한다. 열 때는 이 줄을 지운다. */
+    if (!AI_FILL_ON) { track("world_ai_fill", { result: "closed" }); setErr(t("아직 구현 중이에요")); return; }
+    if (busy) return;
+    setBusy(true); setErr("");
+    track("world_ai_fill", { result: "start", mode: d.id ? "edit" : "new" });
+    try { setD({ ...(await makeWorld(strip(d))), cover: d.cover }); track("world_ai_fill", { result: "done" }); }
+    catch (x) { track("world_ai_fill", { result: "error", status: x instanceof WebtoonApiError ? x.status : 0 }); setErr(x instanceof Error && x.message ? x.message : t("만들지 못했어요")); }
+    setBusy(false);
+  };
+  return (
+    <div className="wn-ai">
+      <button type="button" className="pl-btn wn-w sm" disabled={busy} onClick={run}>{busy ? t("AI가 채우는 중") : d.id ? t("다시 만들기") : t("AI로 채우기")}</button>
+      {err && <span className="pl-err">{err}</span>}
+    </div>
+  );
+}
+
+/* 내 설정집 — 설정집 가져오기에 쓴다 */
+function useBooks() {
+  const [books, setBooks] = useState<LoreBook[] | null>(null);
+  useEffect(() => { void listLorebooks().then((c) => setBooks(c.personal_books || [])).catch(() => setBooks([])); }, []);
+  return books;
+}
+
+/* 고른 사진을 긴 변 900px jpeg data URL 로 — 저장소에 남고 서버에도 그대로 보낸다 */
+function toJpeg(f: File): Promise<string> {
+  return new Promise((ok, bad) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 900 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d")?.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      ok(c.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = bad;
+    img.src = URL.createObjectURL(f);
+  });
+}
+
+function PickPic({ onPick, children, className }: { onPick: (url: string) => void; children: ReactNode; className?: string }) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <button type="button" className={className} onClick={() => ref.current?.click()}>{children}</button>
+      <input ref={ref} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void toJpeg(f).then(onPick).catch(() => {}); e.target.value = ""; }} />
+    </>
+  );
+}
+
+function Face({ name, src, size }: { name: string; src?: string | null; size?: number }) {
+  const s = size ? { width: size, height: size, flexBasis: size } : undefined;
+  return <span className="wn-face" style={{ ...s, ...(src ? { backgroundImage: `url(${src})` } : {}) }}>{!src && name.slice(0, 1)}</span>;
+}
+
+function PersonForm({ p, onDone, onCancel, onDelete }: { p: Person; onDone: (p: Person) => void; onCancel: () => void; onDelete?: () => void }) {
+  const t = useT();
+  const [v, setV] = useState(p);
+  return (
+    <div className="wn-pform">
+      <div className="top">
+        <Face name={v.name} src={v.face} size={84} />
+        <PickPic className="pl-btn wn-w sm" onPick={(face) => setV({ ...v, face })}>{v.face ? t("사진 바꾸기") : t("사진 올리기")}</PickPic>
+      </div>
+      <label><span className="lab">{t("이름")}</span><input value={v.name} maxLength={30} onChange={(e) => setV({ ...v, name: e.target.value })} /></label>
+      <label><span className="lab">{t("역할")}</span><input value={v.role} maxLength={40} onChange={(e) => setV({ ...v, role: e.target.value })} /></label>
+      <label><span className="lab">{t("설정")}</span><textarea rows={3} value={v.desc} maxLength={500} onChange={(e) => setV({ ...v, desc: e.target.value })} /></label>
+      <div className="acts">
+        {onDelete && <button type="button" className="wn-del" onClick={onDelete}>{t("삭제")}</button>}
+        <button type="button" className="pl-btn wn-w sm" onClick={onCancel}>{t("취소")}</button>
+        <button type="button" className="pl-btn sm" disabled={!v.name.trim()} onClick={() => onDone(v)}>{t("완료")}</button>
+      </div>
+    </div>
+  );
+}
+
+function EventForm({ e, no, cast, onDone, onCancel, onDelete, onLive }: { e: Ev; no: string; cast: Person[]; onDone: (e: Ev) => void; onCancel: () => void; onDelete?: () => void; onLive?: (e: Ev) => void }) {
+  const t = useT();
+  const [v, setV0] = useState(e);
+  /* 고치는 대로 밖에도 알린다 — 열어 둔 채 「사건 추가」를 눌러도 적은 것이 남게 */
+  const setV = (n: Ev) => { setV0(n); onLive?.(n); };
+  return (
+    <div className="wn-eform">
+      <PickPic className={`wn-pic${v.image ? "" : " add"}`} onPick={(image) => setV({ ...v, image })}>
+        {v.image ? <span className="im" style={{ backgroundImage: `url(${v.image})` }} /> : <><i><IconPlus /></i>{t("그림 올리기")}</>}
+      </PickPic>
+      <div className="in">
+        <div className="two"><span className="no">{no}</span><input placeholder={t("사건 제목")} aria-label={t("사건 제목")} value={v.title} maxLength={60} onChange={(x) => setV({ ...v, title: x.target.value })} /></div>
+        <input placeholder={t("한 줄 소개")} aria-label={t("한 줄 소개")} value={v.line} maxLength={120} onChange={(x) => setV({ ...v, line: x.target.value })} />
+        <textarea rows={6} placeholder={t("상황")} aria-label={t("상황")} value={v.situation} maxLength={2000} onChange={(x) => setV({ ...v, situation: x.target.value })} />
+        <input placeholder={t("장소")} aria-label={t("장소")} value={v.place} maxLength={80} onChange={(x) => setV({ ...v, place: x.target.value })} />
+        {cast.length > 0 && (
+          <div><span className="lab">{t("이 사건에 나오는 인물")}</span>
+            <div className="wn-chips">{cast.map((p) => {
+              const on = v.cast.includes(p.id);
+              return <button type="button" key={p.id} className={on ? "on" : ""} onClick={() => setV({ ...v, cast: on ? v.cast.filter((x) => x !== p.id) : [...v.cast, p.id] })}>{p.name}</button>;
+            })}</div>
+          </div>
+        )}
+        <div>
+          <ExamplePeople list={v.example_people || []} onChange={(example_people) => setV({ ...v, example_people })} />
+        </div>
+        <div className="acts">
+          {onDelete && <button type="button" className="wn-del" onClick={onDelete}>{t("삭제")}</button>}
+          <button type="button" className="pl-btn wn-w sm" onClick={onCancel}>{t("취소")}</button>
+          <button type="button" className="pl-btn sm" disabled={!v.title.trim()} onClick={() => onDone(v)}>{t("완료")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EventRow({ e, no, onEdit }: { e: Ev; no: string; onEdit: () => void }) {
+  const t = useT();
+  return (
+    <button type="button" className="wn-row" onClick={onEdit}>
+      {e.image ? <span className="im" style={{ backgroundImage: `url(${e.image})` }} /> : <span className="im none" />}
+      <span className="mid"><span className="no">{no}</span><b>{e.title}</b>{e.place && <span className="place">{e.place}</span>}<span className="hook">{e.line || e.situation}</span></span>
+      <span className="pen"><IconEdit /></span>
+    </button>
+  );
+}
+
+/* 예시 캐릭터 — 사건마다 둘까지, 등장인물처럼 그 자리에서 사진 · 이름 · 역할 · 설정으로 만든다 */
+function ExamplePeople({ list, onChange }: { list: Person[]; onChange: (l: Person[]) => void }) {
+  const t = useT();
+  const [open, setOpen] = useState<Person | null>(null);
+  const put = (p: Person) => { onChange(list.some((x) => x.id === p.id) ? list.map((x) => x.id === p.id ? p : x) : [...list, p]); setOpen(null); };
+  const canAdd = list.length < MAX_EXAMPLES && !(open && !list.some((x) => x.id === open.id));
+  return (
+    <>
+    {/* 한 명이라도 있으면 큰 추가 칸 대신 이름표 오른쪽 위의 작은 + */}
+    <div className="wn-exhead"><span className="lab">{t("예시 캐릭터")}</span>
+      {list.length > 0 && canAdd && <button type="button" className="wn-plus" aria-label={t("예시 캐릭터")} onClick={() => setOpen(newPerson())}><IconPlus /></button>}
+    </div>
+    <div className="wn-cast">
+      {list.map((p) => open?.id === p.id
+        ? <PersonForm key={p.id} p={p} onDone={put} onCancel={() => setOpen(null)} onDelete={() => { onChange(list.filter((x) => x.id !== p.id)); setOpen(null); }} />
+        : <button type="button" key={p.id} className="wn-p" onClick={() => setOpen(p)}><span className="ph" style={p.face ? { backgroundImage: `url(${p.face})` } : undefined}>{!p.face && p.name.slice(0, 1)}</span><b>{p.name}</b>{p.role && <em>{p.role}</em>}<span className="pen"><IconEdit /></span></button>)}
+      {open && !list.some((x) => x.id === open.id)
+        ? <PersonForm p={open} onDone={put} onCancel={() => setOpen(null)} />
+        : list.length === 0 && <button type="button" className="wn-dash wn-card-add" onClick={() => setOpen(newPerson())}><IconPlus />{t("예시 캐릭터")}</button>}
+    </div>
+    </>
+  );
+}
+
+/* 설정집 가져오기 — 내 설정집 목록에서 하나. 다시 고르면 덮어쓴다 */
+function FromBook({ d, setD, books, go }: { d: Draft; setD: (d: Draft) => void; books: LoreBook[] | null; go: Go }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="wn-book">
+      <button type="button" className="pl-btn wn-w sm" onClick={() => setOpen(!open)}>{d.lorebook_id ? t("설정집 다시 가져오기") : t("내 설정집에서 가져오기")}</button>
+      {open && (
+        <div className="pick">
+          {books === null ? <span className="hint">…</span> : books.length === 0
+            ? <button type="button" className="wn-dash" onClick={() => go("mypage")}>{t("설정집 만들기")}</button>
+            : books.map((b) => (
+              <button type="button" key={b.library_id || b.id || b.name} className={(b.library_id || b.id) === d.lorebook_id ? "on" : ""} onClick={() => { track("world_book_import", { count: books.length }); setD(fromBook(b, d)); setOpen(false); }}>
+                <span><b>{b.name}</b><small>{(b.fixed_settings || "").slice(0, 60)}</small></span>
+              </button>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function usePublish(d: Draft, clear: () => void, go: Go) {
+  const { status } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  /* 로그인 안 한 채 올리면 서버가 401 을 준다 — 서버 문구 옆에 로그인 단추를 같이 띄운다(초안은 이 브라우저에 그대로 남는다) */
+  const [needLogin, setNeedLogin] = useState(false);
+  const ok = !!d.name.trim() && !!d.one.trim() && d.events.length > 0;
+  /* 세는 값 — 무엇을 얼마나 채웠는지만(글은 안 남긴다) */
+  const shape = () => ({ mode: d.id ? "edit" : "new", count: d.events.length, n: d.cast.length,
+    has_photo: !!d.cover, logged_in: status === "authenticated", result: d.visibility });
+  const publish = async () => {
+    if (!ok || busy) return;
+    setBusy(true); setErr(""); setNeedLogin(false);
+    track("world_publish", shape());
+    try {
+      const id = await saveWorld(d);
+      /* 서버 길이 없을 때(404·405)는 이 브라우저에만 담고 my- 로 시작하는 id 를 돌려준다 */
+      track("world_published", { ...shape(), world: id, kind: id.startsWith("my-") ? "local" : "server" });
+      clear();
+      go("play", { world: id });
+    } catch (x) {
+      const code = x instanceof WebtoonApiError ? x.status : 0;
+      const login = code === 401;
+      track("world_publish_failed", { ...shape(), status: code, reason: login ? "need_login" : "other" });
+      if (login) track("login_prompt", { where: "world_publish" });
+      setNeedLogin(login);
+      setErr(x instanceof Error && x.message ? x.message : "");
+      setBusy(false);
+    }
+  };
+  /* 로그인하고 돌아오면 단추를 거둔다 — 다시 「세계관 올리기」를 누르면 된다 */
+  useEffect(() => { if (status === "authenticated") setNeedLogin(false); }, [status]);
+  return { ok, busy, err, needLogin, publish };
+}
+
+/* ---------- PC — 두 걸음: 1 설정 · 등장인물, 2 사건 ---------- */
+function Desk({ go, editId }: { go: Go; editId?: string }) {
+  const t = useT();
+  const { d, set, setD, keep, saved, clear, loadErr } = useDraft(editId);
+  const books = useBooks();
+  const { ok, busy, err, needLogin, publish } = usePublish(d, clear, go);
+  const [auth, setAuth] = useState(false);
+  const [step, setStep] = useState(0);
+  const phone = usePhone();
+  /* 폰은 설정과 등장인물을 나눈다 */
+  const names = phone ? [t("설정"), t("등장인물"), t("사건")] : [t("설정 · 등장인물"), t("사건")];
+  const evStep = names.length - 1;
+  const s1ok = !!d.name.trim() && !!d.one.trim();
+  /* 몇 번째 걸음까지 왔나 — 화면 주소가 안 바뀌어서 page_view 로는 안 보인다 */
+  useEffect(() => { track("world_new_step", { step: step + 1, count: names.length, mode: editId ? "edit" : "new" }); }, [step, names.length]);
+  const [person, setPerson] = useState<Person | null>(null);
+  const [ev, setEv] = useState<Ev | null>(null);
+  const putPerson = (p: Person) => { if (!d.cast.some((x) => x.id === p.id)) track("world_part_add", { kind: "cast", count: d.cast.length + 1 }); set({ cast: d.cast.some((x) => x.id === p.id) ? d.cast.map((x) => x.id === p.id ? p : x) : [...d.cast, p] }); setPerson(null); };
+  const putEvent = (e: Ev) => { if (!d.events.some((x) => x.id === e.id)) track("world_part_add", { kind: "event", count: d.events.length + 1 }); set({ events: d.events.some((x) => x.id === e.id) ? d.events.map((x) => x.id === e.id ? e : x) : [...d.events, e] }); setEv(null); };
+  /* 사건 추가 — 열어 둔 사건이 있으면 제목이 있을 때 그대로 넣고 새 칸을 연다 */
+  const live = useRef<Ev | null>(null);
+  /* 사건 걸음에 처음 들어오면(사건 0개) 단추를 안 눌러도 빈 사건 칸이 열려 있게 */
+  useEffect(() => {
+    if (step === evStep && d.events.length === 0 && !ev) { const n = newEvent(); live.current = n; setEv(n); }
+  }, [step, evStep, d.events.length]);
+  const addEvent = () => {
+    const cur = live.current;
+    if (ev && cur && cur.id === ev.id && cur.title.trim() && !d.events.some((x) => x.id === cur.id)) track("world_part_add", { kind: "event", count: d.events.length + 1 });
+    if (ev && cur && cur.id === ev.id && cur.title.trim()) set({ events: d.events.some((x) => x.id === cur.id) ? d.events.map((x) => x.id === cur.id ? cur : x) : [...d.events, cur] });
+    const n = newEvent();
+    live.current = n;
+    setEv(n);
+  };
+  return (
+    <div className="pl-wrap wn">
+      <div className="pl-mtop">
+        <button type="button" className="back" onClick={() => (step ? setStep(step - 1) : go("make"))}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 5l-7 7 7 7" /></svg>{step ? names[step - 1] : t("만들기")}</button>
+        <b>{editId ? t("세계관 편집") : t("세계관 만들기")}</b><span className="r">{step + 1} / {names.length}</span>
+      </div>
+      <div className="wn-head">
+        <div className="pl-crumb"><button type="button" onClick={() => go("make")}>{t("만들기")}</button><i>›</i><b>{d.name || t("새 세계관")}</b></div>
+        {loadErr && <span className="pl-err">{t(loadErr)}</span>}
+        <div className="wn-tools"><FromBook d={d} setD={(x) => { setD(x); }} books={books} go={go} /><AiFill d={d} setD={setD} /></div>
+      </div>
+      <div className="wn-steps">{names.map((n, i) => (
+        <button type="button" key={n} className={i < step ? "done" : i === step ? "on" : ""} onClick={() => setStep(i)}><i>{i < step ? "✓" : i + 1}</i>{n}</button>
+      ))}</div>
+      {step < evStep ? (
+      <div className="wn-s1">
+        {(!phone || step === 0) && <div className="wn-s1-l">
+          <PickPic className={`wn-cover${d.cover ? "" : " add"}`} onPick={(cover) => { track("world_part_add", { kind: "cover" }); set({ cover }); }}>
+            {d.cover ? <><span className="im" style={{ backgroundImage: `url(${d.cover})` }} /><span className="pl-btn sm tool">{t("바꾸기")}</span></> : <><i><IconPlus /></i>{t("표지 올리기")}</>}
+          </PickPic>
+          <input className="wn-name" placeholder={t("세계 이름")} aria-label={t("세계 이름")} value={d.name} maxLength={40} onChange={(e) => set({ name: e.target.value })} />
+          <Genre d={d} set={set} />
+          <textarea className="wn-one" rows={2} placeholder={t("한 줄 소개")} aria-label={t("한 줄 소개")} value={d.one} maxLength={160} onChange={(e) => set({ one: e.target.value })} />
+          <label className="wn-lab"><span className="lab">{t("세계 규칙")}</span><textarea className="wn-one" rows={6} value={d.rule} maxLength={2000} onChange={(e) => set({ rule: e.target.value })} /></label>
+          {phone && <div className="wn-bar"><button type="button" className="pl-btn" disabled={!s1ok} onClick={() => { keep(); setStep(1); }}>{t("다음 · {name}", { name: t("등장인물") })}</button></div>}
+        </div>}
+        {(!phone || step === 1) && <div className="wn-s1-r">
+          <h2 className="pl-h1">{t("등장인물")}</h2>
+          <div className="wn-cast">
+            {d.cast.map((p) => person?.id === p.id ? (
+              <PersonForm key={p.id} p={p} onDone={putPerson} onCancel={() => setPerson(null)} onDelete={() => { set({ cast: d.cast.filter((x) => x.id !== p.id), events: d.events.map((e) => ({ ...e, cast: e.cast.filter((x) => x !== p.id) })) }); setPerson(null); }} />
+            ) : (
+              <button type="button" key={p.id} className="wn-p" onClick={() => setPerson(p)}>
+                <span className="ph" style={p.face ? { backgroundImage: `url(${p.face})` } : undefined}>{!p.face && p.name.slice(0, 1)}</span><b>{p.name}</b>{p.role && <em>{p.role}</em>}<span className="pen"><IconEdit /></span>
+              </button>
+            ))}
+            {person && !d.cast.some((x) => x.id === person.id)
+              ? <PersonForm p={person} onDone={putPerson} onCancel={() => setPerson(null)} />
+              : <button type="button" className="wn-dash wn-card-add" onClick={() => setPerson(newPerson())}><IconPlus />{t("등장인물")}</button>}
+          </div>
+          <div className="wn-bar">
+            {phone && <button type="button" className="pl-btn wn-w" onClick={() => setStep(0)}>{t("이전")}</button>}
+            <span className="wn-saved">{saved ? t("저장됨") : ""}</span>
+            <button type="button" className="pl-btn" disabled={!s1ok} onClick={() => { keep(); setStep(evStep); }}>{t("다음 · {name}", { name: t("사건") })}</button>
+          </div>
+        </div>}
+      </div>
+      ) : (
+        <div className="pl-sec wn-s2">
+          <div className="wn-evhead"><h2 className="pl-h1">{t("사건")}</h2><button type="button" className="pl-btn wn-w sm" onClick={addEvent}><IconPlus />{t("사건 추가")}</button></div>
+          {d.events.map((e, i) => ev?.id === e.id
+            ? <EventForm key={e.id} e={e} no={epNo(i)} cast={d.cast} onLive={(x) => { live.current = x; }} onDone={putEvent} onCancel={() => setEv(null)} onDelete={() => { set({ events: d.events.filter((x) => x.id !== e.id) }); setEv(null); }} />
+            : <EventRow key={e.id} e={e} no={epNo(i)} onEdit={() => setEv(e)} />)}
+          {ev && !d.events.some((x) => x.id === ev.id) && <EventForm key={ev.id} e={ev} no={epNo(d.events.length)} cast={d.cast} onLive={(x) => { live.current = x; }} onDone={putEvent} onCancel={() => setEv(null)} />}
+          <div className="wn-bar">
+            <button type="button" className="pl-btn wn-w" onClick={() => setStep(evStep - 1)}>{t("이전")}</button>
+            <div className="wn-seg"><button type="button" className={d.visibility === "public" ? "on" : ""} onClick={() => set({ visibility: "public" })}>{t("모두에게")}</button><button type="button" className={d.visibility === "private" ? "on" : ""} onClick={() => set({ visibility: "private" })}>{t("나만")}</button></div>
+            <span className="wn-saved">{saved ? t("저장됨") : ""}</span>
+            <button type="button" className="pl-btn" disabled={!ok || busy} onClick={publish}>{editId ? t("고친 내용 저장") : t("세계관 올리기")}</button>
+          </div>
+          {err && <p className="pl-err">{err}</p>}
+          {needLogin && <div className="wn-bar"><button type="button" className="pl-btn" onClick={() => { track("world_login_click", { where: "world_publish" }); setAuth(true); }}>{t("로그인")}</button></div>}
+        </div>
+      )}
+      {/* 늘 붙여 두고 open 만 바꾼다(머리 줄 로그인과 같은 방식). 열린 채로 새로 붙이면 개발 모드에서 효과가 두 번 돌며
+          자기가 쌓은 기록 칸을 걷어 바로 닫혔다 */}
+      <AuthModal open={auth} onClose={() => setAuth(false)} />
+    </div>
+  );
+}
+
+/* PC · 폰 같은 두 걸음 — 폰은 한 줄로 쌓이고 위에 얇은 줄(이전 · 제목)이 붙는다 */
+export default function WorldNew({ go, world }: { go: Go; world?: string }) {
+  return <div className="pl"><Desk key={world || "new"} go={go} editId={world} /></div>;
+}

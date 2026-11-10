@@ -302,6 +302,18 @@ def load_negative(style: str = "") -> str:
     return "\n".join(lines)
 
 
+def load_finish() -> str:
+    """모든 그림체 끝에 공통으로 붙는 마무리 지시문. prompt/finish_prompt 에 있다.
+
+    load_negative 와 같은 이유로 한 곳에만 둔다 — 그림체 8개에 같은 줄을
+    복사해 두면 하나 고칠 때 나머지를 놓친다.
+    """
+    path = PROMPT_DIR / "finish_prompt"
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8").strip()
+
+
 def load_style(name: str = "") -> str:
     """그림체 문구. prompt/style/<이름> 에 있다.
 
@@ -310,7 +322,8 @@ def load_style(name: str = "") -> str:
     일이다. 여기가 비어 있으면 매번 다른 그림이 나온다 — 선 굵기·채색·명암·
     색조가 안 적힌 프롬프트는 모델에게 아무 말도 안 한 것과 같다.
 
-    끝에는 공통 네거티브 프롬프트(load_negative)를 매번 붙인다.
+    끝에는 공통 네거티브 프롬프트(load_negative)와 공통 마무리 지시문
+    (load_finish)을 매번 붙인다.
     """
     name = (name or "").strip() or DEFAULT_STYLE
     path = PROMPT_DIR / "style" / name
@@ -324,6 +337,9 @@ def load_style(name: str = "") -> str:
     negative = load_negative(name)
     if negative:
         text += "\n\n## 하지 마라 (공통, 모든 그림체)\n" + negative
+    finish = load_finish()
+    if finish:
+        text += "\n\n## 마무리 (공통, 모든 그림체)\n" + finish
     return "\n".join("  " + ln if ln.strip() else ln for ln in text.splitlines())
 
 

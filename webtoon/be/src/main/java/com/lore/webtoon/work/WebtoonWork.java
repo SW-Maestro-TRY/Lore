@@ -117,6 +117,10 @@ public class WebtoonWork {
     @Column(name = "example_order")
     private Integer exampleOrder;
 
+    /** 둘러보기 「인기순」에서의 자리. 관리자가 정한다. 작을수록 앞, 비어 있으면 정해진 것들 뒤(조회순). */
+    @Column(name = "browse_rank")
+    private Integer browseRank;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -141,6 +145,12 @@ public class WebtoonWork {
     /** 처리 전에 공개였나 — 다시 공개 · 되살리기 때 원래 상태로 돌린다. */
     @Column(name = "moderation_was_public")
     private Boolean moderationWasPublic;
+
+    /* 링크 공개의 열쇠(#898). is_public 이 false 이고 이 값이 있으면 「링크 있는 사람만」이다 — 둘러보기·추천·남의
+       목록은 지금처럼 is_public 만 보므로 비공개와 똑같이 빠지고, 그림도 비공개 자리에 머문다. 비공개로 바꾸면
+       지워서 이미 보낸 링크도 닫는다. 공개로 올릴 때는 남겨 둔다 — 다시 링크 공개로 내려도 보낸 링크가 산다. */
+    @Column(name = "share_key", length = 64, unique = true)
+    private String shareKey;
 
     protected WebtoonWork() {
     }
@@ -210,12 +220,39 @@ public class WebtoonWork {
         this.isPublic = value;
     }
 
+    public String getShareKey() {
+        return shareKey;
+    }
+
+    /** 「링크 있는 사람만」인가 — 둘러보기에는 없고, 열쇠가 있다. */
+    public boolean isLinkOnly() {
+        return !isPublic && shareKey != null && !shareKey.isBlank();
+    }
+
+    /** 공개 범위 한 낱말 — public · link · private. 관리자 처리와 휴지통은 따로 본다. */
+    public String visibility() {
+        return isPublic ? WorkVisibility.PUBLIC : isLinkOnly() ? WorkVisibility.LINK : WorkVisibility.PRIVATE;
+    }
+
+    void setShareKey(String key) {
+        this.shareKey = key;
+    }
+
     public boolean isExample() {
         return example;
     }
 
     public Integer getExampleOrder() {
         return exampleOrder;
+    }
+
+    public Integer getBrowseRank() {
+        return browseRank;
+    }
+
+    /** 인기순 자리를 정하거나(숫자) 비운다(null). 관리자만 부른다({@code BrowseRankAdminController}). */
+    void setBrowseRank(Integer rank) {
+        this.browseRank = rank;
     }
 
     /** 예시로 지정하거나 해제한다. 해제하면 순서도 비운다. */

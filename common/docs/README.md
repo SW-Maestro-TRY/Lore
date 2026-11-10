@@ -5,3 +5,4 @@
 - [architecture.md](./architecture.md) — 전체 구조와 폴더 조직 방식(왜 domain-first 인지 포함)
 - [api-spec.md](./api-spec.md) — API 명세 (템플릿)
 - [git-convention.md](./git-convention.md) — 브랜치 / 커밋 / PR 규칙
+- [payment.md](./payment.md) — 크레딧 충전 결제(페이앱): 연동값 넣는 곳, 첫 실결제 확인, 환불, 이상할 때

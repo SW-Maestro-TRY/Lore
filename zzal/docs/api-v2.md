@@ -15,8 +15,8 @@
 | 인증 | HttpOnly 쿠키 JWT. 모든 v2 경로는 로그인 필요 |
 | 경로 | `/api/zzal/v1/me/pets` 밑. 내 것은 `me`, 남의 펫은 **404**(`ZZAL_PET_NOT_FOUND`) — 403은 "그 번호의 펫이 있다"를 알려준다 |
 | 행동 응답 | **모든 행동(POST)의 응답 = `PetDetail` 최신 상태.** 누른 뒤 다시 조회하지 않는다 |
-| 시각 | ISO-8601 UTC(`2026-09-05T10:00:00Z`). 화면은 `serverNow`와의 차이로만 시간을 다루고, **기기 시계·시간대를 쓰지 않는다** |
-| 시간대 | 서버 계산은 KST(Asia/Seoul) 고정. 창(19:00·23:00·07:00·10:00)은 KST 벽시계 |
+| 시각 | ISO-8601 UTC(`2026-09-05T10:00:00Z`). 화면은 `serverNow`와의 차이로만 시간을 다루고, **기기 시계를 쓰지 않는다**. 기기에서 읽는 것은 시간대 **이름**뿐이다(아래 줄) |
+| 시간대 | **펫마다 하나**(2026-10-26). 화면은 `/api/zzal/` 요청마다 헤더 `X-Zzal-Tz: <IANA 이름>`(기기의 `Intl…resolvedOptions().timeZone`)을 싣는다. 서버는 펫 **생성 때**, 또는 아직 모르는(NULL) 펫의 **첫 요청**에서 한 번 `zzal_pet.time_zone` 에 적고 **다시 바꾸지 않는다**(못 읽는 값은 버린다 → NULL). NULL 은 `Asia/Seoul` 로 읽는다. `PetDetail.timeZone`(그 값, 없으면 Asia/Seoul) · `PetDetail.rulesTimeZone`(서버가 창을 재는 시간대) 두 칸이 내려간다. 창(19:00·23:00·07:00·10:00·부름 10/14/19시)은 `rulesTimeZone` 의 벽시계다. **2단계부터 `rulesTimeZone` = `timeZone`**(서버 규칙이 펫 시간대의 벽시계로 돈다 — 창·자동 취침/기상·부름·함께한 날·밤 굽기·지시문 시각). 1단계 서버는 `rulesTimeZone` 이 늘 Asia/Seoul 이었고, 화면은 둘이 다르면 창 시각을 `timeZone` 으로 바꿔 보여 준다(그래서 화면은 두 단계 어느 서버와도 맞다). 연속 대화·튜토리얼 부름 판의 `day_of` 열쇠는 부화일(KST)로 고정한다 — 시간대를 처음 관측해도 같은 판을 찾는다. 부화 하루 상한·운영 경보·S3 보관·관리자 화면은 KST 그대로 |
 | 이미지 키 | `images/…` 뒷부분만. 화면이 `assetUrl()`로 CDN을 앞에 붙인다 |
 | 서버 정본 | 수치는 저장하지 않고 조회 때 계산(lazy settle). 낙관적 업데이트 금지 |
 | 케어 미스 | **어디에도 내려가지 않는다.** 보이는 신호는 `leaving`(짐 가방)뿐 |
@@ -84,8 +84,8 @@
 
 | 호출 | 조건(정본 2·12·16장) | 거절 |
 |---|---|---|
-| `POST /{id}/sleep` | **낮잠**: 아기 60분 안(한 번). **밤잠**: 60분 뒤 KST 19:00~23:00. 아기 60분 안에는 밤잠 없음 | `ZZAL_NOT_SLEEP_TIME` `ZZAL_PET_SLEEPING` `ZZAL_TRAVELING` |
-| `POST /{id}/wake` | **밤잠**: KST 07:00~10:00. **낮잠**: 재운 지 5분 뒤 | `ZZAL_NOT_WAKE_TIME` `ZZAL_PET_NOT_SLEEPING` |
+| `POST /{id}/sleep` | **낮잠**: 아기 60분 안(한 번). **밤잠**: 60분 뒤 19:00~23:00(`rulesTimeZone` 벽시계). 아기 60분 안에는 밤잠 없음 | `ZZAL_NOT_SLEEP_TIME` `ZZAL_PET_SLEEPING` `ZZAL_TRAVELING` |
+| `POST /{id}/wake` | **밤잠**: 07:00~10:00(`rulesTimeZone` 벽시계). **낮잠**: 재운 지 5분 뒤 | `ZZAL_NOT_WAKE_TIME` `ZZAL_PET_NOT_SLEEPING` |
 
 - 자동 취침 23:00, 자동 기상 10:00(늦잠, `clock.overslept=true`), 낮잠 자동 기상 10분. 자동은 보상 없음(플랜 해석 기본값).
 - 사용자 재우기 = 행복 +1·친밀도 +10 / 사용자 깨우기 = 친밀도 +10.
@@ -208,6 +208,8 @@
   "hatchedAt": "2026-09-05T09:02:23Z",
 
   "serverNow": "2026-09-05T09:30:00Z",   // ★ 필수. 이 펫의 시계(dev 오프셋 포함)
+  "timeZone": "Asia/Seoul",              // 이 펫의 시간대(표시용). 모르면 Asia/Seoul
+  "rulesTimeZone": "Asia/Seoul",         // 창을 재는 시간대. 2단계부터 timeZone 과 같다(1단계는 늘 Asia/Seoul)
 
   // ── 이하 ALIVE 전용 ─────────────────────────────────────────
   "clock": {
@@ -218,8 +220,8 @@
     "wokeAt": "2026-09-05T09:02:23Z",    // 오늘 기상 시각(부화 당일은 부화 시각)
     "canSleep": false,                   // 지금 재우기 버튼이 눌리는가
     "canWake": false,                    // 지금 깨우기 버튼이 눌리는가
-    "sleepWindowOpensAt": "2026-09-05T10:00:00Z", // 다음 재우기 창 시작(KST 19:00). 낮잠 가능이면 serverNow
-    "autoSleepAt": "2026-09-05T14:00:00Z",        // 자동 취침(KST 23:00). 아기 60분 유예 반영
+    "sleepWindowOpensAt": "2026-09-05T10:00:00Z", // 다음 재우기 창 시작(rulesTimeZone 19:00). 낮잠 가능이면 serverNow
+    "autoSleepAt": "2026-09-05T14:00:00Z",        // 자동 취침(rulesTimeZone 23:00). 아기 60분 유예 반영
     "wakeWindowOpensAt": null,           // 자는 중일 때: 깨우기 창 시작(밤 07:00 / 낮잠 +5분)
     "autoWakeAt": null,                  // 자는 중일 때: 자동 기상(밤 10:00 / 낮잠 +10분)
     "overslept": false                   // 오늘 10:00 자동 기상이었는가. 다음 잠까지 유지
@@ -453,8 +455,8 @@
 | 호출 | 요청 | 비고 |
 |---|---|---|
 | `POST /advance-clock` | `{seconds?, minutes?}` | 오프셋에 더한다(≤30일). 규칙은 한 글자도 안 바뀐다 |
-| `POST /set-clock` | `{at?: ISO} \| {sinceHatchMinutes?: int} \| {localTime?: "HH:mm"}` | 펫 시계를 그 시각으로. 셋 중 하나. `localTime`은 오늘(KST) 그 시각 |
-| `POST /night-sweep` | | 이 펫에 대해 23:00 스위프를 지금 실행(큐 등록·굽기) |
+| `POST /set-clock` | `{at?: ISO} \| {sinceHatchMinutes?: int} \| {localTime?: "HH:mm"}` | 펫 시계를 그 시각으로. 셋 중 하나. `localTime`은 오늘(`rulesTimeZone`) 그 시각 |
+| `POST /night-sweep` | | 이 펫에 대해 밤 스위프를 지금 실행(큐 등록·굽기). 밤 날짜는 펫 시간대 |
 | `POST /force-open/{seq}` | | 그 동작의 심화 행동을 가짜 imageKey로 즉시 검수 통과(`OPEN`). **도착은 규칙 그대로** — 깨어 있으면 그 응답에서, 자는 중이면 깨어난 뒤 첫 조회에서 |
 
 응답은 전부 `PetDetail`.
@@ -470,7 +472,7 @@
 | `hatch.states.v1` / `.v2` / `.v4` | 8종 / 16 key / 16 key | 후처리가 만들어야 하는 파일 이름(버전별). `.v4` 가 교체된 16종이고 **순서가 `MotionCatalog` 와 같아야 한다** |
 | `advanced-motions` | (빈) | 3층 큐에 오를 수 있는 key 목록(지시문 있는 것만). 3층이 아직 없어 비어 있다 |
 | `gift-motions` | `roll,fall_back` | 선물 key 목록 |
-| `night.sweep-enabled` | false | 23:00 스위프 켜기(서버 여러 대면 한 대만) |
+| `night.sweep-enabled` | false | 밤 스위프 켜기(15분 눈금, 시간대마다 현지 23:00 — 서버 여러 대면 한 대만) |
 | `night.max-bakes` | 200 | 밤 굽기 상한 K |
 | `night.local-regen-max` | 2 | 로컬 재생성 최대 횟수 |
 | `chat.mode` | template | template · llm |
@@ -577,7 +579,7 @@
 | 부화 파이프라인 v2 | `PipelineRegistry` HATCH v2 = sheet→identity→grid→grid2→post(`basic/{key}.webp`, `--keys`). `prompt/v2/*.txt`가 없으면 **v1로 기동하고 부팅 로그에 경고**, 기록도 v1 | PR-5 |
 | 5 관리자 | **v2 동작** — `/api/zzal/v1/admin/motions` 5개(`pending`·`verdict`·`regen-requests`·`upload`·`night/summary`). 주소 앞머리는 `/api/zzal/v1` 그대로다 | PR-7 |
 | 6 개발 도구 | `advance-clock`·`set-clock`·**`night-sweep`(이 펫만 계획→집기→굽기, run 기록 없음)**·**`force-open/{seq}`**(가짜 검수 통과, 도착은 규칙대로) | PR-2·6·7 |
-| 밤 굽기 큐 | **동작** — 23:00 `NightSweep`(`sweep-enabled` 기본 false·서버 한 대만), `zzal_night_run(night_of PK)`, 첫 심화(3일째·케어 미스 0)·FAILED 재등록, 우선순위 선물>케어미스0일수>친밀도>id, K=200 이월, claim `UPDATE…WHERE QUEUED`, 기동 복구(23~10시 창). 굽기는 `MotionService.bakeNow` — **API 1회 → 게이트 → REVIEW / FAIL이면 LOCAL_REQUESTED**. 굽기 중 예외는 `FAILED`, 집힌 채 멈춘 자리는 기동 복구가 `QUEUED`로 회수 | PR-6·7 |
+| 밤 굽기 큐 | **동작** — 15분 눈금 `NightSweep`(시간대마다 현지 23:00 에 그 시간대 펫만, `sweep-enabled` 기본 false·서버 한 대만), `zzal_night_run((night_of, time_zone) PK)` + 펫 단위 멱등 `zzal_pet.last_swept_night_of`, K 는 KST 하루(10:00~10:00)에 시작한 판들의 합, 첫 심화(3일째·케어 미스 0)·FAILED 재등록, 우선순위 선물>케어미스0일수>친밀도>id, K=200 이월, claim `UPDATE…WHERE QUEUED`, 기동 복구(23~10시 창). 굽기는 `MotionService.bakeNow` — **API 1회 → 게이트 → REVIEW / FAIL이면 LOCAL_REQUESTED**. 굽기 중 예외는 `FAILED`, 집힌 채 멈춘 자리는 기동 복구가 `QUEUED`로 회수 | PR-6·7 |
 | 후기 | v1 경로 `/api/zzal/v1/me/pets/{id}/feedback` 유지 | (변경 없음) |
 
 ## 변경 기록
@@ -603,3 +605,39 @@
 - **2026-09-05** — PR-8(#198): 병·약·케어 미스 연결(9절), 해석 34~38. `deathReason`은 FAILED·DEAD에서 절대 null이 아니다.
 - **2026-09-05** — PR-7(#197) 리뷰 반영(#224): 판정은 `REVIEW`인 행에만(`ZZAL_NOT_IN_REVIEW`), 깨우기 응답에 도착, `queue()`가 `regenRound` 리셋, 판정·업로드 행 잠금, 해석 25 확정(앨범은 플래그만).
 - **2026-09-05** — PR-7(#197): 검수 후 공개. 관리자 5개를 v2 경로로, 아침 공개(`revealedAt`)·`learnedToday`·`seen`·`baking`·`firstGift`·`features.album`, "검수 전 지급" 제거. 해석 29~33. 1.5 채팅 봉투·1.7 게임 응답 필드를 실물과 대조해 확정.
+
+
+### 첫만남의 선택 언어 (2026-10-17 통합 코드)
+
+`POST /api/zzal/v1/me/pets/{petId}/first-meeting`은 기존 선택 헤더 `X-Zzal-Language: ko|ja|en`을 선택적으로 받는다. URI/본문/응답은 바뀌지 않는다. 소유권 확인·펫 잠금 뒤, 미완료 첫만남에서 기존 저장 언어를 갱신하고 호칭 확정/스킵 후 첫 인사 생성에 사용한다. 헤더가 없거나 지원하지 않는 값이면 기존 저장 언어를 유지한다(신규 기본 ko). 언어 선택은 첫 선발화의 기본값이며 현재 사용자 언어·명시 전환 요청이 우선한다.
+
+GET은 읽기 전용이다. 저장된 첫 인사는 재시도/완료 뒤 언어가 달라도 다시 생성·번역하지 않는다. 현재 호칭 전 discoveryLine은 고정 서비스 안내이며 이 변경으로 QUESTION LLM 생성이 추가되는 것은 아니다. 원문 대화와 이전 인사를 무음 번역하지 않는다.
+
+
+### 첫 안내 v4 — 새 작성 캐릭터 전용 (2026-10-17 통합 코드)
+
+기존 firstIntro 응답 URI/형태를 유지하고 version=4를 추가한다. sequence는 FEED→SNACK→CLEAN→BATH→GAME→NAP_SLEEP→NAP_WAKE→ATTENDANCE_INTRO→FINISH_NOTICE→REVIEW_SEEN→COMPLETE다. 숫자 step은 version별sequence 인덱스이며 enum.ordinal이 아니다. 기존 v2/v3 저장진도·완료사용자는 자동변환하거나 재시작하지 않는다.
+
+care/sleep/wake의 기존 firstIntroStep receipt를 사용한다. 현재 단계가 아닌 행동은 완료되지 않으며 이미확정된같은receipt는 재실행하지 않는다. NAP는 밤잠출석/일일리셋이 아니고 연습중 즉시깰수있다. v4 일반채팅은 일곱행동과 마무리를 마친 COMPLETE부터 허용하되 수면·여행·첫만남미완료 가드를 유지한다.
+
+기존 tutorial/seen POST에서 v4 허용 topic은 ATTENDANCE_INTRO,REVIEW_SEEN이다. ATTENDANCE_INTRO를본뒤seen으로 FINISH_NOTICE에들어가면 실제발행배경preview준비를기존 AttendanceService에요청한다. FINISH_NOTICE의확인은기존 tutorial/done으로시계를한번시작하고 깨어있는 REVIEW_SEEN으로이동한다. 후기제출/닫기 뒤 깨어있는 짧은 마지막인사를 보여준 다음 자동 seen REVIEW_SEEN으로 COMPLETE(추가확인버튼없음),전송강제없음. pending동안 일반대화/돌봄/게임은열리지않고 정산은멈춘다. v2/v3의ALBUM/PERSONALITY/DIARY_INTRO는해당구버전만유지한다. 새 v4가구14코스를다시요구하지않는다.
+
+마지막 seen 시점의 실제 게임시각이23:00~07:00이면 즉시NIGHT로응답한다. 후기/인사중 나갔다오면 같은 REVIEW_SEEN을재개하며07:00지난후에는소급취침하지않는다. 추가채팅유예없음; 일반19/23/07/10규칙과v2/v3종료동작보존. v4에는새 migration V20261017_0010으로기존CHECK(2,3)를(2,3,4)로확장해야한다. 수동FE타입/DevRemote v4는반영; legacy출석안내실UI/생성OpenAPI스냅샷은별도접합범위다.
+
+
+### 첫 안내 마무리·채팅소개 대사 (2026-10-21)
+
+기존 POST /api/zzal/v1/me/pets/{petId}/tutorial/seen의 PREPARE_SPEECH에 선택 필드 scene을 추가한다. FINISH_NOTICE topic에는 FINISH_THANKS/FINISH_TOMORROW, REVIEW_SEEN topic에는 CHAT_INTRO/CHAT_MEMORY/CHAT_INVITE가 대응하며 모두 phase=ENTRY다. 기존 행동 요청은 scene을 생략하고 기존 topic/phase를 유지한다. ACK는 scene/phase 없이 보내며 진도 전이는 기존 서버 규칙 그대로다. scene은 진도 키가 아닌 표시용 키다.
+
+첫 튜토리얼 배치는 행동 14개와 마무리 5개를 한 번 생성한다. 기존 행동 캐시만 있는 캐릭터는 명시적인 첫 ending PREPARE에서 마무리 5개만 한 번 생성하고 기존 행동 캐시는 바꾸지 않는다. 마무리 claim이 하나라도 있으면 PENDING/실패/불명확 결과에도 새 배치를 생성하지 않는다. GET은 생성하거나 PET turn을 쓰지 않으며 현재 서버 단계의 활성 발화만 반환한다. 각 화면의 PREPARE가 해당 캐시 한 개만 활성화한다.
+
+생성 실패·기존 설정과의 불일치는 미생성 상태(FAILED/UNCERTAIN/SUPERSEDED)를 유지하고 source=FALLBACK, 현재 DB 호칭·선택 언어의 안전 안내를 반환한다(turnRef는 null일 수 있다). 정상 생성은 READY/source=LLM이며 활성화 뒤 turnRef를 가진다. 로미 대화·움짤 예시는 별도 고정 샘플로 유지하고 실제 사용자 대화/기억으로 생성하거나 주입하지 않는다.
+
+
+### 비공개 문의 접수 (2026-10-21)
+
+POST /api/zzal/v1/me/inquiries는 로그인 계정의 텍스트 문의를 별도 zzal_inquiry DB 테이블에 저장한다. requestId(UUID), body(앞뒤 공백 제거 후 1~4000자), locale(엄격한 소문자 ko/en/ja)은 필수이며 petId는 선택/null이다. petId가 있으면 현재 로그인 계정의 소유권을 상태 변경 없이 읽기 검증한다. 본문에서 소유자 번호나 이메일을 받지 않는다.
+
+200의 data는 {id,createdAt}만 반환하며 DB 저장 성공 뒤에만 접수로 표시한다. unique(user_id,request_id)로 동시/응답 유실 재전송을 보호한다. 같은 정규화 본문·locale·petId면 최초 접수 응답을 반환하고, 같은 UUID에 내용이 달라지면 409 ZZAL_INQUIRY_CONFLICT다. 입력 오류는400, 미로그인은401, 없는/타인 pet은404다. 실패·불확실 결과에서는 동일 내용과 UUID로 재시도하고, 새로운 문의에는 새 UUID를 사용한다.
+
+별점 후기·채팅/기억·분석 이벤트와 섞지 않으며 문의 본문을 로그에 남기지 않는다. 문의 전체 조회/관리자 응답/첨부/S3/자동 메일 발송은 제공하지 않는다. 문의 화면의 연락 이메일 표시는 UI의 별도 고정 정보다. migration은 V20261021_0100__zzal_inquiry.sql이다.

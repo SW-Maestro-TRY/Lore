@@ -23,6 +23,7 @@ import java.util.concurrent.ThreadPoolExecutor;
  *   <li>{@code EventArchiveJob.scheduled()} — 05:10 KST. 행동 기록을 S3 로 베껴 두는 보관이다.
  *       돈이 안 나가고, {@code app.zzal.archive.enabled} 가 기본 꺼짐이라 버킷이 생기기 전에는 안 돈다</li>
  * </ul>
+ * 맞춤 출석 outbox는 CustomBundleDispatcher의 전용 pool1/30초 poll이며 custom.dispatch.enabled 기본 false로 별도 차단한다.
  * 새 트리거를 더할 때는 <b>여기 목록에 적는다</b> — 적히지 않은 타이머는 아무도 모르는 채로 돈다.
  *
  * <h3>{@code nightExecutor}</h3>

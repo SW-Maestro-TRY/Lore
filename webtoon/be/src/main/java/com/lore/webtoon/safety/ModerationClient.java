@@ -20,6 +20,18 @@ public interface ModerationClient {
      */
     Verdict moderate(String text) throws ModerationUnavailable;
 
+    /**
+     * 여러 글을 묻는다 — 걸린 자리를 찾을 때만 쓴다({@link SafetyGuard#locate}). 결과는 같은 순서다.
+     * 기본은 하나씩 묻고, 실제 구현은 한 번의 요청으로 묻는다.
+     */
+    default java.util.List<Verdict> moderateAll(java.util.List<String> texts) throws ModerationUnavailable {
+        java.util.List<Verdict> out = new java.util.ArrayList<>();
+        for (String t : texts) {
+            out.add(moderate(t));
+        }
+        return out;
+    }
+
     /** 물어볼 수 없었다. 원인은 로그에, 사용자에게는 안 보인다. */
     class ModerationUnavailable extends Exception {
         public ModerationUnavailable(String message, Throwable cause) {

@@ -1,0 +1,35 @@
+/* 오늘 생성 상한(#617) — 관리자 개요 맨 위. 카드 · 단추 · 딱지는 웹툰 탭 것을 그대로 쓰고, 여기는 배치만 정한다. */
+.wt .wt-spend-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.wt .wt-spend-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wt .wt-spend-title h2 { margin: 0; }
+.wt .wt-spend-state { font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; color: #fff; }
+.wt .wt-spend-state.open { background: #2e7d4f; }
+.wt .wt-spend-state.blocked { background: #b23a2e; }
+
+.wt .wt-spend-meters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.wt .wt-spend-meter { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; }
+.wt .wt-spend-meter-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.wt .wt-spend-meter-top b { font-size: 20px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.wt .wt-spend-meter-top b .muted { font-size: 14px; font-weight: 600; }
+.wt .wt-spend-bar { display: block; height: 8px; border-radius: 4px; background: var(--water-light); overflow: hidden; }
+.wt .wt-spend-bar i { display: block; height: 100%; background: var(--sea); border-radius: 4px; }
+.wt .wt-spend-bar.near i { background: #d9a441; }
+.wt .wt-spend-bar.full i { background: #b23a2e; }
+.wt .wt-spend-sub { font-size: 12px; }
+.wt .wt-spend-note { font-size: 13px; margin: 0; line-height: 1.6; }
+
+.wt .wt-spend-form { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.wt .wt-spend-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.wt .wt-spend-form .field { height: 40px; width: 150px; padding: 0 12px; font-size: 15px; font-variant-numeric: tabular-nums; }
+.wt .wt-spend-form .btn-sm { height: 40px; }
+.wt .wt-spend-presets { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.wt .wt-spend-presets .tag { cursor: pointer; }
+
+.wt .wt-spend-ask { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--sea); border-radius: 12px; }
+.wt .wt-spend-ask p { margin: 0; flex: 1 1 280px; font-size: 14px; line-height: 1.6; }
+.wt .wt-spend-done { margin: 0; font-size: 13px; color: #7fd3a1; }
+
+@media (max-width: 640px) {
+  .wt .wt-spend-meters { grid-template-columns: 1fr; }
+  .wt .wt-spend-form .field { width: 130px; }
+}

@@ -20,7 +20,7 @@ export default function BackgroundPicker({ current, unlocked, onPick }: Backgrou
   return (
     <div data-part="background-picker" data-unlocked={unlocked ? '1' : '0'} style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
       <span style={{ fontFamily: PEN, fontSize: 18, color: SUB }}>
-        {unlocked ? '방 꾸미기' : '방 꾸미기 · 2층 동작 4개를 열면 바꿀 수 있어요'}
+        {unlocked ? '방 꾸미기' : '방 꾸미기 · 아직 사용할 수 없어요'}
       </span>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {BACKGROUNDS.map((b) => {

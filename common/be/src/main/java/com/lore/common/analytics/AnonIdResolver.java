@@ -42,6 +42,17 @@ public class AnonIdResolver {
     public static final String COOKIE = "lore_anon_id";
 
     /**
+     * 같은 번호를 <b>스크립트가 읽을 수 있게</b> 한 장 더 내려 주는 사본(2026-10-07).
+     *
+     * ★ 왜 — 쿠키가 지워지면 같은 사람이 새 번호로 세어진다. 화면이 옛 번호를 localStorage 에
+     *   남겨 두었다가 가입·로그인 때 {@code from} 으로 알려 주면, 서버가 (옛 번호, 사용자) 를 한 줄 더
+     *   이어 같은 사람으로 묶을 수 있다. 본 쿠키는 HttpOnly 라 화면이 그 번호를 알 길이 이것뿐이다.
+     * ★ 이 사본은 <b>읽기 전용 표시</b>다 — 서버는 번호를 여전히 {@link #COOKIE} 에서만 꺼낸다.
+     *   사본을 바꿔 넣어도 기록되는 번호는 안 바뀐다.
+     */
+    public static final String HINT_COOKIE = "lore_anon_hint";
+
+    /**
      * 쿠키 수명 400일.
      *
      * ★ 이보다 길게 적어도 소용이 없다 — 크롬이 400일로 잘라 저장한다.
@@ -71,27 +82,48 @@ public class AnonIdResolver {
      *   그 번호로 들어온 첫 이벤트가 이미 알려 준다.
      */
     public String resolve(HttpServletRequest request, HttpServletResponse response) {
-        String existing = read(request);
+        String existing = read(request, COOKIE);
         if (existing != null) return existing;
 
         String issued = UUID.randomUUID().toString().replace("-", "");
-        response.addHeader("Set-Cookie", ResponseCookie.from(COOKIE, issued)
-                .httpOnly(true)
+        addCookie(response, COOKIE, issued, true);
+        return issued;
+    }
+
+    /**
+     * 사본({@link #HINT_COOKIE})을 번호에 맞춰 둔다. 없거나 어긋날 때만 내려 보내므로 브라우저마다 한 번이다.
+     *
+     * ★ {@link #resolve} 에 넣지 않고 따로 둔 이유 — resolve 는 피스메이커 광고 랜딩도 함께 쓰고,
+     *   그쪽은 "번호가 있으면 응답에 쿠키를 안 싣는다" 를 계약으로 둔다(AdLandingCookieTest).
+     *   사본은 행동 기록 주소(AnalyticsController)에서만 맞춘다.
+     */
+    public void syncHint(HttpServletRequest request, HttpServletResponse response, String anonId) {
+        if (!isWellFormed(anonId) || anonId.equals(read(request, HINT_COOKIE))) return;
+        addCookie(response, HINT_COOKIE, anonId, false);
+    }
+
+    /** 번호 모양이 맞는가. 화면이 보낸 옛 번호({@code from})를 거를 때도 같은 기준을 쓴다. */
+    public static boolean isWellFormed(String value) {
+        return value != null && SHAPE.matcher(value).matches();
+    }
+
+    private void addCookie(HttpServletResponse response, String name, String value, boolean httpOnly) {
+        response.addHeader("Set-Cookie", ResponseCookie.from(name, value)
+                .httpOnly(httpOnly)
                 .secure(secure)
                 .sameSite("Lax")
                 .path("/")
                 .maxAge(TTL)
                 .build()
                 .toString());
-        return issued;
     }
 
     /** 쿠키에서 꺼낸다. 없거나 모양이 안 맞으면 null. */
-    private String read(HttpServletRequest request) {
+    private String read(HttpServletRequest request, String name) {
         Cookie[] cookies = request.getCookies();
         if (cookies == null) return null;
         for (Cookie c : cookies) {
-            if (COOKIE.equals(c.getName()) && c.getValue() != null && SHAPE.matcher(c.getValue()).matches()) {
+            if (name.equals(c.getName()) && isWellFormed(c.getValue())) {
                 return c.getValue();
             }
         }

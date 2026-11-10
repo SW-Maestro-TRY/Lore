@@ -51,13 +51,16 @@ export const GENRE_NOTE: Record<string, string> = {
 export const WIZ_STEPS = ["캐릭터", "이야기 · 장르", "그림체", "그리기 방식"];
 export const WIZ_LAST = 4;
 export const MAX_PHOTOS = 4;
+/** 첫 주인공 말고 함께 고를 수 있는 사람 수(#899) — 주인공은 넷까지. 서버 `JobService.CO_PROTAGONIST_MAX` ·
+    하네스 `run.CO_MAX` 와 같다. 서버가 allowance 의 co_max 로도 알려 주면 그 값을 쓴다. */
+export const CO_MAX = 3;
 
 export type WizardMode = "simple" | "expert";
 
 /** 얼마나 촘촘히 그릴까. 값은 서버(WebtoonQuality)가 아는 이름과 같아야 한다. */
 export type WizardQuality = "wave" | "surf" | "swell";
 
-/* 화질 셋 — 이름 · 한 줄 · 설명.
+/* 새 생성에서 고르는 두 방식. wave는 옛 작업 호환을 위해 타입에 남긴다.
  *
  * **크레딧 값은 여기 안 적는다.** 서버가 `/nh/allowance` 의 `qualities` 로
  * 내려 준다(WebtoonQuality). 여기에도 적어 두면 한쪽만 고치는 순간 화면이
@@ -72,32 +75,61 @@ export const QUALITY_INFO: {
   desc: string[];
 }[] = [
   {
-    key: "wave",
-    label: "물결",
-    lede: "약 6분 · 가장 빠른 생성",
-    desc: ["굵고 단순한 선으로 가볍게 표현해요.", "배경과 소품은 필요한 만큼만 담아요."],
-  },
-  {
     key: "surf",
     label: "파도",
-    lede: "약 8분 · 자연스러운 디테일",
+    lede: "약 8분 · 빠른 기본 생성",
     desc: ["인물과 배경을 가장 자연스럽게 표현해요."],
   },
   {
     key: "swell",
     label: "너울",
-    lede: "약 15분 · 가장 섬세한 표현",
+    lede: "약 15분 · 더 오래 걸리는 섬세한 표현",
     desc: ["가는 선과 풍부한 디테일로 표현해요.", "배경과 소품까지 깊이 있게 담아내요."],
   },
 ];
 
 export const QUALITY_DEFAULT: WizardQuality = "surf";
 
+/** 일반 웹툰 만들기: 「토끼 귀가 떨린 날」 아르카나 page02, 로판 그림체의 동일 장면 비교. */
+const QUALITY_SAMPLE: Record<WizardQuality, string> = {
+  wave: "/static/gallery/quality/wave.jpg", // 옛 작업 호환용. 새 선택지에는 표시하지 않는다.
+  surf: "/static/gallery/quality/arcana-page02-flare.png",
+  swell: "/static/gallery/quality/arcana-page02-gpt-image-2.jpg",
+};
+
+export function qualitySamples(): Record<WizardQuality, string> | null {
+  return QUALITY_SAMPLE;
+}
+
+/** 세계관 체험: 「밤에 노래하는 학교」 1화 page04, 일반 웹툰 그림체의 동일 장면 비교. */
+export function worldPlayQualitySamples(): Record<WizardQuality, string> {
+  return {
+    wave: QUALITY_SAMPLE.wave,
+    surf: "/static/gallery/quality/school-corridor-page04-flare.png",
+    swell: "/static/gallery/quality/school-corridor-page04-gpt-image-2.png",
+  };
+}
+
+/** 카드에 작게 보이는 같은 장면 얼굴 컷. 그림체를 나란히 비교하고, 누르면 위의 페이지 전체가 열린다. */
+export const QUALITY_THUMB: Record<WizardQuality, string> = {
+  wave: QUALITY_SAMPLE.wave,
+  surf: "/static/gallery/quality/arcana-page02-flare-face.jpg",
+  swell: "/static/gallery/quality/arcana-page02-gpt-image-2-face.jpg",
+};
+export const WORLD_PLAY_QUALITY_THUMB: Record<WizardQuality, string> = {
+  wave: QUALITY_SAMPLE.wave,
+  surf: "/static/gallery/quality/school-corridor-page04-flare-face.jpg",
+  swell: "/static/gallery/quality/school-corridor-page04-gpt-image-2-face.jpg",
+};
+
 export interface WizardForm {
+  lorebook?: import("./api").LoreBook | null;
   photos: string[]; // data URL
   /** 「이 캐릭터로 웹툰 만들기」로 들어왔을 때. 서버가 이 번호로 그림을 붙인다 —
    *  브라우저가 그림을 내려받아 다시 올릴 이유가 없다. */
   characterId?: string;
+  /** 함께 주인공으로 고른 내 캐릭터(#899). 첫 주인공은 characterId 그대로, 여기에는 그 밖의 사람만. */
+  coCharacterIds?: string[];
   /** 미리 보여줄 그림 주소. 보내는 값이 아니라 화면에만 쓴다. */
   characterArt?: string;
   name: string;
@@ -107,6 +139,8 @@ export interface WizardForm {
   style: string;
   quality: WizardQuality;
   mode: WizardMode;
+  /** 내 이야기(own) 길의 「바로 만들기」 — 켜면 확인 자리 없이 끝까지. quick 길은 mode 를 쓴다. */
+  ownDirect?: boolean;
   agreeIp: boolean;
   /** 어느 길인가(#548). 입구에서 고른 카드가 정한다. */
   create: WizardCreate;
@@ -126,6 +160,7 @@ export const OWN_STORY_MAX = 20000;
 export const emptyWizardForm = (): WizardForm => ({
   photos: [],
   characterId: undefined,
+  coCharacterIds: [],
   characterArt: undefined,
   name: "",
   character: "",
@@ -133,7 +168,7 @@ export const emptyWizardForm = (): WizardForm => ({
   genre: "",
   style: "",
   quality: QUALITY_DEFAULT,
-  mode: "expert",
+  mode: "simple",
   agreeIp: false,
   create: "quick",
   title: "",

@@ -6,7 +6,7 @@
  *
  * 폰트는 스킨마다 다르지만 두 벌을 나란히 띄워 비교할 일이 많아 한 번에 받는다.
  */
-@import url('https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Nanum+Pen+Script&family=Gowun+Dodum&family=Nanum+Gothic+Coding:wght@400;700&family=Do+Hyeon&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Nanum+Gothic+Coding:wght@400;700&family=Do+Hyeon&family=Noto+Sans+KR:wght@400;500;700&display=swap');
 
 /* 앱이 떠 있는 동안 페이지 자체는 스크롤하지 않는다 — 안에서 섹션을 훑기 때문에
  * 바깥까지 같이 움직이면 조작이 어긋난다. 헤더는 남긴다(여기서 다른 탭으로 건너간다).

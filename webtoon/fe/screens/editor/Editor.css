@@ -38,16 +38,13 @@
 .wt .wt-ed-overlaytoggle input { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
 .wt .wt-ed-saved { font-size: 12px; color: #0f9e8a; margin: 0; }
 .wt .wt-ed-saved[data-state="saving"] { color: var(--dim); }
-.wt .wt-ed-saved[data-state="fail"] { color: #b3311a; font-weight: 600; }
+.wt .wt-ed-saved[data-state="fail"],
+.wt .wt-ed-saved[data-state="denied"] { color: #b3311a; font-weight: 600; }
 .wt .wt-ed-bake, .wt .wt-ed-done { height: 40px; font-size: 13.5px; padding: 0 18px; }
 
 /* 구운 결과 띠 */
 .wt .wt-ed .bake-result { display: flex; align-items: center; gap: 14px; padding: 10px 20px; background: var(--water-light); border-top: 1px solid rgba(15, 51, 63, 0.08); font-size: 13px; flex-wrap: wrap; }
 .wt .wt-ed .bake-result[hidden] { display: none; }
-.wt .wt-ed .bake-head { display: contents; }
-.wt .wt-ed .bake-head b { font-size: 13px; }
-.wt .wt-ed .bake-head span { color: var(--dim); }
-.wt .wt-ed .bake-warn { margin: 0; color: #a13a2e; }
 .wt .wt-ed .bake-acts { display: flex; gap: 8px; align-items: center; margin-left: auto; }
 .wt .wt-ed .bake-acts .btn { height: 32px; font-size: 12.5px; padding: 0 14px; }
 
@@ -173,6 +170,11 @@
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28); white-space: nowrap;
 }
 .wt .wt-ed .item-bar.is-below { transform: translate(-50%, 10px); }
+/* 단추 줄은 그림보다 넓어지지 않고, 넘치면 두 줄로 접는다 — 폰은 단추가 커서(38px) 「글꼴」까지
+   한 줄에 두면 좁은 폰에서 그림 폭을 넘는다. 폭을 max-content 로 두는 것은, 자리(left)를 옮긴
+   만큼 남은 폭으로 접으면 가장자리 말풍선에서 단추가 한 줄에 하나씩 쌓이기 때문이다. */
+.wt .wt-ed .item-bar { width: max-content; max-width: 100%; box-sizing: border-box; flex-wrap: wrap; justify-content: center; }
+.wt .wt-ed .item-bar .ib-font { padding: 0 9px; }
 .wt .wt-ed .item-bar .ib { min-width: 30px; height: 30px; padding: 0 6px; border: 0; border-radius: 8px; background: transparent; color: #fff; font-size: 13px; line-height: 1; cursor: pointer; }
 .wt .wt-ed .item-bar .ib:hover { background: rgba(255, 255, 255, 0.16); }
 .wt .wt-ed .item-bar .ib.is-on { background: var(--sea); color: #fff; }
@@ -180,7 +182,23 @@
 .wt .wt-ed .item-bar .ib-sep { width: 1px; height: 18px; margin: 0 3px; background: rgba(255, 255, 255, 0.22); }
 @media (pointer: coarse) { .wt .wt-ed .item-bar .ib { min-width: 38px; height: 38px; font-size: 15px; } }
 
-.wt .wt-ed .bub { position: relative; z-index: 1; color: #111; text-align: center; padding: 0.55em 0.85em; font-weight: 600; box-sizing: border-box; word-break: keep-all; width: fit-content; max-width: 100%; }
+/* white-space: pre-wrap — 사람이 친 줄바꿈과 연속 공백을 그대로 보인다. 없으면 저장은 되는데
+   화면에서만 한 칸으로 뭉쳐 보였다(2026-10-28 제보). 굽는 쪽(BubbleArtist.wrap)도 같이 지킨다.
+   overflow-wrap: break-word — 한 어절이 한 줄보다 길면 글자로 자른다. 없으면 「끄아아아악」 같은
+   긴 어절이 풍선 밖으로 삐져나갔다. 굽는 쪽도 같은 자리에서 자른다. */
+.wt .wt-ed .bub { position: relative; z-index: 1; color: #111; text-align: center; padding: 0.55em 0.85em; font-weight: 600; box-sizing: border-box; word-break: keep-all; overflow-wrap: break-word; white-space: pre-wrap; width: fit-content; max-width: 100%; }
+/* 말풍선 글꼴(2026-10-28). 글꼴마다 파일 하나이고, 굵기를 100~900 으로 펼쳐 두어 브라우저가
+   다른 굵기 파일을 고르거나 가짜 굵게를 만들지 않는다. 굽는 쪽(BubbleArtist.FONTS)은 jar 에 든
+   같은 글꼴로 그린다 — 파일이 같아야 글자 폭과 줄바꿈이 같다. 고른 글꼴에 없는 글자(주아의
+   「…」 등)는 기본 글꼴로 넘어가는데, 굽는 쪽도 같은 순서로 넘긴다. */
+@font-face { font-family: "LORE Bubble Base"; src: url("../../assets/fonts/LINESeedKR-Bold.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "LORE Bubble MaruBuri"; src: url("../../assets/fonts/MaruBuri-Bold.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "LORE Bubble SUIT"; src: url("../../assets/fonts/SUIT-Bold.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "LORE Bubble Jua"; src: url("../../assets/fonts/Jua-Regular.woff2") format("woff2"); font-weight: 100 900; font-display: swap; }
+.wt .wt-ed .bub, .wt .wt-ed .ib-font { font-family: "LORE Bubble Base", var(--font-ui); }
+.wt .wt-ed [data-font="maruburi"] { font-family: "LORE Bubble MaruBuri", "LORE Bubble Base", var(--font-ui); }
+.wt .wt-ed [data-font="suit"] { font-family: "LORE Bubble SUIT", "LORE Bubble Base", var(--font-ui); }
+.wt .wt-ed [data-font="jua"] { font-family: "LORE Bubble Jua", "LORE Bubble Base", var(--font-ui); }
 .wt .wt-ed .bub-svg { position: absolute; pointer-events: none; overflow: visible; z-index: 0; }
 .wt .wt-ed .bub-svg .bs > * { fill: #fff; stroke: #111; stroke-width: 5; }
 .wt .wt-ed .bub-svg .bs-shout > * { stroke-width: 6; }
@@ -314,7 +332,9 @@
   .wt .wt-ed-title { flex-basis: 100%; order: 1; }
   .wt .wt-ed-chips { order: 2; flex-basis: 100%; justify-content: flex-start; }
   .wt .wt-ed-body { flex-direction: column; }
-  .wt .wt-ed-left { width: auto; position: static; max-height: none; height: auto; border-right: 0; border-bottom: 1px solid rgba(15, 51, 63, 0.08); }
+  /* align-self: stretch — 넓은 화면의 flex-start 가 남아 있으면 세로로 쌓인 지금은 폭이 내용만큼
+     줄어 장 목록이 화면 왼쪽 2/3 에만 섰다(360px 폭에서 확인). */
+  .wt .wt-ed-left { width: auto; align-self: stretch; position: static; max-height: none; height: auto; border-right: 0; border-bottom: 1px solid rgba(15, 51, 63, 0.08); }
   /* 왼쪽 단은 페이지 · 장면 · 다시 그리기라 좁은 화면에서도 접지 않는다(#548) */
   .wt .wt-ed-pages { margin-top: 8px; }
   .wt .wt-ed-pagegrid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
@@ -363,7 +383,7 @@
 /* 크레딧 부족 안내(#548) — 아래 가운데에 떠 있는 한 줄 */
 .wt .wt-ed-creditshort { position: fixed; left: 50%; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60;
   display: flex; align-items: center; gap: 6px; box-shadow: 0 10px 28px rgba(15, 30, 45, .2); border-radius: 12px; }
-.wt .wt-ed-creditshort-x { width: 28px; height: 28px; border: 0; border-radius: 8px; background: #fff; cursor: pointer; font-size: 18px; color: var(--muted); }
+.wt .wt-ed-creditshort-x { width: 34px; height: 34px; border: 0; border-radius: 8px; background: #fff; cursor: pointer; font-size: 24px; color: var(--muted); }
 /* 다시 그리기 칸 — 단추 바로 아래에 열린다(#548) */
 .wt .wt-ed-regenask { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
 .wt .wt-ed-regenask > b { font-size: 13px; }
@@ -394,3 +414,5 @@
 .wt .unsafe-note { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 80%; text-align: center; color: #5b6b70; font-size: 14px; line-height: 1.6; pointer-events: none; }
 .wt .ask-unsafe { margin: 0 0 8px; padding: 10px 12px; border-radius: 10px; background: #fff4f2; color: #8a2b1d; font-size: 14px; line-height: 1.6; }
 .wt .wt-ed-sceneedit { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+
+.wt .wt-ed-regen-inline[hidden]{display:none!important}.wt .wt-ed-regen-inline{position:static;width:100%;max-width:720px;margin:24px auto;padding:24px;background:var(--water-light);border:1px solid var(--line-strong);border-radius:16px;color:var(--ink)}.wt .wt-ed-regen-inline .wt-ed-regen-box{display:flex;flex-direction:column;gap:18px}.wt .wt-ed-regen-inline h2{font-size:20px}.wt .wt-ed-regen-inline .ask-sub{font-size:12px;color:var(--muted);line-height:1.7}.wt .wt-ed-regen-inline .fb-tags{display:flex;gap:8px;flex-wrap:wrap}.wt .wt-ed-regen-inline .fb-tag{color:var(--muted);background:none;border:1px solid var(--line-strong);border-radius:8px;padding:9px 12px}.wt .wt-ed-regen-inline .fb-tag[aria-pressed=true]{color:var(--sea);border-color:var(--sea);background:#e6a39310}.wt .wt-ed-regen-inline .ask-actions{display:flex;justify-content:flex-end}.wt .wt-ed [data-act=regen][aria-expanded=true]{border-color:var(--sea);background:#e6a39320;color:var(--sea)}

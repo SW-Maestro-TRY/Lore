@@ -67,15 +67,17 @@ class HatchCapsIT extends ZzalItSupport {
                 .andReturn();
     }
 
-    /** 그 사람이 <b>그 시각에</b> 구운 것으로 둔다. 자리는 안 먹는다(실패로 끝난 판). */
+    /**
+     * 그 사람이 <b>그 시각에</b> 부화를 시작한 것으로 둔다. 자리는 안 먹는다(실패로 끝난 판).
+     * ★ 2026-10-07 — 상한은 시작한 부화(attempt=1)만 센다. 그래서 시각마다 실패한 알 하나 + 첫 시도 한 줄.
+     */
     private void bakedAt(Long userId, Instant... times) {
         transactions.executeWithoutResult(status -> {
-            ZzalPet pet = petRepository.save(
-                    ZzalPet.draft(userId, "images/zzal/old-%d".formatted(userId), Instant.now()));
-            ReflectionTestUtils.setField(pet, "phase", PetPhase.FAILED);
-            int attempt = 1;
             for (Instant at : times) {
-                jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, attempt++, "v1", at));
+                ZzalPet pet = petRepository.save(
+                        ZzalPet.draft(userId, "images/zzal/old-%d".formatted(userId), Instant.now()));
+                ReflectionTestUtils.setField(pet, "phase", PetPhase.FAILED);
+                jobRepository.save(GenJob.start(pet.getId(), GenKind.HATCH, 1, "v1", at));
             }
         });
     }

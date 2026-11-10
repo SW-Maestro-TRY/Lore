@@ -1,5 +1,8 @@
 package com.lore.zzal.pet;
 
+import com.lore.zzal.pet.persona.AuthoredPersona;
+import com.lore.zzal.pet.persona.FirstMeeting;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -71,6 +74,11 @@ public class ZzalPet {
     @Column(length = 200)
     private String note;
 
+    /** 새 온보딩의 작성 원문. null인 기존 사용자는 기존 칸을 계속 읽는다. */
+    @jakarta.persistence.Convert(converter = com.lore.zzal.pet.persona.AuthoredPersonaConverter.class)
+    @Column(name = "authored_persona", columnDefinition = "text")
+    private AuthoredPersona authoredPersona;
+
     @Column(nullable = false, length = 300)
     private String sourceImageKey;
 
@@ -99,6 +107,91 @@ public class ZzalPet {
      */
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int basicRound;
+
+    /** Last successful care selection per explicit situation; null preserves historical pets. */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name="care_motion_cursor",columnDefinition="jsonb")
+    private java.util.Map<String,CareMotionCursor> careMotionCursor;
+
+    public record CareMotionCursor(String id,Long setId) {}
+    public CareMotionCursor careMotionCursor(String situation){
+        return careMotionCursor==null?null:careMotionCursor.get(situation);
+    }
+    public void rememberCareMotion(String situation,CareMotionCursor value){
+        if(!com.lore.zzal.attendance.CustomMotionPlan.CARE_SITUATIONS.contains(situation)||value==null||value.id()==null||value.id().isBlank()
+                ||(value.setId()!=null&&value.setId()<=0)) throw new IllegalArgumentException("Invalid care cursor");
+        var next=new java.util.HashMap<>(careMotionCursor==null?java.util.Map.<String,CareMotionCursor>of():careMotionCursor);
+        next.put(situation,value);careMotionCursor=next;
+    }
+
+    // ── 2층 (#696 — 1층 우선 부화) ─────────────────────────────────────────
+
+    /**
+     * 2층 8종이 어디까지 왔나. 부화는 1층에서 끝나고 2층은 뒤에서 굽는다.
+     *
+     * ★ 자바 기본값이 READY 인 이유 — 이 칸이 생기기 전 흐름(1층·2층을 함께 굽고 살리던 것)으로 만든 펫과
+     *   시험이 만드는 펫은 2층이 이미 있는 것으로 본다. 새 부화는 {@code GenerationRecorder.markPetAlive} 가
+     *   살리는 <b>같은 트랜잭션에서</b> PENDING 으로 돌려 놓는다(살아난 순간 2층이 열려 보이는 틈이 없다).
+     *   DB 기본값은 PENDING 이다(마이그레이션이 옛 행을 백필한다).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "layer2_status", nullable = false, length = 16)
+    private Layer2Status layer2Status = Layer2Status.READY;
+
+    /** Immutable cutover ownership snapshot. New pets never earn retired seq9..16 from counters. */
+    @Column(name = "legacy_layer2_owned_mask", nullable = false)
+    private int legacyLayer2OwnedMask;
+
+    public boolean ownsRetiredLayerTwo(int seq) {
+        return seq >= 9 && seq <= 16 && (legacyLayer2OwnedMask & (1 << (seq - 9))) != 0;
+    }
+
+    @Column(name = "layer2_attempts", nullable = false, columnDefinition = "integer default 0")
+    private int layer2Attempts;
+
+    @Column(name = "layer2_last_error", length = 500)
+    private String layer2LastError;
+
+    @Column(name = "layer2_updated_at")
+    private Instant layer2UpdatedAt;
+
+    /** READY 를 사용자에게 알린 시각. null 이면 READY 가 된 뒤 아직 안 알렸다. */
+    @Column(name = "layer2_announced_at")
+    private Instant layer2AnnouncedAt;
+
+    @Column(name = "layer2_flagged", nullable = false, columnDefinition = "boolean default false")
+    private boolean layer2Flagged;
+
+    /** 관리자가 올린 2층 후보(후보id:격자키:게이트, 쉼표 구분). */
+    @Column(name = "layer2_candidates", length = 2000)
+    private String layer2Candidates;
+
+    /** 관리자가 올린 1층 후보(같은 형식). */
+    @Column(name = "layer1_candidates", length = 2000)
+    private String layer1Candidates;
+
+    /**
+     * 관리자가 1층·2층을 손으로 고친 마지막 시각(#702).
+     *
+     * ★ 부화 시각({@link #hatchStartedAt}·{@link #hatchedAt})을 덮어쓰지 않으려고 따로 둔다 — 복구가 그 둘을
+     *   지금으로 바꾸면 부화 소요 시간·부화일 통계가 복구한 날로 튄다.
+     */
+    @Column(name = "recovered_at")
+    private Instant recoveredAt;
+
+    /**
+     * 관리자 "다시 만들기" 요청 시각(#702) — 맥미니 러너가 집어 후보를 올린다. 노출 상태와 따로 간다.
+     * 후보가 올라오거나(누가 올렸든) 고르면 지워진다.
+     */
+    @Column(name = "layer1_regen_requested_at")
+    private Instant layer1RegenRequestedAt;
+
+    @Column(name = "layer2_regen_requested_at")
+    private Instant layer2RegenRequestedAt;
+
+    /** 이번 조회에서 2층 READY 를 처음 알리며 열린 동작 seq. 저장하지 않는다(수명 = 이 요청). */
+    @jakarta.persistence.Transient
+    private java.util.List<Integer> layer2JustUnlocked = java.util.List.of();
 
     // ── 단계 ──────────────────────────────────────────────────────────────
 
@@ -313,6 +406,24 @@ public class ZzalPet {
     /** 밤 연습 장면을 남긴 잠(그 밤 잠든 시각). 같은 잠에 두 컷을 남기지 않으려는 표식. */
     @Column
     private Instant nightSceneAt;
+    @jakarta.persistence.Column(name="attendance_night_cycle_at")
+    private Instant attendanceNightCycleAt;
+    @jakarta.persistence.Transient
+    private com.lore.zzal.attendance.AttendanceRewards attendanceRewards;
+    public Instant getAttendanceNightCycleAt(){return attendanceNightCycleAt;}
+    public com.lore.zzal.attendance.AttendanceRewards getAttendanceRewards(){return attendanceRewards;}
+    public void setAttendanceRewards(com.lore.zzal.attendance.AttendanceRewards value){attendanceRewards=value;}
+
+    /** 출석 선물 화면을 마지막으로 연 시각. 그 뒤에 지급된 선물이 "새 선물"(빨간 점)이다. 열어 본 적 없으면 null. */
+    @jakarta.persistence.Column(name="rewards_seen_at")
+    private Instant rewardsSeenAt;
+    public Instant getRewardsSeenAt(){return rewardsSeenAt;}
+    /** 앞으로만 간다 — 늦게 도착한 재시도가 더 이른 시각으로 되감아 이미 본 선물을 다시 "새것"으로 만들지 않게. */
+    public void markRewardsSeen(Instant at){
+        Instant t=at.truncatedTo(ChronoUnit.MICROS);
+        if(rewardsSeenAt==null||t.isAfter(rewardsSeenAt))rewardsSeenAt=t;
+    }
+
 
     /**
      * 밤 장면을 <b>아직 안 만든 잠</b>의 잠든 시각. 잠드는 순간 적어 두고, 다음 정산·조회에서 쓴 뒤 지운다.
@@ -525,6 +636,23 @@ public class ZzalPet {
     @Column
     private Instant lastSeenAt;
 
+    // ── 시간대 (2026-10-26) ────────────────────────────────────────────
+
+    /**
+     * 이 펫의 시간대(IANA 이름). NULL = 아직 관측 못 함 → {@link #zone()} 은 KST.
+     * 생성 때 또는 NULL 인 펫의 첫 요청에서 한 번 적히고 그 뒤로 안 바뀐다({@link PetTimeZones}).
+     */
+    @Column(name = "time_zone", length = PetTimeZones.MAX_LENGTH)
+    private String timeZone;
+
+    /**
+     * 밤 스위프가 이 펫을 마지막으로 돈 밤(그 펫 시간대의 날짜). 같은 밤을 두 번 돌지 않는 <b>펫 단위</b> 멱등.
+     * ★ {@link #lastNightOf} 와 따로 둔다 — 그 칸은 "잠든 밤" 이라 직접 재운 펫(21시)에도 찍히고, 그걸로 막으면
+     *   지금까지 23:00 스위프가 하던 일(재운 펫의 실패 줄 다시 굽기)이 한국 사용자에게서 빠진다.
+     */
+    @Column(name = "last_swept_night_of")
+    private LocalDate lastSweptNightOf;
+
     // ── 성격·꾸미기 (설계 규칙) ────────────────────────────────────────
 
     @Enumerated(EnumType.STRING)
@@ -560,6 +688,20 @@ public class ZzalPet {
     /** 장르 — 말투와 같이 대사 톤에만 쓴다. */
     @Column(length = ZzalRules.GENRE_MAX_CHARS)
     private String genre;
+
+    /**
+     * 아이가 사용자를 부르는 말(채팅, #704). 대화 중 "뭐라고 부를까" 에 대한 답에서 <b>코드가</b> 뽑아 둔다.
+     * ★ 사용자 프로필의 {@code callMe}(설문)보다 이 칸이 먼저다 — 이 아이와 나눈 말이 더 가깝다.
+     */
+    @Column(name = "call_me", length = 20)
+    private String callMe;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "first_meeting_state", length = 24)
+    private FirstMeeting.State firstMeetingState;
+
+    @Column(name = "call_me_source", length = 24)
+    private String callMeSource;
 
     @Column(length = 32)
     private String background;
@@ -598,6 +740,62 @@ public class ZzalPet {
         pet.hatchStartedAt = now;
         pet.background = "room";
         return pet;
+    }
+
+    /** {@link #draft(Long, String, Instant)} + 생성 요청의 시간대. 못 읽었으면 NULL 로 남아 다음 요청이 채운다. */
+    public static ZzalPet draft(Long userId, String sourceImageKey, Instant now, java.time.ZoneId zone) {
+        ZzalPet pet = draft(userId, sourceImageKey, now);
+        pet.observeTimeZone(zone);
+        return pet;
+    }
+
+    /**
+     * 시간대를 <b>한 번만</b> 적는다. 이미 적혀 있거나 {@code zone} 이 null 이면 아무것도 안 하고 false.
+     *
+     * ★ 덮어쓰지 않는 이유 — 하루 중간에 바뀌면 23시가 두 번 오거나 안 오고, 날짜로 찾는 기록
+     *   (채팅 세션 {@code dateOf(hatchedAt)}·밤 굽기 {@code night_of}·출석·함께한 날)이 그날 하루 어긋난다.
+     */
+    public boolean observeTimeZone(java.time.ZoneId zone) {
+        if (timeZone != null || zone == null) return false;
+        this.timeZone = zone.getId();
+        return true;
+    }
+
+    /** 규칙에 쓰는 시간대. 아직 관측 못 했으면 KST. */
+    public java.time.ZoneId zone() {
+        return PetTimeZones.effective(timeZone);
+    }
+
+    /** 저장된 값 그대로(NULL 가능). */
+    public String getTimeZone() {
+        return timeZone;
+    }
+
+    public LocalDate getLastSweptNightOf() {
+        return lastSweptNightOf;
+    }
+
+    /** 밤 스위프가 {@code nightOf} 를 돌았는가 — 이미 돌았거나 그 뒤의 밤을 돌았으면 true. */
+    public boolean sweptNight(LocalDate nightOf) {
+        return lastSweptNightOf != null && !lastSweptNightOf.isBefore(nightOf);
+    }
+
+    /** 밤 스위프가 이 펫의 {@code nightOf} 를 끝냈다. 뒤로는 안 간다. */
+    public void markSwept(LocalDate nightOf) {
+        if (!sweptNight(nightOf)) this.lastSweptNightOf = nightOf;
+    }
+
+    /**
+     * 살아 있는 펫의 이름을 바꾼다(캐릭터 카드). 값 검사(빈칸·길이·앞뒤 공백)는 서비스가 끝낸 뒤 온다.
+     *
+     * ★ 초안 이름은 {@link #character} 가 맡는다. 여기는 ALIVE 만 받는다 — 부화 중에 이름을 바꾸는 길이
+     *   생기면 부화 파이프라인({@code PetNamed})과 엇갈린다.
+     */
+    public void rename(String name) {
+        if (phase != PetPhase.ALIVE) {
+            throw new IllegalStateException("살아 있는 펫만 이름을 바꿀 수 있다");
+        }
+        this.name = name;
     }
 
     /**
@@ -645,17 +843,56 @@ public class ZzalPet {
         this.identityText = identityText;
         // ★ 초 단위로 — 정산이 초 단위라 밀리초가 남으면 정각 조회가 한 호출 늦어진다.
         this.hatchedAt = now.truncatedTo(ChronoUnit.SECONDS);
+        startLife(now);
+    }
+
+    /**
+     * 부화에 실패한 알을 관리자가 1층 후보로 살린다(#702).
+     *
+     * ★★ 부화 시각을 덮어쓰지 않는다. {@link #hatchStartedAt} 은 원래 값 그대로, {@link #hatchedAt} 은 비어 있을 때만
+     *   지금으로 채운다(실패한 알은 보통 비어 있다). 복구한 시각은 {@link #recoveredAt} 에 남긴다.
+     *   옛 경로({@link #reopenHatch} + {@link #markAlive})는 두 시각을 모두 지금으로 바꿔 통계가 복구한 날로 튀었다.
+     *
+     * ★ 게이지·정산 기준(settledAt·wokeAt)은 지금부터다 — 부화와 같은 첫 상태로 시작한다(튜토리얼부터).
+     */
+    public void reviveByAdmin(String sheetImageKey, String identityText, Instant now) {
+        if (phase != PetPhase.FAILED) {
+            throw new IllegalStateException("부화에 실패한 알이 아니다(지금 " + phase + ")");
+        }
+        this.phase = PetPhase.ALIVE;
+        this.deathReason = null;
+        this.sheetImageKey = sheetImageKey;
+        this.identityText = identityText;
+        if (this.hatchedAt == null) {
+            this.hatchedAt = now.truncatedTo(ChronoUnit.SECONDS);
+        }
+        startLife(now);
+        this.recoveredAt = now;
+    }
+
+    /** 관리자가 층을 손으로 고쳤다(후보 고르기). 부화 시각은 그대로 두고 이 시각만 남긴다. */
+    public void markRecovered(Instant now) {
+        this.recoveredAt = now;
+    }
+
+    public Instant getRecoveredAt() {
+        return recoveredAt;
+    }
+
+    /** 살아난 순간의 첫 상태 — 부화·관리자 살리기가 함께 쓴다. 정산 기준은 지금(초 단위)이다. */
+    private void startLife(Instant now) {
+        Instant t = now.truncatedTo(ChronoUnit.SECONDS);
         this.fullness = ZzalRules.TUTORIAL_START_FULLNESS;
         this.happiness = ZzalRules.HATCH_HAPPINESS;
-        this.trash = ZzalRules.HATCH_TRASH;
+        this.trash = firstIntroVersion == 4 && introAt(FirstIntro.Step.FEED) ? ZzalRules.TRASH_MAX : ZzalRules.HATCH_TRASH;
         this.food = ZzalRules.HATCH_FOOD;
         this.foodAt = null;
-        this.settledAt = this.hatchedAt;
-        this.wokeAt = this.hatchedAt;
+        this.settledAt = t;
+        this.wokeAt = t;
         this.lastSeenAt = now;
         // "N일째 함께" — 부화한 날이 1일째(api-v2.md 2절 예시).
         this.daysTogether = 1;
-        this.lastVisitDate = AwakeClock.dateOf(now);
+        this.lastVisitDate = AwakeClock.dateOf(now, zone());
     }
 
     /**
@@ -675,6 +912,29 @@ public class ZzalPet {
         if (this.phase == PetPhase.FAILED && this.deathReason == null) {
             this.deathReason = DeathReason.HATCH_FAILED;
         }
+    }
+
+    /**
+     * 부화에 실패한 알을 <b>다시 굽는 상태로</b> 되돌린다 — 관리자 재굽기 전용(2026-10-07).
+     *
+     * <ul>
+     *   <li>이름을 지은 알이면 {@code HATCHING}, 아직 이름이 없으면 {@code DRAFT} 로 돌린다.
+     *       이름 없는 알을 {@code HATCHING} 으로 두면 이름을 지을 길(초안에서만 열린다)도, 살아날 길
+     *       (이름이 있어야 살린다)도 막혀 <b>영원히 굽는 중</b>으로 남는다.</li>
+     *   <li>실패 사유를 지운다 — 화면이 그 값으로 실패 문구를 고른다.</li>
+     *   <li>{@code hatchStartedAt} 을 지금으로 — 진행률·멈춘 알 복구(12분)가 새 시도를 기준으로 잰다.</li>
+     * </ul>
+     *
+     * @return 되돌렸으면 true. 실패한 알이 아니면 아무것도 안 하고 false.
+     */
+    public boolean reopenHatch(Instant now) {
+        if (phase != PetPhase.FAILED) {
+            return false;
+        }
+        this.phase = (name == null || name.isBlank()) ? PetPhase.DRAFT : PetPhase.HATCHING;
+        this.deathReason = null;
+        this.hatchStartedAt = now;
+        return true;
     }
 
     /**
@@ -801,7 +1061,83 @@ public class ZzalPet {
      * 5칸이 "바닥을 치워 주세요" 인데, 시계가 멈춰 있어 흔적이 시간으로 생기지 않는다.
      * 그래서 <b>이 칸이 직접 만든다</b>(설계 규칙 — 게이지는 시간이 아니라 각 칸이 만든다).
      */
+    @Column(name = "first_intro_step")
+    private Integer firstIntroStep;
+    @Column(name = "first_intro_version", nullable = false)
+    private int firstIntroVersion = 2;
+
+    public Integer getFirstIntroStep() { return firstIntroStep; }
+    public int getFirstIntroVersion() { return firstIntroVersion; }
+    public int firstIntroIndex(FirstIntro.Step step) { return FirstIntro.index(firstIntroVersion,step); }
+    public boolean hasFirstIntro() { return firstIntroStep != null; }
+    public boolean introAt(FirstIntro.Step step) { return firstIntroStep != null && firstIntroIndex(step) >= 0 && firstIntroStep == firstIntroIndex(step); }
+    public boolean introPassed(FirstIntro.Step step) { return firstIntroStep != null && firstIntroIndex(step) >= 0 && firstIntroStep > firstIntroIndex(step); }
+    public boolean introAtOrAfter(FirstIntro.Step step) { return firstIntroStep != null && firstIntroIndex(step) >= 0 && firstIntroStep >= firstIntroIndex(step); }
+    public boolean firstIntroChatAvailable() {
+        return introAtOrAfter(firstIntroVersion == 4 ? FirstIntro.Step.COMPLETE : FirstIntro.Step.CHAT);
+    }
+    /** v4 review/farewell is pending: keep awake, but do not allow ordinary care/chat. */
+    @Column(name="first_night_chat_deadline_at") private Instant firstNightChatDeadlineAt;
+    @Column(name="first_night_chat_ended_at") private Instant firstNightChatEndedAt;
+    public Instant getFirstNightChatDeadlineAt() { return firstNightChatDeadlineAt; }
+    public Instant getFirstNightChatEndedAt() { return firstNightChatEndedAt; }
+    public boolean firstNightChatGraceEligible(Instant now) {
+        return isAlive() && !isSleeping() && !isTraveling() && isFirstIntroEndingPending()
+                && firstNightChatDeadlineAt == null && firstNightChatEndedAt == null && AwakeClock.isNight(now, zone());
+    }
+    public boolean firstNightChatGraceActive(Instant now) {
+        return isAlive() && !isSleeping() && !isTraveling() && firstIntroVersion == 4
+                && introAt(FirstIntro.Step.COMPLETE) && firstNightChatDeadlineAt != null
+                && firstNightChatEndedAt == null && now.isBefore(firstNightChatDeadlineAt);
+    }
+    public boolean isFirstIntroEndingPending() {
+        return firstIntroVersion == 4 && introAt(FirstIntro.Step.REVIEW_SEEN);
+    }
+    public void finishFirstIntroReview(Instant now) {
+        if (!introAt(FirstIntro.Step.REVIEW_SEEN)) return;
+        Instant at = now.truncatedTo(ChronoUnit.SECONDS);
+        boolean eligible = firstNightChatGraceEligible(at);
+        advanceFirstIntro(FirstIntro.Step.REVIEW_SEEN);
+        if (firstIntroVersion == 4) {
+            settledAt = at;
+            if (eligible) {
+                var local = at.atZone(zone());
+                // 첫 밤 채팅 유예의 끝 = 다음 깨우기 창(07:00, 펫 시간대). 숫자 대신 규칙 상수를 쓴다.
+                Instant morning = local.toLocalDate()
+                        .plusDays(local.toLocalTime().isBefore(ZzalRules.WAKE_WINDOW_OPENS) ? 0 : 1)
+                        .atTime(ZzalRules.WAKE_WINDOW_OPENS).atZone(zone()).toInstant();
+                Instant limit = at.plus(java.time.Duration.ofMinutes(30));
+                firstNightChatDeadlineAt = limit.isBefore(morning) ? limit : morning;
+            } else if (!isSleeping() && AwakeClock.isNight(at, zone())) onSleep(at, SleepKind.NIGHT, false);
+        }
+    }
+    public void advanceFirstIntro(FirstIntro.Step done) {
+        if (done == FirstIntro.Step.COMPLETE || !introAt(done)) return;
+        firstIntroStep += 1;
+        FirstIntro.Step current=FirstIntro.sequence(firstIntroVersion).get(firstIntroStep);
+        if (firstIntroVersion != 4 && current==FirstIntro.Step.CLEAN) trash = Math.max(trash, ZzalRules.TUTORIAL_FIRST_TRASH);
+        if (firstIntroVersion != 4 && current==FirstIntro.Step.BATH) trash = ZzalRules.TUTORIAL_BATH_TRASH;
+    }
+    public boolean introCareAlreadyDone(CareAction action) {
+        if (action == CareAction.MEDICINE) return false;
+        FirstIntro.Step step = FirstIntro.Step.valueOf(action.name());
+        return introPassed(step);
+    }
+    public boolean introCareCurrent(CareAction action) {
+        return action != CareAction.MEDICINE && introAt(FirstIntro.Step.valueOf(action.name()));
+    }
+
     public void advanceTutorial(TutorialSchedule.Step done) {
+        if (hasFirstIntro()) {
+            switch (done) {
+                case FEED -> advanceFirstIntro(FirstIntro.Step.FEED);
+                case CLEAN -> advanceFirstIntro(FirstIntro.Step.CLEAN);
+                case PET -> advanceFirstIntro(FirstIntro.Step.PET);
+                case NAP -> advanceFirstIntro(FirstIntro.Step.NAP_WAKE);
+                default -> { }
+            }
+            return;
+        }
         if (!isInTutorial() || TutorialSchedule.currentOf(tutorialStep) != done) {
             return;
         }
@@ -824,7 +1160,9 @@ public class ZzalPet {
             return;
         }
         tutorialStep = TutorialSchedule.TOTAL - 1;
+        if (hasFirstIntro()) firstIntroStep = firstIntroIndex(FirstIntro.Step.FINISH_NOTICE);
         startClock(now);
+        if (hasFirstIntro()) firstIntroStep = firstIntroIndex(FirstIntro.Step.COMPLETE);
     }
 
     /**
@@ -837,14 +1175,17 @@ public class ZzalPet {
      *   여기서 따로 재우지 않는다 — 잠드는 길이 둘이 되면 하루 정산이 두 번 돌 수 있다.
      */
     public void startClock(Instant now) {
-        if (!isInTutorial() || tutorialStep < TutorialSchedule.TOTAL - 1) {
+        if (!isInTutorial() || (hasFirstIntro() ? !introAt(FirstIntro.Step.FINISH_NOTICE) : tutorialStep < TutorialSchedule.TOTAL - 1)) {
             throw new IllegalStateException("아직 튜토리얼이 안 끝났다");
         }
         tutorialStep = TutorialSchedule.TOTAL;
+        if (hasFirstIntro()) advanceFirstIntro(FirstIntro.Step.FINISH_NOTICE);
         Instant at = now.truncatedTo(ChronoUnit.SECONDS);
         clockStartedAt = at;
         settledAt = at;
         wokeAt = at;
+        // v4 stays awake through review/farewell; its final REVIEW receipt applies current night.
+        if (hasFirstIntro() && firstIntroVersion != 4 && AwakeClock.isNight(at, zone())) onSleep(at, SleepKind.NIGHT, false);
     }
 
     public boolean isSleeping() {
@@ -855,7 +1196,7 @@ public class ZzalPet {
         // ★ 옛 인자는 "아기 60분이 끝나는 시각" 이었다(그때까지 자동 취침을 막는 용도).
         //   지금은 튜토리얼 중이면 settle 이 아예 안 걷으므로 막을 것이 없다.
         return sleepKind == null
-                ? AwakeClock.State.awake(null)
+                ? AwakeClock.State.awake(firstNightChatEndedAt == null ? firstNightChatDeadlineAt : null)
                 : AwakeClock.State.asleep(sleepKind, sleptAt, null);
     }
 
@@ -896,12 +1237,12 @@ public class ZzalPet {
         //   며칠 뒤에 돌아온 사용자에게만 드러나서 거의 안 잡힌다.
         //
         //   시각만 옮겨 둔다 — 시계가 켜지는 순간 그때부터 세기 시작하게.
-        if (isInTutorial()) {
+        if (isInTutorial() || isFirstIntroEndingPending()) {
             settledAt = now;
             return;
         }
 
-        AwakeClock.Walk walk = AwakeClock.walk(clockState(), settledAt, now);
+        AwakeClock.Walk walk = AwakeClock.walk(clockState(), settledAt, now, zone());
         for (AwakeClock.Segment seg : walk.segments()) {
             if (seg.isAwake()) {
                 advanceAwake(seg.from(), seg.to());
@@ -914,6 +1255,8 @@ public class ZzalPet {
                 }
             }
         }
+        if (firstNightChatDeadlineAt != null && firstNightChatEndedAt == null
+                && !now.isBefore(firstNightChatDeadlineAt)) firstNightChatEndedAt = firstNightChatDeadlineAt;
         chargeFood(now);
         settledAt = now;
     }
@@ -925,6 +1268,36 @@ public class ZzalPet {
      *   튜토리얼 동안 시계가 멈추면서 <b>속도라는 개념 자체가 성립하지 않게</b> 되어 사라졌다.
      *   지금 속도는 하나뿐이다.
      */
+    @Column(name="diary_absence_started_at") private Instant diaryAbsenceStartedAt;
+    @Column(name="diary_absence_awake_sec",nullable=false) private long diaryAbsenceAwakeSec;
+    @Column(name="diary_opportunity_at") private Instant diaryOpportunityAt;
+    @Column(name="diary_opportunity_consumed",nullable=false) private boolean diaryOpportunityConsumed;
+    @Column(name="diary_language",nullable=false,length=12) private String diaryLanguage="ko";
+
+    public void startDiaryAbsence(Instant now) {
+        if(diaryAbsenceStartedAt!=null)return;
+        diaryAbsenceStartedAt=now;diaryAbsenceAwakeSec=0;diaryOpportunityAt=null;diaryOpportunityConsumed=false;
+    }
+    public void endDiaryAbsence() {
+        diaryAbsenceStartedAt=null;diaryAbsenceAwakeSec=0;diaryOpportunityAt=null;diaryOpportunityConsumed=false;
+    }
+    private void accumulateDiaryAwake(Instant from,Instant to) {
+        if(diaryAbsenceStartedAt==null||diaryOpportunityConsumed||diaryOpportunityAt!=null)return;
+        Instant start=from.isBefore(diaryAbsenceStartedAt)?diaryAbsenceStartedAt:from;
+        if(!to.isAfter(start))return;
+        long seconds=Duration.between(start,to).getSeconds();
+        long remaining=14400-diaryAbsenceAwakeSec;
+        if(seconds>=remaining){diaryOpportunityAt=start.plusSeconds(remaining);diaryAbsenceAwakeSec=14400;}
+        else diaryAbsenceAwakeSec+=seconds;
+    }
+    public Instant getDiaryAbsenceStartedAt(){return diaryAbsenceStartedAt;}
+    public long getDiaryAbsenceAwakeSec(){return diaryAbsenceAwakeSec;}
+    public Instant getDiaryOpportunityAt(){return diaryOpportunityAt;}
+    public boolean isDiaryOpportunityConsumed(){return diaryOpportunityConsumed;}
+    public void consumeDiaryOpportunity(){diaryOpportunityConsumed=true;}
+    public String getDiaryLanguage(){return diaryLanguage==null?"ko":diaryLanguage;}
+    public void diaryLanguage(String language){if(java.util.Set.of("ko","ja","en").contains(language))diaryLanguage=language;}
+
     private void advanceAwake(Instant from, Instant to) {
         // ★ 여행 중에는 게이지·흔적·병·케어 미스·부재가 전부 멈춘다(설계 규칙 "여행 중·잠든 동안은
         //   어떤 카운터도 안 돈다"). 자는 동안과 같은 대접이라, 여기 한 줄이면 아래 전부가 따라 멈춘다.
@@ -932,6 +1305,7 @@ public class ZzalPet {
             return;
         }
         if (from.isBefore(to)) {
+            accumulateDiaryAwake(from,to);
             tick(Duration.between(from, to).getSeconds(), from);
         }
     }
@@ -1191,7 +1565,7 @@ public class ZzalPet {
             return;
         }
         // 예고 중이었다면 유예가 지났는지 본다
-        if (!AwakeClock.dateOf(at).isBefore(AwakeClock.dateOf(leaveNoticeAt).plusDays(departDays()))) {
+        if (!AwakeClock.dateOf(at, zone()).isBefore(AwakeClock.dateOf(leaveNoticeAt, zone()).plusDays(departDays()))) {
             tripStartedAt = at;
             leaveNoticeAt = null;
             postcardCount = 0;
@@ -1207,7 +1581,7 @@ public class ZzalPet {
         if (lastVisitDate == null) {
             return false;
         }
-        long absent = java.time.temporal.ChronoUnit.DAYS.between(lastVisitDate, AwakeClock.dateOf(at));
+        long absent = java.time.temporal.ChronoUnit.DAYS.between(lastVisitDate, AwakeClock.dateOf(at, zone()));
         return absent >= noticeDays();
     }
 
@@ -1241,8 +1615,8 @@ public class ZzalPet {
     /** 예고가 켜진 그 밤 기준의 출발 예정 시각(화면 표시용). */
     public Instant departAt() {
         return leaveNoticeAt == null ? null
-                : AwakeClock.dateOf(leaveNoticeAt).plusDays(departDays())
-                        .atTime(ZzalRules.AUTO_WAKE_AT).atZone(ZzalRules.ZONE).toInstant();
+                : AwakeClock.dateOf(leaveNoticeAt, zone()).plusDays(departDays())
+                        .atTime(ZzalRules.AUTO_WAKE_AT).atZone(zone()).toInstant();
     }
 
     public Instant getTripStartedAt() {
@@ -1272,13 +1646,13 @@ public class ZzalPet {
     /** 오늘 엽서를 만들 수 있나 — 여행 중, 하루 한 장, 최대 3장(설계 규칙). */
     public boolean canWritePostcard(Instant now) {
         return isTraveling() && postcardCount < ZzalRules.POSTCARD_MAX
-                && !AwakeClock.dateOf(now).equals(lastPostcardDate);
+                && !AwakeClock.dateOf(now, zone()).equals(lastPostcardDate);
     }
 
     /** 엽서 한 장을 썼다고 표시(실제 저장은 서비스가 — 엔티티는 표를 모른다). */
     public void wrotePostcard(Instant now) {
         postcardCount += 1;
-        lastPostcardDate = AwakeClock.dateOf(now);
+        lastPostcardDate = AwakeClock.dateOf(now, zone());
     }
 
     /**
@@ -1506,10 +1880,12 @@ public class ZzalPet {
             //   실제로 순서를 어기고 눌러 재현했다(2026-09-09).
             //
             //   아이가 아직 안 졸린 것이라 사용자에게도 설명이 된다.
+            if (hasFirstIntro()) return introAt(FirstIntro.Step.NAP_SLEEP) ? SleepKind.NAP : null;
             return TutorialSchedule.currentOf(tutorialStep) == TutorialSchedule.Step.NAP
                     && napCount < ZzalRules.NAP_MAX ? SleepKind.NAP : null;
         }
-        return AwakeClock.inSleepWindow(now) ? SleepKind.NIGHT : null;
+        if (firstNightChatGraceActive(now)) return SleepKind.NIGHT;
+        return AwakeClock.inSleepWindow(now, zone()) ? SleepKind.NIGHT : null;
     }
 
     public boolean canSleep(Instant now) {
@@ -1523,6 +1899,7 @@ public class ZzalPet {
             throw new IllegalStateException("지금은 재울 수 없다");
         }
         onSleep(now, kind, true);
+        if (kind == SleepKind.NAP) advanceFirstIntro(FirstIntro.Step.NAP_SLEEP);
     }
 
     /** 지금 깨울 수 있나 — 밤잠은 KST 07:00~10:00, 낮잠은 5분 뒤. */
@@ -1530,7 +1907,8 @@ public class ZzalPet {
         if (!isSleeping()) {
             return false;
         }
-        return !now.isBefore(AwakeClock.wakeWindowOpensAt(sleepKind, sleptAt));
+        if (hasFirstIntro() && isInTutorial() && sleepKind == SleepKind.NAP) return true;
+        return !now.isBefore(AwakeClock.wakeWindowOpensAt(sleepKind, sleptAt, zone()));
     }
 
     /** 사용자가 깨운다. 보상 = 친밀도 +10(밤잠만). */
@@ -1542,7 +1920,7 @@ public class ZzalPet {
         // ★ 낮잠에서 깬 순간이 이미 밤(23:00~07:00)이고 아기 60분도 끝났으면 그 자리에서 밤잠에 든다.
         //   안 그러면 "깨어 있음" 으로 답하고 다음 조회에서 잠드는데, 그건 "행동 응답 = 최신 상태" 를 어긴다
         //   (리뷰 재현: 22:35 부화 → 23:30 낮잠 → 23:36 깨우기).
-        if (!isSleeping() && !isInTutorial() && AwakeClock.isNight(now)) {
+        if (!isSleeping() && !isInTutorial() && AwakeClock.isNight(now, zone())) {
             onSleep(now, SleepKind.NIGHT, false);
         }
     }
@@ -1552,6 +1930,8 @@ public class ZzalPet {
      * (3층 조각 판정·굽기 큐 등록은 서비스 층에서 이 뒤에 붙는다 — PR-6·10)
      */
     private void onSleep(Instant at, SleepKind kind, boolean manual) {
+        if (firstNightChatDeadlineAt != null && firstNightChatEndedAt == null)
+            firstNightChatEndedAt = at.isBefore(firstNightChatDeadlineAt) ? at : firstNightChatDeadlineAt;
         sleepKind = kind;
         sleptAt = at;
         if (kind == SleepKind.NIGHT) {
@@ -1567,7 +1947,7 @@ public class ZzalPet {
                 zeroMissDays += 1;
             }
             lastNightCareMiss = todayCareMiss;      // 밤 큐 판정 재료(리셋 전 스냅샷)
-            lastNightOf = AwakeClock.dateOf(at);
+            lastNightOf = AwakeClock.dateOf(at, zone());
 
             // ★ 조각은 여기서 아무것도 하지 않는다(설계 규칙) — 하루로 끊지 않고 쌓이고,
             //   네 칸이 다 찬 판은 <b>다음 기상</b>에 되돌린다. 잠드는 순간은 그 자리가 아니다.
@@ -1605,6 +1985,7 @@ public class ZzalPet {
         sleepKind = null;
         sleptAt = null;
         if (was == SleepKind.NIGHT) {
+            attendanceNightCycleAt = at.truncatedTo(ChronoUnit.MICROS);
             wokeAt = at;
             overslept = !manual;
             judgeLeaving(at);
@@ -1654,6 +2035,7 @@ public class ZzalPet {
 
     /** 간식. 행복 +1. 다른 행동 없이 <b>연속 5개면 배탈</b>(설계 규칙, 100%). */
     public void snack(Instant now) {
+        advanceFirstIntro(FirstIntro.Step.SNACK);
         happiness = Math.min(ZzalRules.GAUGE_MAX, happiness + ZzalRules.SNACK_HAPPINESS);
         todaySnacks += 1;
         // ★★ 해금에 세는 것은 그날 4개까지다(배탈이 나는 5개째부터는 안 센다).
@@ -1713,6 +2095,7 @@ public class ZzalPet {
 
     /** 목욕. 흔적 0 + 행복 +1. 하루 1회(서비스가 막는다). */
     public void bath(Instant now) {
+        advanceFirstIntro(FirstIntro.Step.BATH);
         trash = 0;
         happiness = Math.min(ZzalRules.GAUGE_MAX, happiness + ZzalRules.BATH_HAPPINESS);
         todayBathDone = true;
@@ -1779,7 +2162,7 @@ public class ZzalPet {
         //   남는다(#227 리뷰 상-1 실측 — 30분마다 12번 조회에 컷 2개). 설계 규칙은 <b>부재 중</b>이다.
         //   남은 초(4시간에 못 미친 나머지)도 그 부재와 함께 끝난다 — 다음 부재는 처음부터 센다.
         absenceAwakeSec = 0;
-        LocalDate today = AwakeClock.dateOf(now);
+        LocalDate today = AwakeClock.dateOf(now, zone());
         if (today.equals(lastVisitDate)) {
             return false;
         }
@@ -1884,6 +2267,7 @@ public class ZzalPet {
      */
     public void finishGame() {
         gameStarts += 1;
+        advanceFirstIntro(FirstIntro.Step.GAME);
     }
 
     /** 좌우 맞히기 승리 — 달리기 해금(5승)의 재료. */
@@ -1948,6 +2332,405 @@ public class ZzalPet {
 
     public enum Mood { SICK, HUNGRY, SAD, DIRTY, NORMAL }
 
+    // ── 개발 리모컨 (dev 컨트롤러만 부른다 — app.zzal.dev-tools) ─────────────
+    //
+    // ★ 운영 규칙이 쓰는 메서드를 고치지 않고 여기에 따로 둔다. 운영 코드가 이 메서드를 부르는 일은 없다
+    //   (부르는 곳은 com.lore.zzal.dev 뿐이고, 그 빈은 dev-tools=true 일 때만 뜬다).
+    // ★ 값을 바꾸는 곳은 이 묶음 한 곳이다 — 리모컨이 엔티티 칸을 직접 만지는 길이 서비스 여기저기로 새지 않게.
+
+    /**
+     * dev — 칸 값을 직접 세팅한다({@link DevPetPatch}). null 인 칸은 그대로.
+     *
+     * ★ 연쇄는 안 돌린다. 대신 경계값(게이지 0·똥 4)을 넣으면 <b>그 상태가 지금 막 된 것처럼</b> 타이머를 맞춘다 —
+     *   그래야 시계를 6시간 넘겼을 때 운영과 같은 순서로 케어 미스·병이 이어진다.
+     * ★ 범위 검증은 부르는 쪽이 {@link DevPetPatch#violations()} 로 먼저 한다.
+     */
+    public void devApply(DevPetPatch p, Instant now) {
+        Instant t = now.truncatedTo(ChronoUnit.SECONDS);
+        if (p.phase() != null) {
+            this.phase = p.phase();
+            if (phase == PetPhase.ALIVE) {
+                this.deathReason = null;
+                if (hatchedAt == null) {
+                    this.hatchedAt = t;
+                    startLife(t);
+                }
+                if (settledAt == null) {
+                    settledAt = t;
+                }
+            }
+        }
+        if (p.deathReason() != null) {
+            this.deathReason = p.deathReason();
+        }
+        if (p.tutorialStep() != null) {
+            int step = p.tutorialStep();
+            if (step >= TutorialSchedule.TOTAL) {
+                // 끝 = 시계가 지금 켜진다(startClock 과 같은 칸). 구르기 선물 굽기는 events/clock-start 가 한다.
+                this.tutorialStep = TutorialSchedule.TOTAL;
+                if (clockStartedAt == null) {
+                    clockStartedAt = t;
+                    settledAt = t;
+                    wokeAt = t;
+                }
+            } else {
+                // 튜토리얼 안으로 되돌린다 — 시계가 꺼져야 settle 이 다시 멈춘다(isInTutorial).
+                this.tutorialStep = step;
+                this.clockStartedAt = null;
+            }
+        }
+        if (p.firstIntroVersion() != null || p.firstIntroKey() != null) {
+            FirstIntro.Step key = p.firstIntroKey() != null ? p.firstIntroKey()
+                    : hasFirstIntro() ? FirstIntro.sequence(firstIntroVersion).get(firstIntroStep) : FirstIntro.Step.FEED;
+            devSetFirstIntro(p.firstIntroVersion() == null ? (hasFirstIntro() ? firstIntroVersion : 3) : p.firstIntroVersion(), key, t);
+        }
+        if (p.graduationSeen() != null) {
+            this.graduationSeenAt = p.graduationSeen() ? t : null;
+        }
+        if (p.fullness() != null) {
+            this.fullness = p.fullness();
+            this.fullnessMissArmed = fullness == 0;
+            this.fullnessZeroSec = 0;
+        }
+        if (p.happiness() != null) {
+            this.happiness = p.happiness();
+            this.happinessMissArmed = happiness == 0;
+            this.happinessZeroSec = 0;
+        }
+        if (p.trash() != null) {
+            this.trash = p.trash();
+            this.cleanMissArmed = trash >= ZzalRules.TRASH_MAX;
+            this.cleanZeroSec = 0;
+        }
+        if (p.food() != null) {
+            this.food = p.food();
+            // 가득이면 충전 시계가 멈추고, 모자라면 지금부터 4시간에 하나(chargeFood 와 같은 모양)
+            this.foodAt = food >= ZzalRules.FOOD_MAX ? null : t;
+        }
+        if (p.careMiss() != null) {
+            this.careMiss = p.careMiss();
+        }
+        if (p.todayCareMiss() != null) {
+            this.todayCareMiss = p.todayCareMiss();
+        }
+        if (p.lastNightCareMiss() != null) {
+            this.lastNightCareMiss = p.lastNightCareMiss();
+        }
+        if (p.zeroMissDays() != null) {
+            this.zeroMissDays = p.zeroMissDays();
+        }
+        if (p.sick() != null) {
+            if ("NONE".equals(p.sick())) {
+                this.sickSince = null;
+                this.sickKind = null;
+                this.sickAwakeSec = 0;
+            } else {
+                this.sickKind = SickKind.valueOf(p.sick());
+                if (sickSince == null) {
+                    this.sickSince = t;
+                }
+                this.sickAwakeSec = 0;
+            }
+        }
+        if (p.sickHoursAgo() != null && sickSince != null) {
+            this.sickSince = t.minus(Duration.ofHours(p.sickHoursAgo()));
+            this.sickAwakeSec = Duration.ofHours(p.sickHoursAgo()).getSeconds()
+                    % ZzalRules.CARE_MISS_SICK_EVERY.getSeconds();
+        }
+        if (p.naturalSickInMinutes() != null) {
+            this.naturalSickDueAwakeSec = p.naturalSickInMinutes() < 0 ? null
+                    : Math.max(1L, Duration.ofMinutes(p.naturalSickInMinutes()).getSeconds());
+        }
+        if (p.sleep() != null) {
+            if ("NONE".equals(p.sleep())) {
+                this.sleepKind = null;
+                this.sleptAt = null;
+            } else {
+                this.sleepKind = SleepKind.valueOf(p.sleep());
+                this.sleptAt = t;
+            }
+        }
+        if (p.overslept() != null) {
+            this.overslept = p.overslept();
+        }
+        if (p.napCount() != null) {
+            this.napCount = p.napCount();
+        }
+        if (p.intimacy() != null) {
+            this.intimacy = p.intimacy();
+            this.intimacyPeak = Math.max(intimacyPeak, intimacy);
+        }
+        if (p.intimacyPeak() != null) {
+            this.intimacyPeak = Math.max(p.intimacyPeak(), intimacy);
+        }
+        if (p.todayPetCount() != null) {
+            this.todayPetCount = p.todayPetCount();
+        }
+        if (p.todayCareIntimacy() != null) {
+            this.todayCareIntimacy = p.todayCareIntimacy();
+        }
+        if (p.todayGames() != null) {
+            this.todayGames = p.todayGames();
+        }
+        if (p.todayBathDone() != null) {
+            this.todayBathDone = p.todayBathDone();
+        }
+        if (p.todaySnacks() != null) {
+            this.todaySnacks = p.todaySnacks();
+        }
+        if (p.todayCared() != null) {
+            this.todayCared = p.todayCared();
+        }
+        if (p.feeds() != null) {
+            this.feeds = p.feeds();
+        }
+        if (p.pets() != null) {
+            this.pets = p.pets();
+        }
+        if (p.cleans() != null) {
+            this.cleans = p.cleans();
+        }
+        if (p.bathCount() != null) {
+            this.bathCount = p.bathCount();
+        }
+        if (p.snacks() != null) {
+            this.snacks = p.snacks();
+        }
+        if (p.chatAnswers() != null) {
+            this.chatAnswers = p.chatAnswers();
+        }
+        if (p.sleepWakeCount() != null) {
+            this.sleepWakeCount = p.sleepWakeCount();
+        }
+        if (p.wakes() != null) {
+            this.wakes = p.wakes();
+        }
+        if (p.gameStarts() != null) {
+            this.gameStarts = p.gameStarts();
+        }
+        if (p.shares() != null) {
+            this.shares = p.shares();
+        }
+        if (p.leftRightWins() != null) {
+            this.leftRightWins = p.leftRightWins();
+        }
+        if (p.daysTogether() != null) {
+            this.daysTogether = p.daysTogether();
+        }
+        if (p.lastVisitDaysAgo() != null) {
+            this.lastVisitDate = AwakeClock.dateOf(t, zone()).minusDays(p.lastVisitDaysAgo());
+        }
+        if (p.leaveEnabled() != null) {
+            setLeaveEnabled(p.leaveEnabled());
+        }
+        if (p.leaveNotice() != null) {
+            this.leaveNoticeAt = p.leaveNotice() ? t : null;
+        }
+        if (p.trip() != null) {
+            if (p.trip()) {
+                devTripStart(t);
+            } else {
+                this.tripStartedAt = null;
+            }
+        }
+        if (p.leavingJustCancelled() != null) {
+            this.leavingJustCancelled = p.leavingJustCancelled();
+        }
+        if (p.absenceHours() != null) {
+            this.absenceAwakeSec = Duration.ofHours(p.absenceHours()).getSeconds();
+        }
+        if (p.layer2Status() != null) {
+            this.layer2Status = Layer2Status.valueOf(p.layer2Status());
+            this.layer2UpdatedAt = t;
+        }
+        if (p.layer2Flagged() != null) {
+            this.layer2Flagged = p.layer2Flagged();
+        }
+        if (p.layerTwoDone() != null) {
+            this.layerTwoDoneAt = p.layerTwoDone() ? t : null;
+        }
+        if (p.piecesEnabled() != null) {
+            this.piecesEnabledAt = p.piecesEnabled() ? t : null;
+            if (p.piecesEnabled() && layerTwoDoneAt == null) {
+                this.layerTwoDoneAt = t;
+            }
+        }
+        if (p.goodDayPending() != null) {
+            this.goodDayPending = p.goodDayPending();
+        }
+        if (p.goodDayToday() != null) {
+            this.goodDayToday = p.goodDayToday();
+        }
+        if (p.bonusPiece() != null) {
+            this.bonusPiece = p.bonusPiece();
+        }
+        if (p.personality() != null) {
+            this.personality = p.personality();
+        }
+        if (p.world() != null) {
+            this.world = blankToNull(p.world());
+        }
+        if (p.tone() != null) {
+            this.tone = blankToNull(p.tone());
+        }
+        if (p.genre() != null) {
+            this.genre = blankToNull(p.genre());
+        }
+        if (p.background() != null) {
+            this.background = blankToNull(p.background());
+        }
+        if (p.callMe() != null) {
+            this.callMe = blankToNull(p.callMe());
+        }
+        if (p.healed() != null) {
+            this.healedAt = p.healed() ? t : null;
+        }
+    }
+
+    /** dev — 강제 발병. 이미 아파도 그 종류로 바꾼다(운영의 "먼저 난 병이 이긴다" 와 다르게 — 고른 것을 보려고). */
+    public void devFallSick(SickKind kind, Instant at) {
+        this.sickSince = null;
+        fallSick(kind, at);
+    }
+
+    /** dev — 케어 미스 +1. 운영과 같은 길(홀수면 30% 방치 병 굴림)을 탄다. */
+    public void devAddCareMiss(Instant at) {
+        addCareMiss(at);
+    }
+
+    /**
+     * dev — 시각과 무관하게 재운다. {@code manual} 이 true 면 사용자가 재운 것(보상 행복+1·친밀+10·횟수),
+     * false 면 23:00 자동 취침(밤 정산만).
+     */
+    public void devSleep(SleepKind kind, Instant at, boolean manual) {
+        if (isSleeping()) {
+            onWake(at, false);
+        }
+        onSleep(at, kind, manual);
+    }
+
+    /** dev — 시각과 무관하게 깨운다. {@code manual} 이 false 면 10:00 자동 기상(늦잠). 안 자면 아무 일도 없다. */
+    public void devWake(Instant at, boolean manual) {
+        if (!isSleeping()) {
+            return;
+        }
+        onWake(at, manual);
+    }
+
+    /** dev — 떠남 예고를 지금 켠다(조건과 무관). 떠남 꺼짐·여행 중이어도 켠다 — 화면 확인용. */
+    public void devLeaveNotice(Instant at) {
+        this.leaveNoticeAt = at;
+        this.leavingJustCancelled = false;
+    }
+
+    /** dev — 지금 여행을 떠난다. 예고가 출발로 넘어가는 그 자리(judgeLeaving)와 같은 칸을 바꾼다. */
+    public void devTripStart(Instant at) {
+        this.tripStartedAt = at;
+        this.leaveNoticeAt = null;
+        this.postcardCount = 0;
+        this.lastPostcardDate = null;
+    }
+
+    /** dev — 부재(깨어 있는) 시간을 더한다. 4시간마다 혼자 논 장면 한 컷 — 실제로 남기는 것은 장면 서비스다. */
+    public void devAddAbsence(Duration by) {
+        this.absenceAwakeSec += by.getSeconds();
+    }
+
+    /** dev — 밤 장면 대기를 지금으로 건다(그 밤 잠든 것처럼). 실제 컷은 장면 서비스가 남긴다. */
+    public void devQueueNightScene(Instant at) {
+        this.nightSceneAt = null;
+        this.pendingNightSceneAt = at;
+        this.pendingNightSick = isSick();
+        this.pendingNightMood = mood().name();
+    }
+
+    /**
+     * dev — <b>튜토리얼을 처음부터</b>. 부화 직후의 첫 상태로 되돌린다(배부름 0·첫 칸·시계 꺼짐·졸업 창 다시).
+     * 평생 횟수·도감·조각은 그대로 둔다 — 튜토리얼을 다시 보는 것이지 아이를 새로 키우는 것이 아니다.
+     */
+    public void devRestartTutorial(Instant now) {
+        Instant t = now.truncatedTo(ChronoUnit.SECONDS);
+        this.tutorialStep = 0;
+        if (hasFirstIntro()) this.firstIntroStep = firstIntroIndex(FirstIntro.Step.FEED);
+        this.clockStartedAt = null;
+        this.graduationSeenAt = null;
+        this.napCount = 0;
+        this.todayBathDone = false;
+        this.todaySnacks = 0;
+        this.sleepKind = null;
+        this.sleptAt = null;
+        this.fullness = ZzalRules.TUTORIAL_START_FULLNESS;
+        this.happiness = ZzalRules.HATCH_HAPPINESS;
+        this.trash = ZzalRules.HATCH_TRASH;
+        this.food = ZzalRules.HATCH_FOOD;
+        this.foodAt = null;
+        this.sickSince = null;
+        this.sickKind = null;
+        this.sickAwakeSec = 0;
+        this.fullnessMissArmed = false;
+        this.happinessMissArmed = false;
+        this.cleanMissArmed = false;
+        this.settledAt = t;
+    }
+
+    /** dev — 떠난(DEAD)·실패한(FAILED) 아이를 되살린다. 부화한 적이 없으면 첫 상태부터. */
+    public void devRevive(Instant now) {
+        this.phase = PetPhase.ALIVE;
+        this.deathReason = null;
+        if (hatchedAt == null) {
+            this.hatchedAt = now.truncatedTo(ChronoUnit.SECONDS);
+            startLife(now);
+        }
+        this.settledAt = now.truncatedTo(ChronoUnit.SECONDS);
+    }
+
+    /**
+     * dev — 이 아이를 <b>다시 굽는 중</b>(HATCHING)으로 돌린다(굽기 hatch). 굽기가 끝나면 운영과 같은 길
+     * ({@code HatchService.completeIfReady} → {@link #markAlive})로 살아난다 — 게이지는 부화 직후 값이 된다.
+     */
+    public void devRehatch(Instant now) {
+        this.phase = PetPhase.HATCHING;
+        this.deathReason = null;
+        this.hatchStartedAt = now;
+    }
+
+    /** dev — 2층 완주 + 3층 조각 열림을 지금으로(다음 기상을 기다리지 않는다). */
+    public void devOpenPieces(Instant at) {
+        if (layerTwoDoneAt == null) {
+            layerTwoDoneAt = at;
+        }
+        piecesEnabledAt = at;
+    }
+
+    /** dev — 오늘(하루) 한도·카운터를 밤 리셋처럼 0 으로. 잠들지 않고 한도만 되돌린다. */
+    public void devResetToday() {
+        todayGames = 0;
+        todayPetCount = 0;
+        todayCareIntimacy = 0;
+        todayBathDone = false;
+        todaySnacks = 0;
+    }
+
+    public boolean isTodayCared() {
+        return todayCared;
+    }
+
+    public boolean isGoodDayPending() {
+        return goodDayPending;
+    }
+
+    public Instant getLayerTwoDoneAt() {
+        return layerTwoDoneAt;
+    }
+
+    public Instant getFoodAt() {
+        return foodAt;
+    }
+
+    public Instant getNightSceneAt() {
+        return nightSceneAt;
+    }
+
     // ── getter ────────────────────────────────────────────────────────────
 
     public Long getId() {
@@ -1960,6 +2743,14 @@ public class ZzalPet {
 
     public String getName() {
         return name;
+    }
+
+    public AuthoredPersona getAuthoredPersona() {
+        return authoredPersona;
+    }
+
+    public void recordAuthoredPersona(AuthoredPersona value) {
+        this.authoredPersona = value;
     }
 
     public String getNote() {
@@ -2006,6 +2797,174 @@ public class ZzalPet {
         if (round > this.basicRound) {
             this.basicRound = round;
         }
+    }
+
+    // ── 2층 상태 (#696) ────────────────────────────────────────────────────
+
+    public Layer2Status getLayer2Status() {
+        return layer2Status;
+    }
+
+    /** 2층 8종이 사용자에게 보여도 되나. 아니면 조건을 채워도 "연습 중" 이다. */
+    public boolean isLayer2Ready() {
+        return layer2Status == Layer2Status.READY;
+    }
+
+    public int getLayer2Attempts() {
+        return layer2Attempts;
+    }
+
+    public String getLayer2LastError() {
+        return layer2LastError;
+    }
+
+    public Instant getLayer2UpdatedAt() {
+        return layer2UpdatedAt;
+    }
+
+    public Instant getLayer2AnnouncedAt() {
+        return layer2AnnouncedAt;
+    }
+
+    public boolean isLayer2Flagged() {
+        return layer2Flagged;
+    }
+
+    /**
+     * 2층을 처음부터 다시 굽는 자리로 둔다(부화 완료 · 관리자 재시도 · 1층 교체).
+     * 시도 수를 0 으로 돌리고 알림 표식을 지운다 — 다시 READY 가 되면 그때 한 번 알린다.
+     */
+    public void resetLayer2(Instant now) {
+        this.layer2Status = Layer2Status.PENDING;
+        this.layer2Attempts = 0;
+        this.layer2UpdatedAt = now;
+        this.layer2AnnouncedAt = null;
+    }
+
+    /**
+     * 한 번 굽기 시작한다. <b>PENDING 일 때만</b> 집는다 — RUNNING 은 이미 누가 굽는 중(두 번 구우면 돈이 두 번),
+     * READY 는 끝났고, FAILED 는 관리자가 재시도({@link #resetLayer2})로 PENDING 에 돌려야 다시 집힌다
+     * (부화 완료 훅이 늦게 한 번 더 불려 FAILED 를 저절로 다시 굽는 일을 막는다).
+     *
+     * @return 집었으면 true
+     */
+    public boolean startLayer2Attempt(Instant now) {
+        if (layer2Status != Layer2Status.PENDING) {
+            return false;
+        }
+        this.layer2Status = Layer2Status.RUNNING;
+        this.layer2Attempts += 1;
+        this.layer2UpdatedAt = now;
+        return true;
+    }
+
+    /** 이어서 한 번 더(같은 작업 안의 재시도). RUNNING 을 유지하고 시도 수만 올린다. */
+    public void nextLayer2Attempt(String lastError, Instant now) {
+        this.layer2Attempts += 1;
+        this.layer2LastError = trimError(lastError);
+        this.layer2UpdatedAt = now;
+    }
+
+    /** 기동 복구 — 굽던 중 서버가 죽었다. PENDING 으로 내려 다시 집히게 한다(시도 수는 그대로 — 상한이 이어진다). */
+    public void requeueLayer2(Instant now) {
+        if (layer2Status == Layer2Status.RUNNING) {
+            this.layer2Status = Layer2Status.PENDING;
+            this.layer2Attempts = Math.max(0, layer2Attempts - 1);
+            this.layer2UpdatedAt = now;
+        }
+    }
+
+    /** 다 구웠다. 결함 표시와 지난 실패 사유도 지운다 — READY 인데 사유가 남으면 관리자 목록이 실패로 읽힌다(#706). */
+    public void markLayer2Ready(Instant now) {
+        this.layer2Status = Layer2Status.READY;
+        this.layer2Flagged = false;
+        this.layer2LastError = null;
+        this.layer2UpdatedAt = now;
+    }
+
+    /** 재시도를 다 썼다. */
+    public void markLayer2Failed(String lastError, Instant now) {
+        this.layer2Status = Layer2Status.FAILED;
+        this.layer2LastError = trimError(lastError);
+        this.layer2UpdatedAt = now;
+    }
+
+    /**
+     * 통과했지만 결함인 2층을 관리자 복구 목록에 올린다 — <b>표시만 한다</b>(#702).
+     *
+     * ★★ 사용자 노출 상태({@link #layer2Status})는 건드리지 않는다. 옛 동작(#696)은 FAILED 로 바꿔
+     *   사용자 2층 8종이 그 자리에서 "연습 중" 으로 잠겼다(2026-10-08 펭놈·쿠리만쥬). 결함이 있어도
+     *   지금 보이는 그림이 아무것도 안 보이는 것보다 낫고, 바뀌는 순간은 관리자가 후보를 고를 때 하나뿐이다.
+     */
+    public void flagLayer2(String reason) {
+        this.layer2Flagged = true;
+        this.layer2LastError = trimError(reason);
+    }
+
+    /** 결함 표시를 거둔다(목록에서 내림). 2층 다시 만들기 요청도 함께 거둔다. 노출 상태는 그대로. */
+    public void unflagLayer2() {
+        this.layer2Flagged = false;
+        this.layer2RegenRequestedAt = null;
+    }
+
+    /** 그 층의 "다시 만들기" 요청 시각. 없으면 null. */
+    public Instant getRegenRequestedAt(int layer) {
+        return layer == 1 ? layer1RegenRequestedAt : layer2RegenRequestedAt;
+    }
+
+    /** 그 층을 맥미니에서 다시 만들어 달라고 표시한다(이미 있으면 시각만 새로). 노출 상태는 그대로. */
+    public void requestRegen(int layer, Instant now) {
+        if (layer == 1) {
+            this.layer1RegenRequestedAt = now;
+        } else {
+            this.layer2RegenRequestedAt = now;
+        }
+    }
+
+    /** 그 층의 요청을 지운다(후보가 왔거나 골랐거나 취소). */
+    public void clearRegen(int layer) {
+        if (layer == 1) {
+            this.layer1RegenRequestedAt = null;
+        } else {
+            this.layer2RegenRequestedAt = null;
+        }
+    }
+
+    /** READY 를 사용자에게 알렸다. 그때 열린 동작 seq 를 이 요청에 실어 보낸다(폭죽). */
+    public void announceLayer2(java.util.List<Integer> opened, Instant now) {
+        this.layer2AnnouncedAt = now;
+        this.layer2JustUnlocked = java.util.List.copyOf(opened);
+    }
+
+    /** 이 요청에서 READY 알림으로 열린 동작을 꺼낸다(한 번 꺼내면 빈다). */
+    public java.util.List<Integer> takeLayer2JustUnlocked() {
+        java.util.List<Integer> out = layer2JustUnlocked == null ? java.util.List.of() : layer2JustUnlocked;
+        this.layer2JustUnlocked = java.util.List.of();
+        return out;
+    }
+
+    public String getLayer2Candidates() {
+        return layer2Candidates;
+    }
+
+    public void setLayer2Candidates(String candidates) {
+        this.layer2Candidates = candidates;
+    }
+
+    public String getLayer1Candidates() {
+        return layer1Candidates;
+    }
+
+    public void setLayer1Candidates(String candidates) {
+        this.layer1Candidates = candidates;
+    }
+
+    private static String trimError(String s) {
+        if (s == null) {
+            return null;
+        }
+        String one = s.strip();
+        return one.length() > 480 ? one.substring(0, 480) : one;
     }
 
     public PetPhase getPhase() {
@@ -2220,6 +3179,43 @@ public class ZzalPet {
         return genre;
     }
 
+    public String getCallMe() {
+        return callMe;
+    }
+
+    /** 호칭 저장(20자 상한). 비우면 지운다. */
+    public void rememberCallMe(String value) {
+        if (callMeSource != null) return; // 명시 입력/나중에 상태를 모델 추출이 덮지 않는다.
+        String v = value == null ? null : value.strip();
+        this.callMe = v == null || v.isEmpty() ? null : (v.length() > 20 ? v.substring(0, 20) : v);
+    }
+
+    public FirstMeeting.State getFirstMeetingState() { return firstMeetingState; }
+    public String getCallMeSource() { return callMeSource; }
+    public boolean isFirstMeetingComplete() {
+        return firstMeetingState == null || firstMeetingState == FirstMeeting.State.COMPLETE;
+    }
+    public void beginFirstMeeting() {
+        // Only fresh authored registration uses v4. Existing progress and meeting stay intact.
+        if (hasFirstIntro()) return;
+        firstMeetingState = FirstMeeting.State.DISCOVERED;
+        firstIntroVersion = 4;
+        firstIntroStep = firstIntroIndex(FirstIntro.Step.FEED);
+        trash = ZzalRules.TRASH_MAX; // fresh v4 starts dirty once; CLEAN removes one, BATH clears the rest
+        food = Math.max(food, 1);
+        fullness = Math.min(fullness, ZzalRules.GAUGE_MAX - 1);
+    }
+    public void advanceFirstMeeting(FirstMeeting.State state) { firstMeetingState = state; }
+    public void rememberExplicitCallMe(String value) {
+        if (value == null || value.isBlank() || value.strip().length() > 20) throw new IllegalArgumentException("호칭 입력을 확인해 주세요");
+        callMe = value.strip();
+        callMeSource = "EXPLICIT";
+    }
+    public void deferCallMe() {
+        // 건너뛰기는 기존에 알려준 호칭을 지우지 않고 영구 거절로 저장하지 않는다.
+        if (callMe == null || callMe.isBlank()) callMeSource = "DEFERRED";
+    }
+
     public String getBackground() {
         return background;
     }
@@ -2230,5 +3226,84 @@ public class ZzalPet {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    // Development remote only; callers are gated by app.zzal.dev-tools.
+
+
+    /** Explicitly simulated development state; never called by normal care/progress. */
+    public void devSetFirstIntro(int version, FirstIntro.Step key, Instant now) {
+        if (!java.util.Set.of(2,3,4).contains(version) || FirstIntro.index(version,key) < 0)
+            throw new IllegalArgumentException("first intro version/key");
+        firstIntroVersion = version;
+        firstIntroStep = firstIntroIndex(key);
+        boolean finished = key == FirstIntro.Step.REVIEW_SEEN || key == FirstIntro.Step.COMPLETE;
+        tutorialStep = finished ? TutorialSchedule.TOTAL : 0;
+        clockStartedAt = finished ? (clockStartedAt == null ? now : clockStartedAt) : null;
+        settledAt = now;
+        if (finished) wokeAt = now;
+        if (!finished) {
+            sleepKind = key == FirstIntro.Step.NAP_WAKE ? SleepKind.NAP : null;
+            sleptAt = sleepKind == null ? null : now;
+        }
+        if (key == FirstIntro.Step.FEED) { fullness = ZzalRules.TUTORIAL_START_FULLNESS; food = Math.max(food,1); }
+        if (version == 4 && key == FirstIntro.Step.FEED) trash = ZzalRules.TRASH_MAX;
+        if (key == FirstIntro.Step.CLEAN) trash = version == 4 ? ZzalRules.TRASH_MAX : ZzalRules.TUTORIAL_FIRST_TRASH;
+        if (key == FirstIntro.Step.BATH) { trash = ZzalRules.TUTORIAL_BATH_TRASH; todayBathDone = false; }
+        if (key == FirstIntro.Step.GAME) todayGames = 0;
     }
 }

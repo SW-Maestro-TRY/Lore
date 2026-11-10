@@ -39,6 +39,13 @@ public class PageRegen {
     @Column(length = 500)
     private String note;
 
+    /**
+     * 이 장을 무슨 화질로 다시 그리나. 편집실에서 작품과 다른 화질을 골랐을 때만 적는다 —
+     * 비었으면 작품을 만든 화질 그대로다(옛 기록도 그렇게 읽힌다).
+     */
+    @Column(length = 10)
+    private String quality;
+
     @Column(nullable = false, length = 20)
     private String status;
 
@@ -52,11 +59,26 @@ public class PageRegen {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /**
+     * 이 장 값을 낸 사람과 장부 번호. 못 그리면 이걸로 돌려준다(#626).
+     * 서버가 다시 떠도 돌려줄 수 있게 메모리가 아니라 기록에 둔다(#864). 무료(빈 장)와 옛 기록은 비었다.
+     */
+    @Column(name = "paid_by")
+    private Long paidBy;
+
+    @Column(name = "paid_ref", length = 200)
+    private String paidRef;
+
     protected PageRegen() {
     }
 
     static PageRegen queued(String id, String runId, int pageNo, String note, Instant at) {
+        return queued(id, runId, pageNo, note, null, at);
+    }
+
+    static PageRegen queued(String id, String runId, int pageNo, String note, String quality, Instant at) {
         PageRegen one = new PageRegen();
+        one.quality = quality == null || quality.isBlank() ? null : quality;
         one.id = id;
         one.runId = runId;
         one.pageNo = pageNo;
@@ -65,6 +87,13 @@ public class PageRegen {
         one.createdAt = at;
         one.updatedAt = at;
         return one;
+    }
+
+    /** 누가 어느 장부 번호로 냈나 — 처음 저장하기 전에, 줄에 넣기 전에 적는다. */
+    PageRegen paidBy(Long userId, String ref) {
+        this.paidBy = userId;
+        this.paidRef = ref;
+        return this;
     }
 
     void move(RegenStatus to, Instant at) {
@@ -90,6 +119,10 @@ public class PageRegen {
         return pageNo;
     }
 
+    public String getQuality() {
+        return quality;
+    }
+
     public String getNote() {
         return note;
     }
@@ -100,5 +133,13 @@ public class PageRegen {
 
     public String getError() {
         return error;
+    }
+
+    public Long getPaidBy() {
+        return paidBy;
+    }
+
+    public String getPaidRef() {
+        return paidRef;
     }
 }

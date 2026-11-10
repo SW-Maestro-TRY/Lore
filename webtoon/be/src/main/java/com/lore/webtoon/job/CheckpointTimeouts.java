@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * "2번 확인하며"의 체크포인트 둘(이야기 고르기 · 시트 확인)에서 사람이
@@ -63,31 +64,92 @@ public class CheckpointTimeouts {
     private final StoryStore stories;
     private final boolean enabled;
     private final Duration timeout;
+    /** 게스트가 이야기 고르기에서 기다릴 수 있는 시간(#851). 0 이면 끈다. */
+    private final Duration guestPick;
 
     public CheckpointTimeouts(WebtoonJobRepository jobs, JobStore store, JobRunner runner,
                               StoryStore stories,
                               @Value("${lore.webtoon.checkpoint-timeout.enabled:false}") boolean enabled,
-                              @Value("${lore.webtoon.checkpoint-timeout.seconds:300}") long seconds) {
+                              @Value("${lore.webtoon.checkpoint-timeout.seconds:300}") long seconds,
+                              @Value("${lore.webtoon.guest-pick-timeout.seconds:30}") long guestPickSeconds) {
         this.jobs = jobs;
         this.store = store;
         this.runner = runner;
         this.stories = stories;
         this.enabled = enabled;
         this.timeout = Duration.ofSeconds(Math.max(1, seconds));
+        this.guestPick = Duration.ofSeconds(Math.max(0, guestPickSeconds));
         if (enabled) {
             log.info("체크포인트 자동 진행 켜짐 — {}초 답 없으면 대신 넘깁니다", this.timeout.toSeconds());
         }
+        if (!guestPick.isZero()) {
+            log.info("게스트 이야기 고르기 자동 진행 — {}초 안 고르면 1번으로 갑니다", guestPick.toSeconds());
+        }
     }
 
-    /** 10초마다 본다 — 끄면 아무것도 안 한다(설정 조회 한 번뿐, 부담 없다). */
     /**
-     * <b>2026-10-01 결정(#548): 시간으로 진행을 정하지 않는다.</b> 기본값은 꺼짐이고
-     * 그대로 둔다. 장면 초안 자리({@code AWAITING_SCENES})는 이 스윕이 켜져 있어도
+     * 게스트의 진행 화면이 마지막으로 앞에 떠 있던 때(#851). 화면이 앞에 있는 동안은 {@code watching=true}
+     * 로 몇 초마다 묻는다 — 그 동안은 시계를 세지 않는다. 화면을 닫거나 뒤로 보내면 이 시각에서 센다.
+     * 서버가 다시 뜨면 비는데, 그때는 고르기에 들어선 시각({@code updatedAt})에서 센다.
+     */
+    private final Map<Long, Instant> lastSeen = new ConcurrentHashMap<>();
+
+    /** 게스트의 진행 화면이 지금 앞에 떠 있다 — 30초 시계를 다시 0 으로. */
+    public void seen(WebtoonJob job, Instant now) {
+        if (job.getUserId() == null && job.getStatus() == JobStatus.AWAITING_PICK) {
+            lastSeen.put(job.getId(), now);
+        }
+    }
+
+    /** 시계의 기준 — 화면이 마지막으로 앞에 있던 때, 없으면 고르기에 들어선 때. */
+    private Instant since(WebtoonJob job) {
+        Instant seen = lastSeen.get(job.getId());
+        Instant entered = job.getUpdatedAt();
+        if (seen == null) return entered;
+        return entered == null || seen.isAfter(entered) ? seen : entered;
+    }
+
+    /**
+     * 게스트가 이야기 고르기에서 앞으로 몇 초 안에 골라야 하나(#851). 화면이 이 숫자를 세어 보여 준다.
+     * 로그인한 사람이거나 고르는 자리가 아니거나 꺼져 있으면 {@code null} — 기다리는 시간에 끝이 없다.
+     * 화면이 앞에 떠 있는 동안은 묻을 때마다 다시 채워져 사실상 줄지 않는다.
+     */
+    public Integer guestPickSecondsLeft(WebtoonJob job, Instant now) {
+        if (guestPick.isZero() || job.getUserId() != null || job.getStatus() != JobStatus.AWAITING_PICK
+                || since(job) == null) {
+            return null;
+        }
+        long left = guestPick.minus(Duration.between(since(job), now)).getSeconds();
+        return (int) Math.max(0, left);
+    }
+
+    /**
+     * 10초마다 본다.
+     *
+     * <h2>게스트의 이야기 고르기만 시간으로 넘긴다(#851, 2026-10-27)</h2>
+     *
+     * 게스트는 브라우저를 닫으면 이 작업으로 돌아올 길이 없다 — 마이페이지가 없다. 그래서 고르기에서
+     * {@link #guestPick} 안에 답이 없으면 1번으로 진행한다. 화면은 남은 초를 보여 준다
+     * ({@link #guestPickSecondsLeft}). 로그인한 사람은 아래 옛 규칙 그대로다.
+     *
+     * <h2>로그인한 사람은 시간으로 진행을 정하지 않는다(2026-10-01 결정, #548)</h2>
+     *
+     * 기본값은 꺼짐이고 그대로 둔다. 장면 초안 자리({@code AWAITING_SCENES})는 이 스윕이 켜져 있어도
      * 절대 안 건드린다 — 「이대로 만들기」를 누를 때까지 기다리는 것이 그 자리의 뜻이다.
-     * 설정 플래그는 비상용으로만 남겨 둔다.
+     * 설정 플래그는 비상용으로만 남겨 둔다. 마이페이지 「만드는 중」에서 들어와 고른다.
      */
     @Scheduled(fixedDelay = 10_000)
     public void sweep() {
+        if (!guestPick.isZero()) {
+            Instant guestCutoff = Instant.now().minus(guestPick);
+            for (WebtoonJob job : jobs.findByStatusOrderByIdAsc(JobStatus.AWAITING_PICK)) {
+                Instant since = since(job);
+                if (job.getUserId() == null && since != null && since.isBefore(guestCutoff)) {
+                    autoPick(job.getId());
+                    lastSeen.remove(job.getId());
+                }
+            }
+        }
         if (!enabled) {
             return;
         }
@@ -125,8 +187,9 @@ public class CheckpointTimeouts {
             store.pick(job.getId(), n);
             stories.choose(job.getRunId(), n);
             runner.resumeAfterPick(job.getId());
-            log.info("{}초 안에 이야기를 안 골라서 대신 골랐습니다 ({}번, job={})",
-                    timeout.toSeconds(), n, job.getPublicId());
+            log.info("이야기를 안 골라서 대신 골랐습니다 ({}번, {}, job={})",
+                    n, job.getUserId() == null ? "게스트 " + guestPick.toSeconds() + "초" : timeout.toSeconds() + "초",
+                    job.getPublicId());
         } catch (RuntimeException e) {      // noqa: 하나 실패해도 다음 스윕에서 다시 본다
             log.error("이야기를 대신 고르지 못했습니다 (job={})", job.getPublicId(), e);
         }

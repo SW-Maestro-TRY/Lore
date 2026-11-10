@@ -1,0 +1,41 @@
+.pay-done {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: var(--bg, #fff);
+  color: var(--text, #17121f);
+}
+
+.pay-done-box {
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+}
+
+.pay-done-box h1 {
+  margin: 0 0 10px;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.pay-done-box p {
+  margin: 0 0 18px;
+  color: var(--text-muted, #6b6475);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.pay-done-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 46px;
+  padding: 0 28px;
+  border-radius: 999px;
+  background: var(--btn-primary-bg, #17121f);
+  color: var(--btn-primary-fg, #fff);
+  font-weight: 600;
+  text-decoration: none;
+}

@@ -118,7 +118,8 @@ public class ZzalAlerts {
                 return;                                  // 그 임계는 이미 알렸다(재시작해도 표에 남아 있다)
             }
             BigDecimal today = zeroIfNull(jobs.sumCostSince(startOfDay(now)));
-            BigDecimal hatch = zeroIfNull(jobs.sumCostByKind(GenKind.HATCH));
+            // ★ 2층(LAYER2)도 부화 돈이다(#696 — 부화에서 떼어 뒤로 굽게 됐을 뿐) — 빼면 부화 원가가 반쯤으로 보인다.
+            BigDecimal hatch = zeroIfNull(jobs.sumCostByKind(GenKind.HATCH)).add(zeroIfNull(jobs.sumCostByKind(GenKind.LAYER2)));
             BigDecimal motion = zeroIfNull(jobs.sumCostByKind(GenKind.MOTION));
             send("생성 비용 누적 $%d 돌파 — 오늘 $%s".formatted(reached, money(today)),
                     """
@@ -144,7 +145,7 @@ public class ZzalAlerts {
      * 부화 한 마리가 <b>끝내</b> 실패했다(재시도까지 다 쓴 뒤). 연달아 N번째면 알린다.
      *
      * <h3>★★ 왜 3연속인가</h3>
-     * 한 마리는 이미 안에서 두 번 굽는다({@code app.zzal.max-hatch-attempts=2}). 그리고 실패 하나는
+     * 한 마리는 이미 안에서 여러 번 굽는다({@code app.zzal.max-hatch-attempts}, 2026-10-07 부터 5 · 2026-10-27 부터 3). 그리고 실패 하나는
      * 평상시에도 난다 — 거부(moderation)는 그림에 따라 그냥 일어나는 일이다. 반면 <b>3마리가
      * 연달아</b> 실패했다면 시도가 최소 6번 실패한 것이고(약 $1.5 를 버렸고, 하루 상한 40의 7.5%),
      * 그 모양은 그림 탓이 아니라 <b>열쇠·잔액·파이프라인</b>이 통째로 막힌 쪽에 가깝다.
@@ -265,6 +266,36 @@ public class ZzalAlerts {
                             .formatted(night, motionId, blankToDash(reason), WHEN.format(now)));
         } catch (RuntimeException | Error e) {
             swallow("밤 굽기", e);
+        }
+    }
+
+    /**
+     * 2층(격자 2장·8종) 배경 굽기가 <b>재시도를 다 썼다</b>(#696). 사용자는 실패를 보지 않는다 —
+     * 2층 8종이 "연습 중" 으로 남을 뿐이다. 관리자 화면 "2층 실패·대기" 에서 후보를 올려 살린다.
+     *
+     * ★ 같은 펫으로 두 번 알리지 않는다(값 = 펫 id). 경보가 굽기를 되돌리지 않는다 — 예외를 삼킨다.
+     */
+    public void layer2Failed(Long petId, String reason, Instant now) {
+        try {
+            if (!settings.canSend()) {
+                return;
+            }
+            if (!ledger.claimOnce(AlertKeys.LAYER2_FAILED, String.valueOf(petId), now)) {
+                return;
+            }
+            send("2층 굽기 실패 — 펫 %s".formatted(petId),
+                    """
+                    부화 뒤 2층(격자 2장) 굽기가 재시도를 다 썼습니다.
+
+                      펫          petId=%s
+                      마지막 사유  %s
+                      기준 시각   %s KST
+
+                    사용자에게는 실패 화면이 없습니다(2층 8종이 "연습 중" 으로 남습니다).
+                    관리자 화면 "2층 실패·대기" 탭에서 후보 격자를 올려 고르거나 재시도하세요."""
+                            .formatted(petId, blankToDash(reason), WHEN.format(now)));
+        } catch (RuntimeException | Error e) {
+            swallow("2층 굽기", e);
         }
     }
 

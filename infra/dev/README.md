@@ -54,6 +54,20 @@ docker compose -f docker-compose.yml -f docker-compose.dev-ec2.yml --env-file in
   읽기 전용으로 마운트만 한다. 첫 발급은 스택을 올리기 전(또는 80 포트로 챌린지가 뜬 상태)에 한 번 해 둔다.
 - 실제 배포는 사람이 손으로 치지 않는다 — `develop` 에 푸시하면 CI 가 `infra/dev/deploy-dev.sh` 를 박스에서 돌린다.
 
+## 도커 꼬임 처방 — 실제 사고와 막는 자리
+
+| 사고 | 원인 | 처방(파일) |
+|---|---|---|
+| app 만 재생성하면 nginx 502 (2026-09-20 #337 배포, 2026-10-09 채팅 켜고 `up -d app`) | `upstream { server app:8080; }` 는 이름을 nginx 기동 때 한 번만 IP 로 푼다. 새 app 은 새 IP | `nginx.conf`: `resolver 127.0.0.11 valid=10s` + `proxy_pass $변수` → 요청마다 다시 푼다. 손으로 `up -d app` 해도 10초 안에 새 IP. 실측: 옛 설정 재생성 뒤 502, 새 설정 200 |
+| `/zzal` 만 502 "upstream sent too big header" (2026-09-22) | Next 프리로드 헤더 6KB > nginx 기본 4k | `nginx.conf` `location /` 버퍼 16k(유지) |
+| 배포 중 어느 쪽 때문에 502 인지 모름 | `up -d --build` 한 번에 app·web·nginx 가 동시에 바뀜 | `deploy-dev.sh`: 빌드 먼저(실패하면 돌던 스택 그대로) → app 헬스 → web 응답 → 나머지 → nginx 재생성 → nginx 경유 확인 |
+| `.env` 에 넣었는데 앱이 못 봄 (ZZAL_DEV_TOOLS·ZZAL_ADMIN, 9/22 dev API 404·10/9 관리자 화면) | compose `environment:` 에 통로가 없음 | `docker-compose.yml` 에 통로 4줄(기본 false). `deploy-dev.sh` 가 ".env 에 있지만 compose 가 안 넘기는 키"를 이름으로 경고 |
+| `.env` 필수 값이 비어도 조용히 뜸 | 검사 없음 | `deploy-dev.sh` 가 DB_USERNAME·DB_PASSWORD·S3_ACCESS_KEY·S3_SECRET_KEY·CONTENT_BUCKET·S3_PUBLIC_URL 중 빈 것을 이름으로 말하고 멈춤(기존 스택 그대로) |
+| 손으로 친 compose 와 배포가 다른 project 로 갈라짐 | `name: lore-dev` 는 셸의 `COMPOSE_PROJECT_NAME` 에 진다 | `deploy-dev.sh` 가 `-p lore-dev` 로 못박음 |
+| 노트북 워크트리마다 같은 `lore-dev` 컨테이너를 덮어씀 | 이 compose 의 project·포트가 하나로 고정 | 노트북은 `scripts/dev.sh`(브랜치별 project `lore-<브랜치>`·포트 32NN/82NN/54NN/90NN·장부 `~/.lore-dev/stacks.json`) |
+
+박스에서 리모컨·관리자 화면을 켜려면 `/opt/lore-dev/.env` 에 `ZZAL_DEV_TOOLS=true`·`ZZAL_ADMIN=true` 를 넣고 다음 배포(또는 `docker compose -p lore-dev -f docker-compose.yml -f docker-compose.dev-ec2.yml --env-file /opt/lore-dev/.env up -d app`)로 반영한다.
+
 ## 주소가 갈리는 자리 — `/images/` 와 `/lore-content/`
 
 화면은 그림을 `/images/zzal/...` 로 부른다(`zzal/fe/lib/assets.ts` 의 `NEXT_PUBLIC_CDN_BASE` 기본값 `/images`).

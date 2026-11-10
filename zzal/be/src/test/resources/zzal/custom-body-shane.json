@@ -1,0 +1,3137 @@
+{
+  "base": {
+    "version": "1",
+    "canvas": {
+      "w": 312,
+      "h": 349
+    },
+    "K": 291,
+    "Hw": 110,
+    "HwOverK": 0.378,
+    "poses": {
+      "base": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 92,
+          "y": 40,
+          "w": 128,
+          "h": 291
+        },
+        "head_top": {
+          "x": 152.6,
+          "y": 40
+        },
+        "head_side": {
+          "y": 67.5,
+          "left_x": 97.6,
+          "right_x": 207.6
+        },
+        "hand_front": {
+          "y": 200.1,
+          "left_x": 109,
+          "right_x": 204
+        },
+        "feet": {
+          "y": 331,
+          "left_x": 112,
+          "right_x": 200,
+          "center_x": 156.0
+        }
+      },
+      "eat": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 92,
+          "y": 43,
+          "w": 128,
+          "h": 288
+        },
+        "head_top": {
+          "x": 150.5,
+          "y": 43
+        },
+        "head_side": {
+          "y": 70.5,
+          "left_x": 95.5,
+          "right_x": 205.5
+        },
+        "hand_front": {
+          "y": 203.1,
+          "left_x": 111,
+          "right_x": 199
+        },
+        "feet": {
+          "y": 331,
+          "left_x": 111,
+          "right_x": 199,
+          "center_x": 156.0
+        }
+      },
+      "joy": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 95,
+          "y": 52,
+          "w": 126,
+          "h": 279
+        },
+        "head_top": {
+          "x": 154.4,
+          "y": 52
+        },
+        "head_side": {
+          "y": 79.5,
+          "left_x": 99.4,
+          "right_x": 209.4
+        },
+        "hand_front": {
+          "y": 212.1,
+          "left_x": 112,
+          "right_x": 198
+        },
+        "feet": {
+          "y": 331,
+          "left_x": 110,
+          "right_x": 200,
+          "center_x": 158.0
+        }
+      },
+      "sad": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 84,
+          "y": 51,
+          "w": 128,
+          "h": 280
+        },
+        "head_top": {
+          "x": 140.5,
+          "y": 51
+        },
+        "head_side": {
+          "y": 78.5,
+          "left_x": 85.5,
+          "right_x": 195.5
+        },
+        "hand_front": {
+          "y": 211.1,
+          "left_x": 116,
+          "right_x": 206
+        },
+        "feet": {
+          "y": 331,
+          "left_x": 118,
+          "right_x": 191,
+          "center_x": 148.0
+        }
+      },
+      "sick": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 91,
+          "y": 131,
+          "w": 131,
+          "h": 200
+        },
+        "head_top": {
+          "x": 142.6,
+          "y": 131
+        },
+        "head_side": {
+          "y": 158.5,
+          "left_x": 87.6,
+          "right_x": 197.6
+        },
+        "hand_front": {
+          "y": 291.1,
+          "left_x": 128,
+          "right_x": 215
+        },
+        "feet": {
+          "y": 331,
+          "left_x": 114,
+          "right_x": 168,
+          "center_x": 156.5
+        }
+      },
+      "pet": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 89,
+          "y": 76,
+          "w": 126,
+          "h": 255
+        },
+        "head_top": {
+          "x": 135.0,
+          "y": 76
+        },
+        "head_side": {
+          "y": 103.5,
+          "left_x": 80.0,
+          "right_x": 190.0
+        },
+        "hand_front": {
+          "y": 236.1,
+          "left_x": 116,
+          "right_x": 197
+        },
+        "feet": {
+          "y": 331,
+          "left_x": 122,
+          "right_x": 187,
+          "center_x": 152.0
+        }
+      },
+      "hello": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 75,
+          "y": 74,
+          "w": 140,
+          "h": 257
+        },
+        "head_top": {
+          "x": 148.5,
+          "y": 74
+        },
+        "head_side": {
+          "y": 101.5,
+          "left_x": 93.5,
+          "right_x": 203.5
+        },
+        "hand_front": {
+          "y": 234.1,
+          "left_x": 125,
+          "right_x": 204
+        },
+        "feet": {
+          "y": 331,
+          "left_x": 114,
+          "right_x": 198,
+          "center_x": 145.0
+        }
+      },
+      "sleep": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 56,
+          "y": 186,
+          "w": 201,
+          "h": 145
+        },
+        "head_top": {
+          "x": 95.8,
+          "y": 186
+        },
+        "head_side": {
+          "y": 213.5,
+          "left_x": 40.8,
+          "right_x": 164
+        },
+        "hand_front": {
+          "y": 346.1,
+          "left_x": 56,
+          "right_x": 257
+        },
+        "feet": {
+          "y": 331,
+          "left_x": 227,
+          "right_x": 256,
+          "center_x": 156.5
+        }
+      },
+      "eat_rice": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 89,
+          "y": 62,
+          "w": 137,
+          "h": 270
+        },
+        "head_top": {
+          "x": 149.6,
+          "y": 62
+        },
+        "head_side": {
+          "y": 89.5,
+          "left_x": 94.6,
+          "right_x": 207
+        },
+        "hand_front": {
+          "y": 222.1,
+          "left_x": 101,
+          "right_x": 209
+        },
+        "feet": {
+          "y": 332,
+          "left_x": 116,
+          "right_x": 199,
+          "center_x": 157.5
+        }
+      },
+      "eat_snack": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 91,
+          "y": 62,
+          "w": 133,
+          "h": 270
+        },
+        "head_top": {
+          "x": 146.3,
+          "y": 62
+        },
+        "head_side": {
+          "y": 89.5,
+          "left_x": 91.3,
+          "right_x": 205
+        },
+        "hand_front": {
+          "y": 222.1,
+          "left_x": 102,
+          "right_x": 208
+        },
+        "feet": {
+          "y": 332,
+          "left_x": 117,
+          "right_x": 197,
+          "center_x": 157.5
+        }
+      },
+      "sweep": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 90,
+          "y": 72,
+          "w": 136,
+          "h": 260
+        },
+        "head_top": {
+          "x": 145.7,
+          "y": 72
+        },
+        "head_side": {
+          "y": 99.5,
+          "left_x": 90.7,
+          "right_x": 203
+        },
+        "hand_front": {
+          "y": 232.1,
+          "left_x": 112,
+          "right_x": 215
+        },
+        "feet": {
+          "y": 332,
+          "left_x": 109,
+          "right_x": 205,
+          "center_x": 158.0
+        }
+      },
+      "wash": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 84,
+          "y": 103,
+          "w": 145,
+          "h": 229
+        },
+        "head_top": {
+          "x": 148.3,
+          "y": 103
+        },
+        "head_side": {
+          "y": 130.5,
+          "left_x": 93.3,
+          "right_x": 203.3
+        },
+        "hand_front": {
+          "y": 263.1,
+          "left_x": 84,
+          "right_x": 229
+        },
+        "feet": {
+          "y": 332,
+          "left_x": 107,
+          "right_x": 205,
+          "center_x": 156.5
+        }
+      },
+      "reply": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 100,
+          "y": 75,
+          "w": 123,
+          "h": 257
+        },
+        "head_top": {
+          "x": 151.1,
+          "y": 75
+        },
+        "head_side": {
+          "y": 102.5,
+          "left_x": 96.1,
+          "right_x": 206.1
+        },
+        "hand_front": {
+          "y": 235.1,
+          "left_x": 122,
+          "right_x": 196
+        },
+        "feet": {
+          "y": 332,
+          "left_x": 120,
+          "right_x": 195,
+          "center_x": 161.5
+        }
+      },
+      "petted": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 93,
+          "y": 80,
+          "w": 131,
+          "h": 252
+        },
+        "head_top": {
+          "x": 189.9,
+          "y": 80
+        },
+        "head_side": {
+          "y": 107.5,
+          "left_x": 121,
+          "right_x": 244.9
+        },
+        "hand_front": {
+          "y": 240.1,
+          "left_x": 120,
+          "right_x": 196
+        },
+        "feet": {
+          "y": 332,
+          "left_x": 121,
+          "right_x": 194,
+          "center_x": 158.5
+        }
+      },
+      "startle": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 99,
+          "y": 68,
+          "w": 124,
+          "h": 263
+        },
+        "head_top": {
+          "x": 151.1,
+          "y": 68
+        },
+        "head_side": {
+          "y": 95.5,
+          "left_x": 96.1,
+          "right_x": 206.1
+        },
+        "hand_front": {
+          "y": 228.1,
+          "left_x": 117,
+          "right_x": 208
+        },
+        "feet": {
+          "y": 331,
+          "left_x": 119,
+          "right_x": 196,
+          "center_x": 161.0
+        }
+      },
+      "wake_up": {
+        "canvas": [
+          312,
+          349
+        ],
+        "bbox": {
+          "x": 78,
+          "y": 70,
+          "w": 145,
+          "h": 262
+        },
+        "head_top": {
+          "x": 147.9,
+          "y": 70
+        },
+        "head_side": {
+          "y": 97.5,
+          "left_x": 92.9,
+          "right_x": 202.9
+        },
+        "hand_front": {
+          "y": 230.1,
+          "left_x": 127,
+          "right_x": 206
+        },
+        "feet": {
+          "y": 332,
+          "left_x": 119,
+          "right_x": 196,
+          "center_x": 150.5
+        }
+      }
+    }
+  },
+  "anchors": {
+    "version": "1",
+    "canvas": {
+      "w": 312,
+      "h": 456
+    },
+    "K": 291,
+    "Hw": 110,
+    "HwOverK": 0.378,
+    "poses": {
+      "eat_rice": {
+        "canvas": [
+          312,
+          456
+        ],
+        "bbox": {
+          "x": 41,
+          "y": 80,
+          "w": 241,
+          "h": 298
+        },
+        "head_top": {
+          "x": 157.0,
+          "y": 80
+        },
+        "head_side": {
+          "y": 107.5,
+          "left_x": 102.0,
+          "right_x": 218
+        },
+        "hand_front": {
+          "y": 240.1,
+          "left_x": 44,
+          "right_x": 278
+        },
+        "feet": {
+          "y": 378,
+          "left_x": 122,
+          "right_x": 201,
+          "center_x": 161.5
+        }
+      },
+      "eat_snack": {
+        "canvas": [
+          312,
+          456
+        ],
+        "bbox": {
+          "x": 78,
+          "y": 101,
+          "w": 156,
+          "h": 277
+        },
+        "head_top": {
+          "x": 139.7,
+          "y": 101
+        },
+        "head_side": {
+          "y": 128.5,
+          "left_x": 84.7,
+          "right_x": 194.7
+        },
+        "hand_front": {
+          "y": 261.1,
+          "left_x": 93,
+          "right_x": 212
+        },
+        "feet": {
+          "y": 378,
+          "left_x": 160,
+          "right_x": 192,
+          "center_x": 156.0
+        }
+      },
+      "sweep": {
+        "canvas": [
+          312,
+          456
+        ],
+        "bbox": {
+          "x": 67,
+          "y": 86,
+          "w": 160,
+          "h": 292
+        },
+        "head_top": {
+          "x": 140.5,
+          "y": 86
+        },
+        "head_side": {
+          "y": 113.5,
+          "left_x": 85.5,
+          "right_x": 201
+        },
+        "hand_front": {
+          "y": 246.1,
+          "left_x": 76,
+          "right_x": 217
+        },
+        "feet": {
+          "y": 378,
+          "left_x": 117,
+          "right_x": 204,
+          "center_x": 147.0
+        }
+      },
+      "wash": {
+        "canvas": [
+          312,
+          456
+        ],
+        "bbox": {
+          "x": 94,
+          "y": 89,
+          "w": 165,
+          "h": 289
+        },
+        "head_top": {
+          "x": 178.0,
+          "y": 89
+        },
+        "head_side": {
+          "y": 116.5,
+          "left_x": 123.0,
+          "right_x": 233.0
+        },
+        "hand_front": {
+          "y": 249.1,
+          "left_x": 142,
+          "right_x": 251
+        },
+        "feet": {
+          "y": 378,
+          "left_x": 143,
+          "right_x": 169,
+          "center_x": 176.5
+        }
+      },
+      "reply": {
+        "canvas": [
+          312,
+          456
+        ],
+        "bbox": {
+          "x": 52,
+          "y": 106,
+          "w": 209,
+          "h": 272
+        },
+        "head_top": {
+          "x": 161.8,
+          "y": 106
+        },
+        "head_side": {
+          "y": 133.5,
+          "left_x": 106.8,
+          "right_x": 223
+        },
+        "hand_front": {
+          "y": 266.1,
+          "left_x": 125,
+          "right_x": 235
+        },
+        "feet": {
+          "y": 378,
+          "left_x": 146,
+          "right_x": 163,
+          "center_x": 156.5
+        }
+      },
+      "petted": {
+        "canvas": [
+          312,
+          456
+        ],
+        "bbox": {
+          "x": 63,
+          "y": 113,
+          "w": 209,
+          "h": 265
+        },
+        "head_top": {
+          "x": 194.7,
+          "y": 113
+        },
+        "head_side": {
+          "y": 140.5,
+          "left_x": 139.7,
+          "right_x": 249.7
+        },
+        "hand_front": {
+          "y": 273.1,
+          "left_x": 119,
+          "right_x": 255
+        },
+        "feet": {
+          "y": 378,
+          "left_x": 77,
+          "right_x": 140,
+          "center_x": 167.5
+        }
+      },
+      "startle": {
+        "canvas": [
+          312,
+          456
+        ],
+        "bbox": {
+          "x": 50,
+          "y": 96,
+          "w": 203,
+          "h": 282
+        },
+        "head_top": {
+          "x": 153.4,
+          "y": 96
+        },
+        "head_side": {
+          "y": 123.5,
+          "left_x": 85,
+          "right_x": 208.4
+        },
+        "hand_front": {
+          "y": 256.1,
+          "left_x": 60,
+          "right_x": 248
+        },
+        "feet": {
+          "y": 378,
+          "left_x": 148,
+          "right_x": 166,
+          "center_x": 151.5
+        }
+      },
+      "wake_up": {
+        "canvas": [
+          312,
+          456
+        ],
+        "bbox": {
+          "x": 20,
+          "y": 120,
+          "w": 274,
+          "h": 258
+        },
+        "head_top": {
+          "x": 94.1,
+          "y": 120
+        },
+        "head_side": {
+          "y": 147.5,
+          "left_x": 39.1,
+          "right_x": 159
+        },
+        "hand_front": {
+          "y": 280.1,
+          "left_x": 32,
+          "right_x": 272
+        },
+        "feet": {
+          "y": 378,
+          "left_x": 190,
+          "right_x": 207,
+          "center_x": 157.0
+        }
+      }
+    },
+    "customTransform": {
+      "version": "CUSTOM_CANVAS_BODY_V2",
+      "gridSHA256": "61a714090408b73e34a13cd3267e6138dd502e007717d2ea5614477258f73761",
+      "baseAnchorsSHA256": "28821b5c2bec13c56a043850b873fcce45a768246cc789e169ca5b9a38a9b360",
+      "baseCanvas": {
+        "w": 312,
+        "h": 349
+      },
+      "outputCanvas": {
+        "w": 312,
+        "h": 456
+      },
+      "K": 291,
+      "Hw": 110,
+      "sourceHeadWidth": 116.5,
+      "normalizationScale": 1.0139372822299653,
+      "baseOffset": {
+        "x": 0,
+        "y": 47
+      },
+      "sharedAffine": {
+        "scale": 1.0139372822299653,
+        "dx": -2,
+        "dy": 0
+      },
+      "inputCanvas": {
+        "w": 312,
+        "h": 450
+      },
+      "resizedCanvas": {
+        "w": 316,
+        "h": 456
+      },
+      "standingFootTarget": 378.0,
+      "standingFootSource": 372.5,
+      "cellMembership": [
+        {
+          "frame": 1,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                138,
+                389,
+                160,
+                409
+              ],
+              "pixels": 152,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 152,
+          "retainedOwnCellAlphaPixels": 42951
+        },
+        {
+          "frame": 2,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                132,
+                390,
+                154,
+                409
+              ],
+              "pixels": 154,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 154,
+          "retainedOwnCellAlphaPixels": 39409
+        },
+        {
+          "frame": 3,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                121,
+                391,
+                144,
+                409
+              ],
+              "pixels": 155,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 155,
+          "retainedOwnCellAlphaPixels": 26924
+        },
+        {
+          "frame": 4,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                111,
+                391,
+                134,
+                409
+              ],
+              "pixels": 149,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 149,
+          "retainedOwnCellAlphaPixels": 27176
+        },
+        {
+          "frame": 5,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                138,
+                386,
+                160,
+                409
+              ],
+              "pixels": 187,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                157,
+                406,
+                189,
+                409
+              ],
+              "pixels": 73,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                216,
+                408,
+                217,
+                409
+              ],
+              "pixels": 1,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 261,
+          "retainedOwnCellAlphaPixels": 24989
+        },
+        {
+          "frame": 6,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                126,
+                386,
+                147,
+                409
+              ],
+              "pixels": 188,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                144,
+                405,
+                181,
+                409
+              ],
+              "pixels": 101,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                201,
+                407,
+                205,
+                409
+              ],
+              "pixels": 6,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 295,
+          "retainedOwnCellAlphaPixels": 24612
+        },
+        {
+          "frame": 7,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                97,
+                0,
+                223,
+                50
+              ],
+              "pixels": 4210,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                151,
+                389,
+                173,
+                409
+              ],
+              "pixels": 160,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                177,
+                408,
+                187,
+                409
+              ],
+              "pixels": 10,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 4380,
+          "retainedOwnCellAlphaPixels": 23967
+        },
+        {
+          "frame": 8,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                84,
+                0,
+                212,
+                50
+              ],
+              "pixels": 4189,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                139,
+                393,
+                160,
+                409
+              ],
+              "pixels": 118,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 4307,
+          "retainedOwnCellAlphaPixels": 23378
+        },
+        {
+          "frame": 9,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                129,
+                0,
+                175,
+                51
+              ],
+              "pixels": 1345,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                180,
+                0,
+                230,
+                53
+              ],
+              "pixels": 1261,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                97,
+                389,
+                114,
+                405
+              ],
+              "pixels": 156,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 2762,
+          "retainedOwnCellAlphaPixels": 27623
+        },
+        {
+          "frame": 10,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                127,
+                0,
+                170,
+                51
+              ],
+              "pixels": 1316,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                175,
+                0,
+                226,
+                53
+              ],
+              "pixels": 1260,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                80,
+                390,
+                98,
+                409
+              ],
+              "pixels": 187,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 2763,
+          "retainedOwnCellAlphaPixels": 27986
+        },
+        {
+          "frame": 11,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                104,
+                0,
+                136,
+                52
+              ],
+              "pixels": 1134,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                146,
+                0,
+                191,
+                36
+              ],
+              "pixels": 940,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                80,
+                397,
+                94,
+                409
+              ],
+              "pixels": 62,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 2136,
+          "retainedOwnCellAlphaPixels": 26556
+        },
+        {
+          "frame": 12,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                96,
+                0,
+                131,
+                52
+              ],
+              "pixels": 1155,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                139,
+                0,
+                182,
+                35
+              ],
+              "pixels": 891,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                97,
+                403,
+                108,
+                409
+              ],
+              "pixels": 27,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 2073,
+          "retainedOwnCellAlphaPixels": 25624
+        },
+        {
+          "frame": 13,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                55,
+                0,
+                72,
+                10
+              ],
+              "pixels": 150,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                141,
+                0,
+                158,
+                30
+              ],
+              "pixels": 479,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                180,
+                0,
+                196,
+                8
+              ],
+              "pixels": 106,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 735,
+          "retainedOwnCellAlphaPixels": 24158
+        },
+        {
+          "frame": 14,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                44,
+                0,
+                61,
+                11
+              ],
+              "pixels": 156,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                127,
+                0,
+                145,
+                30
+              ],
+              "pixels": 488,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                168,
+                0,
+                183,
+                8
+              ],
+              "pixels": 106,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                189,
+                0,
+                193,
+                1
+              ],
+              "pixels": 4,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 754,
+          "retainedOwnCellAlphaPixels": 22594
+        },
+        {
+          "frame": 15,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                40,
+                0,
+                99,
+                26
+              ],
+              "pixels": 1237,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                105,
+                0,
+                114,
+                26
+              ],
+              "pixels": 174,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                147,
+                0,
+                184,
+                16
+              ],
+              "pixels": 512,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                194,
+                0,
+                226,
+                21
+              ],
+              "pixels": 546,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 2469,
+          "retainedOwnCellAlphaPixels": 34178
+        },
+        {
+          "frame": 16,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                31,
+                0,
+                88,
+                26
+              ],
+              "pixels": 1183,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                94,
+                0,
+                103,
+                26
+              ],
+              "pixels": 179,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                137,
+                0,
+                175,
+                17
+              ],
+              "pixels": 562,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                182,
+                0,
+                213,
+                22
+              ],
+              "pixels": 545,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 2469,
+          "retainedOwnCellAlphaPixels": 32816
+        }
+      ],
+      "crop": {
+        "originalBox": [
+          120,
+          174,
+          432,
+          529
+        ],
+        "expandedBox": [
+          120,
+          99,
+          432,
+          549
+        ],
+        "alphaPixelsBefore": [
+          43041,
+          39499,
+          26924,
+          27176,
+          24901,
+          24528,
+          23967,
+          23378,
+          27579,
+          27960,
+          26556,
+          25624,
+          24206,
+          22620,
+          34178,
+          32816
+        ],
+        "alphaPixelsAfter": [
+          43041,
+          39499,
+          26924,
+          27176,
+          24901,
+          24528,
+          23967,
+          23378,
+          27579,
+          27960,
+          26556,
+          25624,
+          24206,
+          22620,
+          34178,
+          32816
+        ],
+        "lostAlphaPixels": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "frames": [
+        {
+          "frame": 1,
+          "alphaPixelsBeforePlacement": 45414,
+          "alphaPixelsAfterPlacement": 45414,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            39,
+            78,
+            284,
+            379
+          ]
+        },
+        {
+          "frame": 2,
+          "alphaPixelsBeforePlacement": 41773,
+          "alphaPixelsAfterPlacement": 41773,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            37,
+            79,
+            275,
+            378
+          ]
+        },
+        {
+          "frame": 3,
+          "alphaPixelsBeforePlacement": 29152,
+          "alphaPixelsAfterPlacement": 29152,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            78,
+            99,
+            234,
+            379
+          ]
+        },
+        {
+          "frame": 4,
+          "alphaPixelsBeforePlacement": 29523,
+          "alphaPixelsAfterPlacement": 29523,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            75,
+            98,
+            234,
+            379
+          ]
+        },
+        {
+          "frame": 5,
+          "alphaPixelsBeforePlacement": 27250,
+          "alphaPixelsAfterPlacement": 27250,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            65,
+            36,
+            229,
+            379
+          ]
+        },
+        {
+          "frame": 6,
+          "alphaPixelsBeforePlacement": 26869,
+          "alphaPixelsAfterPlacement": 26869,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            69,
+            16,
+            226,
+            378
+          ]
+        },
+        {
+          "frame": 7,
+          "alphaPixelsBeforePlacement": 26206,
+          "alphaPixelsAfterPlacement": 26206,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            92,
+            87,
+            261,
+            379
+          ]
+        },
+        {
+          "frame": 8,
+          "alphaPixelsBeforePlacement": 25502,
+          "alphaPixelsAfterPlacement": 25502,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            93,
+            87,
+            257,
+            379
+          ]
+        },
+        {
+          "frame": 9,
+          "alphaPixelsBeforePlacement": 29870,
+          "alphaPixelsAfterPlacement": 29870,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            50,
+            104,
+            263,
+            440
+          ]
+        },
+        {
+          "frame": 10,
+          "alphaPixelsBeforePlacement": 30254,
+          "alphaPixelsAfterPlacement": 30254,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            50,
+            104,
+            264,
+            379
+          ]
+        },
+        {
+          "frame": 11,
+          "alphaPixelsBeforePlacement": 30101,
+          "alphaPixelsAfterPlacement": 30101,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            61,
+            111,
+            274,
+            379
+          ]
+        },
+        {
+          "frame": 12,
+          "alphaPixelsBeforePlacement": 29139,
+          "alphaPixelsAfterPlacement": 29139,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            62,
+            113,
+            270,
+            378
+          ]
+        },
+        {
+          "frame": 13,
+          "alphaPixelsBeforePlacement": 27027,
+          "alphaPixelsAfterPlacement": 27027,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            48,
+            94,
+            255,
+            379
+          ]
+        },
+        {
+          "frame": 14,
+          "alphaPixelsBeforePlacement": 25221,
+          "alphaPixelsAfterPlacement": 25221,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            64,
+            95,
+            264,
+            354
+          ]
+        },
+        {
+          "frame": 15,
+          "alphaPixelsBeforePlacement": 36659,
+          "alphaPixelsAfterPlacement": 36659,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            18,
+            118,
+            296,
+            379
+          ]
+        },
+        {
+          "frame": 16,
+          "alphaPixelsBeforePlacement": 35230,
+          "alphaPixelsAfterPlacement": 35230,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            17,
+            120,
+            295,
+            379
+          ]
+        }
+      ],
+      "lostAlphaPixels": 0,
+      "bodyNormalization": {
+        "version": "UPRIGHT_SILHOUETTE_PROXY_V1",
+        "motionPlanSHA256": "7b92a8da4e51c02c525c909c0ebc58d33e8ff0343f51148053932949e4d664eb",
+        "targetHeight": 291,
+        "sourceHeight": 287.0,
+        "sourceHeadWidthProxy": 116.5,
+        "scale": 1.0139372822299653,
+        "selectedOrders": [
+          3
+        ],
+        "selectedFrames": [
+          5,
+          6
+        ],
+        "standingFootSource": 372.5,
+        "measuredFrames": [
+          {
+            "frame": 5,
+            "height": 287,
+            "headWidthProxy": 117,
+            "headTop": 86,
+            "footY": 373,
+            "bbox": [
+              68,
+              86,
+              227,
+              373
+            ]
+          },
+          {
+            "frame": 6,
+            "height": 287,
+            "headWidthProxy": 116,
+            "headTop": 85,
+            "footY": 372,
+            "bbox": [
+              71,
+              85,
+              223,
+              372
+            ]
+          }
+        ],
+        "decisions": [
+          {
+            "order": 1,
+            "slot": "eat_rice",
+            "pose": "standing: one foot slightly forward, torso turned three-quarters, one gloved hand holding a clear peach iced tea cup at chest height and the other hand raised toward the sky",
+            "propsCount": 3,
+            "excludedReason": "OVERHEAD_POSE"
+          },
+          {
+            "order": 2,
+            "slot": "eat_snack",
+            "pose": "crouch: low balanced crouch with elbows tucked in, spoon held near the mouth and bright eyes focused on the dessert cup",
+            "propsCount": 3,
+            "excludedReason": "NOT_STANDING"
+          },
+          {
+            "order": 3,
+            "slot": "sweep",
+            "pose": "standing: feet shoulder-width apart, map held open with both hands, head tilted slightly down while one gloved finger points at a constellation",
+            "propsCount": 3,
+            "excludedReason": null,
+            "selected": true,
+            "measurements": [
+              {
+                "frame": 5,
+                "height": 287,
+                "headWidthProxy": 117,
+                "headTop": 86,
+                "footY": 373,
+                "bbox": [
+                  68,
+                  86,
+                  227,
+                  373
+                ]
+              },
+              {
+                "frame": 6,
+                "height": 287,
+                "headWidthProxy": 116,
+                "headTop": 85,
+                "footY": 372,
+                "bbox": [
+                  71,
+                  85,
+                  223,
+                  372
+                ]
+              }
+            ]
+          },
+          {
+            "order": 4,
+            "slot": "wash",
+            "pose": "standing: upright posture with one sneaker slightly lifted, one arm raised in a broad wave and the other resting near the belt",
+            "propsCount": 2,
+            "excludedReason": "NON_UPRIGHT_OR_UNGROUNDED"
+          },
+          {
+            "order": 5,
+            "slot": "reply",
+            "pose": "crouch: kneeling beside a low table, one hand steadying a dessert bowl while the other places a star-shaped topping with tweezers",
+            "propsCount": 3,
+            "excludedReason": "NOT_STANDING"
+          },
+          {
+            "order": 6,
+            "slot": "petted",
+            "pose": "standing: leaning slightly forward into a compact telescope, one hand on the focus wheel and the other gripping the tripod for balance",
+            "propsCount": 3,
+            "excludedReason": "NON_UPRIGHT_OR_UNGROUNDED"
+          },
+          {
+            "order": 7,
+            "slot": "startle",
+            "pose": "standing: both feet lifted in a small celebratory jump, knees bent, fists raised beside the shoulders and mouth open in delight",
+            "propsCount": 2,
+            "excludedReason": "NON_UPRIGHT_OR_UNGROUNDED"
+          },
+          {
+            "order": 8,
+            "slot": "wake_up",
+            "pose": "lying: curled on one side with knees slightly drawn up, head resting on a small cushion and both hands loosely holding a notebook",
+            "propsCount": 3,
+            "excludedReason": "NOT_STANDING"
+          }
+        ],
+        "characterOnlySegmentation": false,
+        "normalizedHeadWidthProxy": 118.12369337979095,
+        "seedHwDiagnosticRatio": 1.0738517579980995,
+        "diagnosticLimit": "Hw/head-band are silhouette proxies; uniform resizing cannot correct intrinsic head/body proportion drift."
+      }
+    }
+  },
+  "metadata": {
+    "customTransform": {
+      "version": "CUSTOM_CANVAS_BODY_V2",
+      "gridSHA256": "61a714090408b73e34a13cd3267e6138dd502e007717d2ea5614477258f73761",
+      "baseAnchorsSHA256": "28821b5c2bec13c56a043850b873fcce45a768246cc789e169ca5b9a38a9b360",
+      "baseCanvas": {
+        "w": 312,
+        "h": 349
+      },
+      "outputCanvas": {
+        "w": 312,
+        "h": 456
+      },
+      "K": 291,
+      "Hw": 110,
+      "sourceHeadWidth": 116.5,
+      "normalizationScale": 1.0139372822299653,
+      "baseOffset": {
+        "x": 0,
+        "y": 47
+      },
+      "sharedAffine": {
+        "scale": 1.0139372822299653,
+        "dx": -2,
+        "dy": 0
+      },
+      "inputCanvas": {
+        "w": 312,
+        "h": 450
+      },
+      "resizedCanvas": {
+        "w": 316,
+        "h": 456
+      },
+      "standingFootTarget": 378.0,
+      "standingFootSource": 372.5,
+      "cellMembership": [
+        {
+          "frame": 1,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                138,
+                389,
+                160,
+                409
+              ],
+              "pixels": 152,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 152,
+          "retainedOwnCellAlphaPixels": 42951
+        },
+        {
+          "frame": 2,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                132,
+                390,
+                154,
+                409
+              ],
+              "pixels": 154,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 154,
+          "retainedOwnCellAlphaPixels": 39409
+        },
+        {
+          "frame": 3,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                121,
+                391,
+                144,
+                409
+              ],
+              "pixels": 155,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 155,
+          "retainedOwnCellAlphaPixels": 26924
+        },
+        {
+          "frame": 4,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                111,
+                391,
+                134,
+                409
+              ],
+              "pixels": 149,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 149,
+          "retainedOwnCellAlphaPixels": 27176
+        },
+        {
+          "frame": 5,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                138,
+                386,
+                160,
+                409
+              ],
+              "pixels": 187,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                157,
+                406,
+                189,
+                409
+              ],
+              "pixels": 73,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                216,
+                408,
+                217,
+                409
+              ],
+              "pixels": 1,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 261,
+          "retainedOwnCellAlphaPixels": 24989
+        },
+        {
+          "frame": 6,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                126,
+                386,
+                147,
+                409
+              ],
+              "pixels": 188,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                144,
+                405,
+                181,
+                409
+              ],
+              "pixels": 101,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                201,
+                407,
+                205,
+                409
+              ],
+              "pixels": 6,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 295,
+          "retainedOwnCellAlphaPixels": 24612
+        },
+        {
+          "frame": 7,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                97,
+                0,
+                223,
+                50
+              ],
+              "pixels": 4210,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                151,
+                389,
+                173,
+                409
+              ],
+              "pixels": 160,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                177,
+                408,
+                187,
+                409
+              ],
+              "pixels": 10,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 4380,
+          "retainedOwnCellAlphaPixels": 23967
+        },
+        {
+          "frame": 8,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                84,
+                0,
+                212,
+                50
+              ],
+              "pixels": 4189,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                139,
+                393,
+                160,
+                409
+              ],
+              "pixels": 118,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 4307,
+          "retainedOwnCellAlphaPixels": 23378
+        },
+        {
+          "frame": 9,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                129,
+                0,
+                175,
+                51
+              ],
+              "pixels": 1345,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                180,
+                0,
+                230,
+                53
+              ],
+              "pixels": 1261,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                97,
+                389,
+                114,
+                405
+              ],
+              "pixels": 156,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 2762,
+          "retainedOwnCellAlphaPixels": 27623
+        },
+        {
+          "frame": 10,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                127,
+                0,
+                170,
+                51
+              ],
+              "pixels": 1316,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                175,
+                0,
+                226,
+                53
+              ],
+              "pixels": 1260,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                80,
+                390,
+                98,
+                409
+              ],
+              "pixels": 187,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 2763,
+          "retainedOwnCellAlphaPixels": 27986
+        },
+        {
+          "frame": 11,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                104,
+                0,
+                136,
+                52
+              ],
+              "pixels": 1134,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                146,
+                0,
+                191,
+                36
+              ],
+              "pixels": 940,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                80,
+                397,
+                94,
+                409
+              ],
+              "pixels": 62,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 2136,
+          "retainedOwnCellAlphaPixels": 26556
+        },
+        {
+          "frame": 12,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                96,
+                0,
+                131,
+                52
+              ],
+              "pixels": 1155,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                139,
+                0,
+                182,
+                35
+              ],
+              "pixels": 891,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                97,
+                403,
+                108,
+                409
+              ],
+              "pixels": 27,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 2073,
+          "retainedOwnCellAlphaPixels": 25624
+        },
+        {
+          "frame": 13,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                55,
+                0,
+                72,
+                10
+              ],
+              "pixels": 150,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                141,
+                0,
+                158,
+                30
+              ],
+              "pixels": 479,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                180,
+                0,
+                196,
+                8
+              ],
+              "pixels": 106,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 735,
+          "retainedOwnCellAlphaPixels": 24158
+        },
+        {
+          "frame": 14,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                44,
+                0,
+                61,
+                11
+              ],
+              "pixels": 156,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                127,
+                0,
+                145,
+                30
+              ],
+              "pixels": 488,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                168,
+                0,
+                183,
+                8
+              ],
+              "pixels": 106,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                189,
+                0,
+                193,
+                1
+              ],
+              "pixels": 4,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 754,
+          "retainedOwnCellAlphaPixels": 22594
+        },
+        {
+          "frame": 15,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                40,
+                0,
+                99,
+                26
+              ],
+              "pixels": 1237,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                105,
+                0,
+                114,
+                26
+              ],
+              "pixels": 174,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                147,
+                0,
+                184,
+                16
+              ],
+              "pixels": 512,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                194,
+                0,
+                226,
+                21
+              ],
+              "pixels": 546,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 2469,
+          "retainedOwnCellAlphaPixels": 34178
+        },
+        {
+          "frame": 16,
+          "ownCell": [
+            0,
+            60,
+            312,
+            372
+          ],
+          "componentsRemoved": [
+            {
+              "bbox": [
+                31,
+                0,
+                88,
+                26
+              ],
+              "pixels": 1183,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                94,
+                0,
+                103,
+                26
+              ],
+              "pixels": 179,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                137,
+                0,
+                175,
+                17
+              ],
+              "pixels": 562,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            },
+            {
+              "bbox": [
+                182,
+                0,
+                213,
+                22
+              ],
+              "pixels": 545,
+              "reason": "DISCONNECTED_OUTSIDE_OWN_CELL"
+            }
+          ],
+          "removedAlphaPixels": 2469,
+          "retainedOwnCellAlphaPixels": 32816
+        }
+      ],
+      "crop": {
+        "originalBox": [
+          120,
+          174,
+          432,
+          529
+        ],
+        "expandedBox": [
+          120,
+          99,
+          432,
+          549
+        ],
+        "alphaPixelsBefore": [
+          43041,
+          39499,
+          26924,
+          27176,
+          24901,
+          24528,
+          23967,
+          23378,
+          27579,
+          27960,
+          26556,
+          25624,
+          24206,
+          22620,
+          34178,
+          32816
+        ],
+        "alphaPixelsAfter": [
+          43041,
+          39499,
+          26924,
+          27176,
+          24901,
+          24528,
+          23967,
+          23378,
+          27579,
+          27960,
+          26556,
+          25624,
+          24206,
+          22620,
+          34178,
+          32816
+        ],
+        "lostAlphaPixels": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "frames": [
+        {
+          "frame": 1,
+          "alphaPixelsBeforePlacement": 45414,
+          "alphaPixelsAfterPlacement": 45414,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            39,
+            78,
+            284,
+            379
+          ]
+        },
+        {
+          "frame": 2,
+          "alphaPixelsBeforePlacement": 41773,
+          "alphaPixelsAfterPlacement": 41773,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            37,
+            79,
+            275,
+            378
+          ]
+        },
+        {
+          "frame": 3,
+          "alphaPixelsBeforePlacement": 29152,
+          "alphaPixelsAfterPlacement": 29152,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            78,
+            99,
+            234,
+            379
+          ]
+        },
+        {
+          "frame": 4,
+          "alphaPixelsBeforePlacement": 29523,
+          "alphaPixelsAfterPlacement": 29523,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            75,
+            98,
+            234,
+            379
+          ]
+        },
+        {
+          "frame": 5,
+          "alphaPixelsBeforePlacement": 27250,
+          "alphaPixelsAfterPlacement": 27250,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            65,
+            36,
+            229,
+            379
+          ]
+        },
+        {
+          "frame": 6,
+          "alphaPixelsBeforePlacement": 26869,
+          "alphaPixelsAfterPlacement": 26869,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            69,
+            16,
+            226,
+            378
+          ]
+        },
+        {
+          "frame": 7,
+          "alphaPixelsBeforePlacement": 26206,
+          "alphaPixelsAfterPlacement": 26206,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            92,
+            87,
+            261,
+            379
+          ]
+        },
+        {
+          "frame": 8,
+          "alphaPixelsBeforePlacement": 25502,
+          "alphaPixelsAfterPlacement": 25502,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            93,
+            87,
+            257,
+            379
+          ]
+        },
+        {
+          "frame": 9,
+          "alphaPixelsBeforePlacement": 29870,
+          "alphaPixelsAfterPlacement": 29870,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            50,
+            104,
+            263,
+            440
+          ]
+        },
+        {
+          "frame": 10,
+          "alphaPixelsBeforePlacement": 30254,
+          "alphaPixelsAfterPlacement": 30254,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            50,
+            104,
+            264,
+            379
+          ]
+        },
+        {
+          "frame": 11,
+          "alphaPixelsBeforePlacement": 30101,
+          "alphaPixelsAfterPlacement": 30101,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            61,
+            111,
+            274,
+            379
+          ]
+        },
+        {
+          "frame": 12,
+          "alphaPixelsBeforePlacement": 29139,
+          "alphaPixelsAfterPlacement": 29139,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            62,
+            113,
+            270,
+            378
+          ]
+        },
+        {
+          "frame": 13,
+          "alphaPixelsBeforePlacement": 27027,
+          "alphaPixelsAfterPlacement": 27027,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            48,
+            94,
+            255,
+            379
+          ]
+        },
+        {
+          "frame": 14,
+          "alphaPixelsBeforePlacement": 25221,
+          "alphaPixelsAfterPlacement": 25221,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            64,
+            95,
+            264,
+            354
+          ]
+        },
+        {
+          "frame": 15,
+          "alphaPixelsBeforePlacement": 36659,
+          "alphaPixelsAfterPlacement": 36659,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            18,
+            118,
+            296,
+            379
+          ]
+        },
+        {
+          "frame": 16,
+          "alphaPixelsBeforePlacement": 35230,
+          "alphaPixelsAfterPlacement": 35230,
+          "lostAlphaPixels": 0,
+          "edgeContact": {},
+          "contentPreserved": true,
+          "bbox": [
+            17,
+            120,
+            295,
+            379
+          ]
+        }
+      ],
+      "lostAlphaPixels": 0,
+      "bodyNormalization": {
+        "version": "UPRIGHT_SILHOUETTE_PROXY_V1",
+        "motionPlanSHA256": "7b92a8da4e51c02c525c909c0ebc58d33e8ff0343f51148053932949e4d664eb",
+        "targetHeight": 291,
+        "sourceHeight": 287.0,
+        "sourceHeadWidthProxy": 116.5,
+        "scale": 1.0139372822299653,
+        "selectedOrders": [
+          3
+        ],
+        "selectedFrames": [
+          5,
+          6
+        ],
+        "standingFootSource": 372.5,
+        "measuredFrames": [
+          {
+            "frame": 5,
+            "height": 287,
+            "headWidthProxy": 117,
+            "headTop": 86,
+            "footY": 373,
+            "bbox": [
+              68,
+              86,
+              227,
+              373
+            ]
+          },
+          {
+            "frame": 6,
+            "height": 287,
+            "headWidthProxy": 116,
+            "headTop": 85,
+            "footY": 372,
+            "bbox": [
+              71,
+              85,
+              223,
+              372
+            ]
+          }
+        ],
+        "decisions": [
+          {
+            "order": 1,
+            "slot": "eat_rice",
+            "pose": "standing: one foot slightly forward, torso turned three-quarters, one gloved hand holding a clear peach iced tea cup at chest height and the other hand raised toward the sky",
+            "propsCount": 3,
+            "excludedReason": "OVERHEAD_POSE"
+          },
+          {
+            "order": 2,
+            "slot": "eat_snack",
+            "pose": "crouch: low balanced crouch with elbows tucked in, spoon held near the mouth and bright eyes focused on the dessert cup",
+            "propsCount": 3,
+            "excludedReason": "NOT_STANDING"
+          },
+          {
+            "order": 3,
+            "slot": "sweep",
+            "pose": "standing: feet shoulder-width apart, map held open with both hands, head tilted slightly down while one gloved finger points at a constellation",
+            "propsCount": 3,
+            "excludedReason": null,
+            "selected": true,
+            "measurements": [
+              {
+                "frame": 5,
+                "height": 287,
+                "headWidthProxy": 117,
+                "headTop": 86,
+                "footY": 373,
+                "bbox": [
+                  68,
+                  86,
+                  227,
+                  373
+                ]
+              },
+              {
+                "frame": 6,
+                "height": 287,
+                "headWidthProxy": 116,
+                "headTop": 85,
+                "footY": 372,
+                "bbox": [
+                  71,
+                  85,
+                  223,
+                  372
+                ]
+              }
+            ]
+          },
+          {
+            "order": 4,
+            "slot": "wash",
+            "pose": "standing: upright posture with one sneaker slightly lifted, one arm raised in a broad wave and the other resting near the belt",
+            "propsCount": 2,
+            "excludedReason": "NON_UPRIGHT_OR_UNGROUNDED"
+          },
+          {
+            "order": 5,
+            "slot": "reply",
+            "pose": "crouch: kneeling beside a low table, one hand steadying a dessert bowl while the other places a star-shaped topping with tweezers",
+            "propsCount": 3,
+            "excludedReason": "NOT_STANDING"
+          },
+          {
+            "order": 6,
+            "slot": "petted",
+            "pose": "standing: leaning slightly forward into a compact telescope, one hand on the focus wheel and the other gripping the tripod for balance",
+            "propsCount": 3,
+            "excludedReason": "NON_UPRIGHT_OR_UNGROUNDED"
+          },
+          {
+            "order": 7,
+            "slot": "startle",
+            "pose": "standing: both feet lifted in a small celebratory jump, knees bent, fists raised beside the shoulders and mouth open in delight",
+            "propsCount": 2,
+            "excludedReason": "NON_UPRIGHT_OR_UNGROUNDED"
+          },
+          {
+            "order": 8,
+            "slot": "wake_up",
+            "pose": "lying: curled on one side with knees slightly drawn up, head resting on a small cushion and both hands loosely holding a notebook",
+            "propsCount": 3,
+            "excludedReason": "NOT_STANDING"
+          }
+        ],
+        "characterOnlySegmentation": false,
+        "normalizedHeadWidthProxy": 118.12369337979095,
+        "seedHwDiagnosticRatio": 1.0738517579980995,
+        "diagnosticLimit": "Hw/head-band are silhouette proxies; uniform resizing cannot correct intrinsic head/body proportion drift."
+      }
+    }
+  },
+  "plan": {
+    "version": "CUSTOM_MOTION_PLAN_V2",
+    "motions": [
+      {
+        "order": 1,
+        "title": "별빛 음료를 들어 올리기",
+        "action": "얼음을 띄운 복숭아 아이스티를 들고 반짝이는 별을 바라본다.",
+        "rationale": "음료를 좋아하는 성향과 우주에 관심 많은 분위기를 살린 창작 장면이다.",
+        "basis": "PERSONA_CREATIVE",
+        "selectedSources": [],
+        "semantic": null,
+        "albumOnly": true,
+        "pose": "standing: one foot slightly forward, torso turned three-quarters, one gloved hand holding a clear peach iced tea cup at chest height and the other hand raised toward the sky",
+        "props": [
+          "clear cup of peach iced tea",
+          "ice cubes",
+          "blue star pendant"
+        ],
+        "staging": "Place the character beneath a deep blue evening sky with small stylized stars and a soft aqua rim light.",
+        "situations": []
+      },
+      {
+        "order": 2,
+        "title": "쿠키아이스크림 한 스푼",
+        "action": "쿠키 조각이 보이는 아이스크림을 조심스럽게 한 스푼 떠먹는다.",
+        "rationale": "쿠키아이스크림을 좋아한다는 설정을 직접 반영한 캐릭터 중심의 창작 행동이다.",
+        "basis": "PERSONA_CREATIVE",
+        "selectedSources": [],
+        "semantic": "eat",
+        "albumOnly": false,
+        "pose": "crouch: low balanced crouch with elbows tucked in, spoon held near the mouth and bright eyes focused on the dessert cup",
+        "props": [
+          "cookie ice cream cup",
+          "small spoon",
+          "cookie crumbs"
+        ],
+        "staging": "Use a compact pastel dessert counter with clean cel-shaded highlights on the ice cream and hoodie.",
+        "situations": []
+      },
+      {
+        "order": 3,
+        "title": "별자리 지도 펼치기",
+        "action": "작은 별자리 지도를 펼쳐 다음에 관측할 별을 가리킨다.",
+        "rationale": "우주에 대한 관심을 탐험과 학습의 느낌으로 확장한 PERSONA_CREATIVE 장면이다.",
+        "basis": "PERSONA_CREATIVE",
+        "selectedSources": [],
+        "semantic": null,
+        "albumOnly": true,
+        "pose": "standing: feet shoulder-width apart, map held open with both hands, head tilted slightly down while one gloved finger points at a constellation",
+        "props": [
+          "folded constellation map",
+          "blue marker",
+          "small flashlight"
+        ],
+        "staging": "Set the character on a school rooftop at twilight with a low telescope silhouette and scattered star charts.",
+        "situations": []
+      },
+      {
+        "order": 4,
+        "title": "친구에게 활짝 인사",
+        "action": "한 손을 높이 흔들며 환하게 인사한다.",
+        "rationale": "밝고 친근한 학교 배경의 일상적인 인사 동작으로 구성했다.",
+        "basis": "PERSONA_CREATIVE",
+        "selectedSources": [],
+        "semantic": "hello",
+        "albumOnly": false,
+        "pose": "standing: upright posture with one sneaker slightly lifted, one arm raised in a broad wave and the other resting near the belt",
+        "props": [
+          "blue school bag",
+          "small star-shaped keychain"
+        ],
+        "staging": "Place the character at a sunny school entrance with soft geometric shadows and an open path behind them.",
+        "situations": []
+      },
+      {
+        "order": 5,
+        "title": "아이스크림 별 만들기",
+        "action": "아이스크림 위에 작은 별 모양 토핑을 올려 장식한다.",
+        "rationale": "아이스크림 선호와 별 모티프를 결합한 앨범 전용 창작 장면이다.",
+        "basis": "PERSONA_CREATIVE",
+        "selectedSources": [],
+        "semantic": null,
+        "albumOnly": true,
+        "pose": "crouch: kneeling beside a low table, one hand steadying a dessert bowl while the other places a star-shaped topping with tweezers",
+        "props": [
+          "vanilla ice cream bowl",
+          "star-shaped topping",
+          "small dessert tweezers"
+        ],
+        "staging": "Use a tidy tabletop composition with aqua napkins, red accents echoing the hair, and a softly blurred kitchen background.",
+        "situations": []
+      },
+      {
+        "order": 6,
+        "title": "망원경으로 달 관찰",
+        "action": "망원경에 눈을 대고 달 표면을 집중해서 살핀다.",
+        "rationale": "우주 관심사를 가장 직접적으로 보여 주는 몰입형 관찰 행동이다.",
+        "basis": "PERSONA_CREATIVE",
+        "selectedSources": [],
+        "semantic": null,
+        "albumOnly": true,
+        "pose": "standing: leaning slightly forward into a compact telescope, one hand on the focus wheel and the other gripping the tripod for balance",
+        "props": [
+          "small telescope",
+          "tripod",
+          "moon observation notebook"
+        ],
+        "staging": "Frame the character on a quiet rooftop under a large crescent moon with cool navy shadows and cyan highlights.",
+        "situations": []
+      },
+      {
+        "order": 7,
+        "title": "기쁜 발견에 점프",
+        "action": "새로운 별자리를 발견하고 두 주먹을 쥔 채 기뻐한다.",
+        "rationale": "발견의 순간을 명확한 기쁨 표현으로 만들되 기존 기억을 주장하지 않는 창작 장면이다.",
+        "basis": "PERSONA_CREATIVE",
+        "selectedSources": [],
+        "semantic": "joy",
+        "albumOnly": false,
+        "pose": "standing: both feet lifted in a small celebratory jump, knees bent, fists raised beside the shoulders and mouth open in delight",
+        "props": [
+          "glowing constellation card",
+          "small star stickers"
+        ],
+        "staging": "Use a dark observatory interior with the newly discovered constellation glowing behind the character like a crisp cel-shaded hologram.",
+        "situations": []
+      },
+      {
+        "order": 8,
+        "title": "별무늬 담요 아래 휴식",
+        "action": "별무늬 담요를 덮고 오늘의 관측 기록을 품에 안은 채 잠든다.",
+        "rationale": "활동 뒤의 차분한 마무리로 캐릭터의 우주 테마와 편안한 분위기를 유지했다.",
+        "basis": "PERSONA_CREATIVE",
+        "selectedSources": [],
+        "semantic": "sleep",
+        "albumOnly": false,
+        "pose": "lying: curled on one side with knees slightly drawn up, head resting on a small cushion and both hands loosely holding a notebook",
+        "props": [
+          "star-patterned blanket",
+          "observation notebook",
+          "small moon lamp"
+        ],
+        "staging": "Place the character in a cozy room with the moon lamp casting gentle aqua light and the hoodie details remaining clearly visible.",
+        "situations": []
+      }
+    ]
+  },
+  "baseHash": "28821b5c2bec13c56a043850b873fcce45a768246cc789e169ca5b9a38a9b360",
+  "gridHash": "61a714090408b73e34a13cd3267e6138dd502e007717d2ea5614477258f73761"
+}

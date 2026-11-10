@@ -36,6 +36,18 @@ public enum ErrorCode {
     // 띄울지가 이 코드에서 갈린다.
     CREDIT_NOT_ENOUGH(HttpStatus.PAYMENT_REQUIRED, "크레딧이 모자랍니다"),
 
+    // 충전 결제 (common, #155)
+    // 준비 안 됨은 503 — 이 서버에 페이앱 연동값이 안 들어 있다. 화면은 이 코드를 보고
+    // 결제 대신 1:1 문의를 안내한다(사람이 할 수 있는 일이 문의뿐이다).
+    PAYMENT_NOT_READY(HttpStatus.SERVICE_UNAVAILABLE, "결제 기능을 준비 중이에요"),
+    // 결제대행사가 결제창을 못 만들어 줬다. 다시 눌러 볼 만한 일이다.
+    PAYMENT_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "결제창을 열지 못했어요. 잠시 뒤 다시 시도해 주세요"),
+    PAYMENT_ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없어요"),
+    // 환불할 수 없는 주문 — 결제 완료가 아니거나, 이미 환불했거나, 돌려줄 유료 크레딧이 없다.
+    PAYMENT_NOT_REFUNDABLE(HttpStatus.CONFLICT, "환불할 수 없는 주문이에요"),
+    // 페이앱이 취소를 거절했다. 크레딧은 회수하지 않았다.
+    PAYMENT_REFUND_FAILED(HttpStatus.BAD_GATEWAY, "페이앱이 환불(취소)을 거절했어요"),
+
     // 업로드 (common)
     INVALID_UPLOAD_KEY(HttpStatus.BAD_REQUEST, "올바르지 않은 이미지입니다"),
     UPLOAD_KEY_ALREADY_USED(HttpStatus.BAD_REQUEST, "이미 사용한 이미지입니다"),
@@ -74,6 +86,9 @@ public enum ErrorCode {
     ZZAL_NOT_WAKE_TIME(HttpStatus.CONFLICT, "아직 깰 시간이 아니에요"),
     ZZAL_SICK_REFUSES(HttpStatus.CONFLICT, "아파서 지금은 못 해요"),
     ZZAL_BATH_DONE_TODAY(HttpStatus.CONFLICT, "오늘은 이미 씻었어요"),
+    ZZAL_CHAT_SESSION_STALE(HttpStatus.CONFLICT, "대화가 바뀌었어요. 지금 대화를 다시 확인해 주세요"),
+    ZZAL_ACTION_REQUEST_CONFLICT(HttpStatus.CONFLICT, "이 요청 번호는 다른 행동에 사용됐어요"),
+    ZZAL_CHAT_REQUEST_CONFLICT(HttpStatus.CONFLICT, "이 전송 번호는 다른 답에 사용됐어요"),
     ZZAL_CHAT_SLOT_CLOSED(HttpStatus.CONFLICT, "지금은 부르지 않았어요"),
     ZZAL_FEATURE_LOCKED(HttpStatus.CONFLICT, "아직 열리지 않았어요"),
     ZZAL_TRAVELING(HttpStatus.CONFLICT, "여행 중이에요"),
@@ -89,6 +104,7 @@ public enum ErrorCode {
     ZZAL_PET_HATCH_FAILED(HttpStatus.CONFLICT, "이 그림으로는 그리기가 어려웠어요. 다른 그림으로 다시 해 볼까요?"),
     ZZAL_TUTORIAL_NOT_FINISHED(HttpStatus.CONFLICT, "아직 배울 것이 남았어요"),
     ZZAL_TUTORIAL_ALREADY_DONE(HttpStatus.CONFLICT, "이미 다 배웠어요"),
+    ZZAL_PERSONA_SOURCE_STALE(HttpStatus.CONFLICT, "설정이 바뀌었어요. 현재 설정을 다시 확인해 주세요"),
     ZZAL_TUTORIAL_STEP_MISMATCH(HttpStatus.CONFLICT, "지금 배울 차례가 아니에요"),
     ZZAL_REGEN_NOT_REQUESTED(HttpStatus.CONFLICT, "다시 굽기를 요청한 동작이 아니에요"),
     ZZAL_NOT_IN_REVIEW(HttpStatus.CONFLICT, "검수 대기 중인 동작이 아니에요"),
@@ -104,6 +120,10 @@ public enum ErrorCode {
 
     // 후기 (zzal)
     ZZAL_FEEDBACK_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "이미 후기를 남겼어요"),
+
+    ZZAL_INQUIRY_CONFLICT(HttpStatus.CONFLICT, "같은 문의 요청 번호에 다른 내용이 담겨 있어요"),
+    ZZAL_INQUIRY_NOT_FOUND(HttpStatus.NOT_FOUND, "문의를 찾을 수 없어요"),
+    ZZAL_INQUIRY_ALREADY_REPLIED(HttpStatus.CONFLICT, "이미 답장한 문의예요"),
 
     // 동작 요청 (zzal)
     // ★ 429 가 아니라 409 다 — 이 서비스의 하루 상한은 전부 409 + 전용 코드로 답해 왔고
@@ -123,6 +143,9 @@ public enum ErrorCode {
     // ★ 404 가 아니라 403 을 준다 — 관리자 화면의 존재 자체는 비밀이 아니고,
     //   404 로 감추면 권한 설정을 빠뜨렸을 때 "주소가 틀렸나" 로 헤매게 된다.
     ADMIN_ONLY(HttpStatus.FORBIDDEN, "관리자만 볼 수 있어요"),
+    ADMIN_RETRY_OPEN(HttpStatus.CONFLICT, "이미 열린 재시도 요청이 있어요. 취소한 뒤 다시 누르세요"),
+    ADMIN_RETRY_CLOSED(HttpStatus.CONFLICT, "이미 집혔거나 끝난 재시도 요청이에요"),
+    ADMIN_RETRY_ALREADY_GRANTED(HttpStatus.CONFLICT, "이미 사용자에게 지급된 세트라 바꿀 수 없어요"),
 
     // 복선 카드 (piece-maker) — 2026-09-22. 카드 API 셋(GET /api/piece-maker/v1/public/cards/**)이 쓴다.
     // ★ 회차(chapter)의 400 만 코드를 따로 둔다 — 화면은 이 코드를 보면 저장해 둔 "판정 기준" 회차를 되돌린다.
@@ -137,6 +160,11 @@ public enum ErrorCode {
     // 가설(piece-maker, 3부) — 2026-09-22. 가설 API(/api/piece-maker/v1/hypotheses/**, /admin/hypotheses/**)가 쓴다.
     // ★ 없는 번호와 남의 가설을 한 코드로 답한다 — 갈라 주면 번호를 바꿔 가며 남의 가설이 있는지 알아낼 수 있다.
     PIECE_MAKER_HYPOTHESIS_NOT_FOUND(HttpStatus.NOT_FOUND, "가설을 찾을 수 없습니다"),
+    PIECE_MAKER_RESULT_VIEW_DISABLED(HttpStatus.CONFLICT, "정상 판정 열람 기록이 비활성화되어 있습니다"),
+    PIECE_MAKER_AD_MEASUREMENT_DISABLED(HttpStatus.CONFLICT, "광고 측정이 비활성화되어 있습니다"),
+    PIECE_MAKER_AD_LANDING_NOT_FOUND(HttpStatus.NOT_FOUND, "광고 방문 기록을 찾을 수 없습니다"),
+    PIECE_MAKER_AD_LANDING_CONFLICT(HttpStatus.CONFLICT, "광고 방문의 계정 또는 요청 정보가 일치하지 않습니다"),
+    PIECE_MAKER_AD_LANDING_RATE_LIMIT(HttpStatus.TOO_MANY_REQUESTS, "광고 방문 기록 요청이 너무 많습니다"),
     // ★ 화면이 실은 해시 둘이 카드 표의 값과 다르다 — 카드 표를 갈아 넣은 뒤 옛 화면이 맡기는 가설은 운영자의
     //   judge.py 가 어차피 거절하므로, 독자가 기다리다 실패를 보는 대신 맡기는 순간에 막는다(NA decisions.md 1-30).
     PIECE_MAKER_DIGEST_MISMATCH(HttpStatus.BAD_REQUEST, "화면의 장부와 서버의 장부가 다릅니다. 페이지를 새로 열어 주세요");

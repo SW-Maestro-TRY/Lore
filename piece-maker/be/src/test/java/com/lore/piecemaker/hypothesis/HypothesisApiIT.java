@@ -18,7 +18,7 @@ import java.util.function.Consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 가설 API 의 통합 검사. 표본 25장 위에서 맡기기(2-5)와 하나 보기(2-6)를 본다 — 저장 · 복사 · 가리기 · 검사 문구 · 되묻기.
+ * 가설 API 의 통합 검사. 화면 검사 자료의 표본으로 맡기기(2-5)와 하나 보기(2-6)를 본다 — 저장 · 복사 · 가리기 · 검사 문구 · 되묻기.
  * 로그인은 {@code asUser} 로 넣는다(JWT 필터가 넣는 것과 같은 모양).
  */
 @PieceMakerIntegrationTest

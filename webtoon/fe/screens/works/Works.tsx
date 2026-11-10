@@ -2,22 +2,26 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  browseRuns, coverUrl, isMyRun, likedAmong, myAccountRuns, recentRuns, setVisibility,
+  adminSetBrowseRank, browseRuns, coverUrl, thumbUrl, isMyRun, likedAmong, myAccountRuns, visibilityOf,
   type RunCard,
 } from "../../lib/api";
+import { useAuth } from "@common/auth/useAuth";
 import { useT } from "../../lib/i18n";
 import { labelToken, track } from "../../lib/track";
 import { louArt } from "../../lib/louArt";
 import type { Go } from "../../lib/nav";
 import { IconChevronDown } from "../../ui/Icons";
 import LikeButton from "../../ui/LikeButton";
-import RunStrip from "../../ui/RunStrip";
+import VisibilityPicker from "../../ui/VisibilityPicker";
 import { STYLE_INFO } from "../../lib/wizardData";
+import TopBanners from "./TopBanners";
 import FilterCombo from "./FilterCombo";
 import { GENRE_ORDER, genreBucket } from "./genreBucket";
+import { byLatest, byPopular, byViews } from "./popular";
 import "../wizard/i18n";
 import "./i18n";
 import "./Works.css";
+import "./WorksFinal.css";
 
 /* 둘러보기 — 캔버스 Works · WorksEmpty · WorksError · MWorks.
  *
@@ -29,8 +33,14 @@ import "./Works.css";
  *
  * 찾기·칩(찜)·그림체 칸·장르 칸은 전부 화면에서 거른다(#248). 목록이 작아서 서버에
  * 묻는 것보다 받은 것을 거르는 편이 빠르고, 검색어는 서버에 남지 않는다. */
+type SortKey = "popular" | "views" | "likes" | "newest" | "oldest";
+/* 인기순 = 관리자가 정한 자리(rank)가 먼저, 그 뒤는 조회순. 기본 정렬이다(2026-10-27). */
+const SORTS: [SortKey, string][] = [["popular", "인기순"], ["views", "조회순"], ["likes", "좋아요순"], ["newest", "최신순"], ["oldest", "오래된순"]];
+
 export default function Works({ go, authenticated }: { go: Go; authenticated: boolean }) {
   const t = useT();
+  const { user: me } = useAuth();
+  const isAdmin = authenticated && me?.role === "ADMIN";
   const [runs, setRuns] = useState<RunCard[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
@@ -68,21 +78,15 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
 
   const mineOf = (r: RunCard) => isMyRun(r.run_id) || accountRuns.includes(r.run_id);
 
-  /* 최근 본 웹툰(#247) — 브라우저에 남은 번호를 목록에서 찾아 표지 한 줄로. */
-  const recent = useMemo(() => {
-    if (!runs) return [];
-    const byId = new Map(runs.map((r) => [r.run_id, r]));
-    return recentRuns().map((id) => byId.get(id)).filter((r): r is RunCard => !!r).slice(0, 10);
-  }, [runs]);
-
   /* 칩: 전체 · 내 작품 · 찜. 그 옆에 그림체 칸 · 장르 칸 — 셋은 겹쳐 걸린다.
      전에는 장르·그림체도 칩으로 늘어놨는데, 장르가 작품마다 모델이 적은 글이라
      작품 수만큼 칩이 생기고 영어도 섞였다. 장르는 genreBucket 으로 묶는다.
-     정렬: 최신순 ↔ 오래된순 (run_id 가 시각으로 시작한다). */
+     정렬: 기본은 인기순(관리자 자리 → 조회순, 2026-10-27), 조회순 · 좋아요순 · 최신순 · 오래된순도 고른다. 같으면 최신 것이 앞
+     (run_id 가 시각으로 시작한다). */
   const [filter, setFilter] = useState<"all" | "mine" | "liked">("all");
   const [style, setStyle] = useState("");
   const [genre, setGenre] = useState("");
-  const [newest, setNewest] = useState(true);
+  const [sort, setSort] = useState<SortKey>("popular");
   const [query, setQuery] = useState("");
 
   /* 칩과 검색어까지 건 목록 — 두 칸은 여기서 서로를 건다. */
@@ -133,8 +137,15 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
     let list = base;
     if (style) list = list.filter((r) => r.style_label === style);
     if (genre) list = list.filter((r) => genreBucket(r.genre) === genre);
-    return [...list].sort((a, b) => (newest ? b.run_id.localeCompare(a.run_id) : a.run_id.localeCompare(b.run_id)));
-  }, [base, style, genre, newest]);
+    const by: Record<SortKey, (a: RunCard, b: RunCard) => number> = {
+      popular: byPopular,
+      views: byViews,
+      likes: (a, b) => (b.likes || 0) - (a.likes || 0) || byLatest(a, b),
+      newest: byLatest,
+      oldest: (a, b) => a.run_id.localeCompare(b.run_id),
+    };
+    return [...list].sort(by[sort]);
+  }, [base, style, genre, sort]);
 
   /* 검색은 결과 수만 남긴다 — 무엇을 쳤는지는 서버에 보내지 않는다(#413). */
   useEffect(() => {
@@ -160,11 +171,15 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
     <div className="wt-works-chips">
       <button type="button" className={`chip${filter === "all" ? " on" : ""}`} onClick={() => setFilter("all")}>{t("전체")}</button>
       {chip("mine", t("내 작품"))}
-      {authenticated && chip("liked", t("찜"))}
-      <button type="button" className="chip wt-works-sort" onClick={() => setNewest((v) => !v)}
-              aria-label={newest ? t("최신순 — 누르면 오래된순") : t("오래된순 — 누르면 최신순")}>
-        {newest ? t("최신순") : t("오래된순")} <IconChevronDown size={14} />
-      </button>
+      {/* 좋아요한 작품 — 로그인 전에도 칸은 보인다(2026-10-25). 누르면 로그인 안내가 나온다. */}
+      {chip("liked", t("좋아요"))}
+      <label className="chip wt-works-sort">
+        <select value={sort} aria-label={t("정렬")}
+                onChange={(e) => { const v = e.target.value as SortKey; track("works_filter", { filter: "sort", target: v }); setSort(v); }}>
+          {SORTS.map(([key, label]) => <option key={key} value={key}>{t(label)}</option>)}
+        </select>
+        <IconChevronDown size={14} />
+      </label>
     </div>
   );
 
@@ -173,19 +188,13 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
       <div className="wt-wrap wt-page wt-works-page">
         <div className="wt-works-head">
           <div className="wt-works-title">
-            <h2>{t("다른 사람들의 웹툰")}</h2>
-          </div>
-          <div className="wt-works-headacts">
-            <button type="button" className="btn btn-p wt-works-create" onClick={() => go("entry")}>{t("내 웹툰 만들기")}</button>
+            <h2>{t("웹툰 둘러보기")}</h2>
           </div>
         </div>
 
-        {recent.length > 0 && filter === "all" && !style && !genre && !query && (
-          <div className="wt-works-recent">
-            <RunStrip title={t("최근 본 웹툰")} runs={recent}
-                      onOpen={(r) => { track("recent_open", { run: r.run_id }); go("result", { run: r.run_id }); }} />
-          </div>
-        )}
+        {/* 「최근 본 웹툰」 줄은 뺐다 — 목록 위에 표지 줄이 하나 더 있으니 정신없다는 피드백(2026-10-24) */}
+
+        <TopBanners />
 
         <div className="wt-works-finds">
           <input className="field wt-works-search" type="search" value={query} placeholder={t("제목·캐릭터·장르로 찾기")}
@@ -230,7 +239,7 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
             <h2>{t("아직 구경할 웹툰이 없어요")}</h2>
             <span className="muted">{t("첫 작품이 이 자리에 걸립니다. 캐릭터 하나와 이야기 한 줄이면 10분 안에 한 편이 나와요.")}</span>
             <div className="wt-works-stateacts">
-              <button type="button" className="btn btn-p" onClick={() => go("entry")}>{t("내 캐릭터로 웹툰 만들기")}</button>
+              <button type="button" className="btn btn-p" onClick={() => go("create",{step:1})}>{t("내 캐릭터로 웹툰 만들기")}</button>
             </div>
           </div>
         )}
@@ -239,15 +248,21 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
           <div className="wt-works-state wt-works-state-sm">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={louArt("empty")} alt="" style={{ width: 140 }} />
-            <h2>{filter === "liked" && !query ? t("아직 찜한 웹툰이 없어요") : t("찾는 웹툰이 없어요")}</h2>
-            <span className="muted">{filter === "liked" && !query ? t("마음에 드는 작품의 하트를 누르면 여기에 모여요.") : t("다른 말로 찾아보거나 고른 조건을 풀어 보세요.")}</span>
+            <h2>{filter === "liked" && !query ? (authenticated ? t("아직 좋아요한 웹툰이 없어요") : t("로그인하면 좋아요한 웹툰을 모아 볼 수 있어요")) : t("찾는 웹툰이 없어요")}</h2>
+            <span className="muted">{filter === "liked" && !query ? (authenticated ? t("마음에 드는 작품의 하트를 누르면 여기에 모여요.") : t("화면 위 로그인 단추를 눌러 주세요.")) : t("다른 말로 찾아보거나 고른 조건을 풀어 보세요.")}</span>
           </div>
         )}
 
         {shown && shown.length > 0 && (
           <div className="wt-works-grid">
+            {/* 만들기 입구는 목록 첫 칸 — 제목 옆 큰 단추는 홀로 떠 있어 뜬금없다는 피드백(2026-10-25) */}
+            {filter !== "liked" && <button type="button" className="wt-works-make" onClick={() => { track("works_create", { where: "grid" }); go("create", { step: 1 }); }}>
+              <span className="wt-works-make-cover"><i aria-hidden="true">+</i><b>{t("내 웹툰 만들기")}</b><small>{t("내 캐릭터로 한 편")}</small></span>
+            </button>}
             {shown.map((r) => (
               <WorkCard key={r.run_id} run={r} mine={mineOf(r)} go={go} authenticated={authenticated}
+                        admin={isAdmin}
+                        onRank={(rank) => setRuns((was) => was && was.map((x) => (x.run_id === r.run_id ? { ...x, rank } : x)))}
                         liked={likedIds.has(r.run_id)}
                         onLiked={(on) => setLikedIds((was) => { const next = new Set(was); if (on) next.add(r.run_id); else next.delete(r.run_id); return next; })} />
             ))}
@@ -259,47 +274,31 @@ export default function Works({ go, authenticated }: { go: Go; authenticated: bo
 }
 
 /* 지우기는 둘러보기에 두지 않는다 — 내 작품을 지우는 곳은 마이페이지 하나(#157). */
-function WorkCard({ run, mine, go, authenticated, liked, onLiked }: {
+function WorkCard({ run, mine, go, authenticated, liked, onLiked, admin, onRank }: {
   run: RunCard; mine: boolean; go: Go; authenticated: boolean;
   liked: boolean; onLiked: (on: boolean) => void;
+  admin: boolean; onRank: (rank: number | null) => void;
 }) {
   const t = useT();
   const eps = run.episodes || [];
   const first = eps[0] || 1;
   const [likes, setLikes] = useState(run.likes ?? 0);
-  const open = () => {
-    track("works_open", { run: run.run_id, mine, where: "works" });
-    go("result", { run: run.run_id });
+  /* 연재는 카드 하나에 회차 단추가 붙는다 — 단추는 그 회차를, 표지는 1화를 연다. */
+  const open = (episode?: number) => {
+    const target = (episode && run.episode_run_ids?.[String(episode)]) || run.run_id;
+    track("works_open", { run: target, mine, where: "works", ep: episode ?? first });
+    go("result", { run: target });
   };
 
   const sub = [run.character, ...new Set([run.genre, run.style_label].filter((s): s is string => !!s).map((s) => t(s)))].filter(Boolean).join(" · ");
 
-  /* 공개 스위치 — 서버에 먼저 보내고, 실패하면 되돌린다. */
-  const [pub, setPub] = useState(run.public !== false);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const flip = async () => {
-    const want = !pub;
-    track("visibility_change", { run: run.run_id, result: want ? "public" : "private" });
-    setPub(want);
-    setBusy(true);
-    setErr("");
-    try {
-      const out = await setVisibility(run.run_id, want);
-      setPub(out.public);
-    } catch (e) {
-      setPub(!want);
-      setErr((e as Error).message || t("바꾸지 못했어요"));
-    }
-    setBusy(false);
-  };
 
   return (
     <div className="card wt-works-card">
-      <button type="button" className="wt-works-cover" onClick={open} aria-label={t("{title} 열기", { title: run.title || run.run_id })}>
+      <button type="button" className="wt-works-cover" onClick={() => open()} aria-label={t("{title} 열기", { title: run.title || run.run_id })}>
         {run.cover_page ? (
           /* eslint-disable-next-line @next/next/no-img-element */
-          <img src={coverUrl(run.run_id, run.cover_page, run.cover_episode || first)} alt={run.title || ""} />
+          <img src={run.thumb ? thumbUrl(run.run_id) : coverUrl(run.run_id, run.cover_page, run.cover_episode || first)} alt={run.title || ""} />
         ) : (
           <span className="wt-works-nocover" aria-hidden="true" />
         )}
@@ -315,22 +314,52 @@ function WorkCard({ run, mine, go, authenticated, liked, onLiked }: {
         <span className="muted wt-works-sub">{sub}</span>
         <div className="wt-works-eprow">
           {eps.length > 0 && (
-            <div className="wt-works-eps">
-              {eps.map((n) => (
-                <button key={n} type="button" className="ep" onClick={open}>{t("{n}화", { n })}</button>
-              ))}
-            </div>
+            /* 회차 단추 대신 「총 N화」 글자만 — 연재가 길어지면 단추가 카드를 덮는다(2026-10-26). 회차는 표지를 눌러 들어가서 고른다. */
+            <span className="wt-works-epcount">{t("총 {n}화", { n: eps.length })}</span>
           )}
           {mine && authenticated && (
-            <span className="wt-works-pub">
-              <button type="button" className={`sw${pub ? "" : " off"}`} role="switch" aria-checked={pub}
-                      aria-label={t("둘러보기에 공개")} disabled={busy} onClick={flip}><i /></button>
-              {pub ? t("공개") : t("비공개")}
-            </span>
+            /* 공개 범위 세 단계(#898). 관리자가 숨긴 작품은 잠근다(#638). */
+            <VisibilityPicker runId={run.run_id} initial={visibilityOf(run)} where="works" className="wt-works-pub"
+                              locked={run.moderation?.state === "HIDDEN"} />
           )}
         </div>
-        {err && <span className="err" style={{ fontSize: 12 }}>{err}</span>}
+        {admin && <RankEditor run={run} onRank={onRank} />}
       </div>
     </div>
+  );
+}
+
+/* 관리자만 보는 인기순 자리 칸 — 숫자를 넣고 Enter 나 칸 밖을 누르면 저장, 비우면 자리 해제.
+   작을수록 앞이고, 자리가 없는 작품은 정해진 것들 뒤에 조회순으로 선다. */
+function RankEditor({ run, onRank }: { run: RunCard; onRank: (rank: number | null) => void }) {
+  const t = useT();
+  const [draft, setDraft] = useState(run.rank != null ? String(run.rank) : "");
+  const [state, setState] = useState<"" | "saving" | "saved" | "error">("");
+  useEffect(() => { setDraft(run.rank != null ? String(run.rank) : ""); }, [run.rank]);
+  const save = async () => {
+    const text = draft.trim();
+    const want = text === "" ? null : Number(text);
+    if (want !== null && (!Number.isInteger(want) || want < 1 || want > 9999)) { setState("error"); return; }
+    if (want === (run.rank ?? null)) return;
+    setState("saving");
+    try {
+      const out = await adminSetBrowseRank(run.run_id, want);
+      onRank(out.rank);
+      setState("saved");
+    } catch {
+      setState("error");
+    }
+  };
+  return (
+    <label className="wt-works-rank" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginTop: 6 }}>
+      <span className="muted">{t("인기순 자리")}</span>
+      <input className="field" type="number" min={1} max={9999} inputMode="numeric" value={draft}
+             placeholder={t("없음")} aria-label={t("인기순 자리")} style={{ width: 72, padding: "4px 6px", fontSize: 12 }}
+             onChange={(e) => { setDraft(e.target.value); setState(""); }}
+             onBlur={save} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+      {state === "saving" && <span className="muted">{t("저장 중")}</span>}
+      {state === "saved" && <span className="muted">{t("저장됨")}</span>}
+      {state === "error" && <span className="err">{t("1~9999 숫자만")}</span>}
+    </label>
   );
 }

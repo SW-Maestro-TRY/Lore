@@ -13,14 +13,8 @@ import java.util.List;
 import static com.lore.zzal.pet.AwakeClockTest.kst;
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * 2층 해금 — 조건표를 카운터에 대 본다. 저장하지 않고 계산한다.
- *
- * <h3>★ 경계값으로 본다</h3>
- * 여덟 종을 전부 {@code target-1} 에서 잠김 · {@code target} 에서 열림으로 확인한다. 목표치 하나가
- * 밀리면 화면은 "왜 아직 안 열리지" 로만 보이고, 어느 숫자가 틀렸는지는 드러나지 않는다.
- */
-@DisplayName("해금 규칙 — 카운터에서 계산")
+/** Old thresholds remain relevant only to the cutover preview, never future unlocks. */
+@DisplayName("폐기 해금 — 이전 소유 snapshot 경계와 신규 해금 차단")
 class UnlockRulesTest {
 
     private static final Instant T0 = kst("2026-09-05 12:00");
@@ -45,7 +39,7 @@ class UnlockRulesTest {
     }
 
     @Test
-    @DisplayName("★ 밥 9회 → 밥 먹기(9). 8회까지는 잠겨 있다")
+    @DisplayName("legacy snapshot:  밥 9회 → 밥 먹기(9). 8회까지는 잠겨 있다")
     void feedsOpenEatRice() {
         assertOpensAt("eat_rice", (pet, n) -> {
             for (int i = 0; i < n; i++) {
@@ -56,7 +50,7 @@ class UnlockRulesTest {
     }
 
     @Test
-    @DisplayName("★ 간식 9개 → 간식 먹기(10). 하루 4개까지만 세므로 사흘이 걸린다")
+    @DisplayName("legacy snapshot:  간식 9개 → 간식 먹기(10). 하루 4개까지만 세므로 사흘이 걸린다")
     void snacksOpenEatSnack() {
         ZzalPet pet = baby();
         MotionSpec spec = CATALOG.byKey("eat_snack").orElseThrow();
@@ -66,11 +60,12 @@ class UnlockRulesTest {
         assertThat(UnlockRules.isUnlocked(pet, spec, CATALOG)).isFalse();
 
         feedSnacksOverDays(pet, 1);
-        assertThat(UnlockRules.isUnlocked(pet, spec, CATALOG)).isTrue();
+        assertThat((LegacyLayerTwoOwnership.previewOldComputedOwnership(pet, CATALOG) & (1 << (spec.seq() - 9))) != 0).isTrue();
+        assertThat(UnlockRules.isUnlocked(pet, spec, CATALOG)).isFalse();
     }
 
     @Test
-    @DisplayName("★ 청소 13회 → 청소(11)")
+    @DisplayName("legacy snapshot:  청소 13회 → 청소(11)")
     void cleansOpenSweep() {
         assertOpensAt("sweep", (pet, n) -> {
             for (int i = 0; i < n; i++) {
@@ -80,7 +75,7 @@ class UnlockRulesTest {
     }
 
     @Test
-    @DisplayName("★ 목욕 3회 → 씻기(12)")
+    @DisplayName("legacy snapshot:  목욕 3회 → 씻기(12)")
     void bathOpensWash() {
         assertOpensAt("wash", (pet, n) -> {
             for (int i = 0; i < n; i++) {
@@ -90,7 +85,7 @@ class UnlockRulesTest {
     }
 
     @Test
-    @DisplayName("★ 채팅 답 4회 → 답하기(13)")
+    @DisplayName("legacy snapshot:  채팅 답 4회 → 답하기(13)")
     void chatAnswersOpenReply() {
         assertOpensAt("reply", (pet, n) -> {
             for (int i = 0; i < n; i++) {
@@ -100,7 +95,7 @@ class UnlockRulesTest {
     }
 
     @Test
-    @DisplayName("★ 쓰다듬 4회 → 쓰다듬 받기(14). 하루 친밀도 한도(3회)를 넘겨도 전부 센다")
+    @DisplayName("legacy snapshot:  쓰다듬 4회 → 쓰다듬 받기(14). 하루 친밀도 한도(3회)를 넘겨도 전부 센다")
     void petsOpenPetted() {
         assertOpensAt("petted", (pet, n) -> {
             for (int i = 0; i < n; i++) {
@@ -110,7 +105,7 @@ class UnlockRulesTest {
     }
 
     @Test
-    @DisplayName("★ 게임 4판 → 놀라기(15). ★★ 세는 것은 <b>끝까지 친</b> 매치다(2026-09-22)")
+    @DisplayName("legacy snapshot:  게임 4판 → 놀라기(15). ★★ 세는 것은 <b>끝까지 친</b> 매치다(2026-09-22)")
     void gamesOpenStartle() {
         assertOpensAt("startle", (pet, n) -> {
             for (int i = 0; i < n; i++) {
@@ -129,7 +124,7 @@ class UnlockRulesTest {
     }
 
     @Test
-    @DisplayName("★★ 깨우기 4회 → 일어나기(16). 손으로 깬 밤잠만 센다")
+    @DisplayName("legacy snapshot: ★ 깨우기 4회 → 일어나기(16). 손으로 깬 밤잠만 센다")
     void manualWakesOpenWakeUp() {
         ZzalPet pet = baby();
         MotionSpec spec = CATALOG.byKey("wake_up").orElseThrow();
@@ -139,11 +134,12 @@ class UnlockRulesTest {
         assertThat(UnlockRules.isUnlocked(pet, spec, CATALOG)).isFalse();
 
         wakeNights(pet, 1);
-        assertThat(UnlockRules.isUnlocked(pet, spec, CATALOG)).isTrue();
+        assertThat((LegacyLayerTwoOwnership.previewOldComputedOwnership(pet, CATALOG) & (1 << (spec.seq() - 9))) != 0).isTrue();
+        assertThat(UnlockRules.isUnlocked(pet, spec, CATALOG)).isFalse();
     }
 
     @Test
-    @DisplayName("★★ 조건은 그 행동 자체다 — 여덟 종이 서로 다른 카운터를 본다")
+    @DisplayName("legacy snapshot: ★ 조건은 그 행동 자체다 — 여덟 종이 서로 다른 카운터를 본다")
     void everyLayerTwoWatchesItsOwnAction() {
         List<UnlockRule.Kind> kinds = CATALOG.basic().stream()
                 .filter(m -> m.layer() == com.lore.zzal.motion.MotionLayer.BASIC_2)
@@ -165,15 +161,16 @@ class UnlockRulesTest {
 
         ZzalPet justBefore = baby();
         action.run(justBefore, target - 1);
+        assertThat((LegacyLayerTwoOwnership.previewOldComputedOwnership(justBefore, CATALOG) & (1 << (spec.seq() - 9))) != 0).isFalse();
         assertThat(UnlockRules.isUnlocked(justBefore, spec, CATALOG))
                 .as("%s 는 %d 에서 아직 잠겨 있어야 한다", key, target - 1)
                 .isFalse();
 
         ZzalPet atTarget = baby();
         action.run(atTarget, target);
-        assertThat(UnlockRules.isUnlocked(atTarget, spec, CATALOG))
-                .as("%s 는 %d 에서 열려야 한다", key, target)
-                .isTrue();
+        assertThat((LegacyLayerTwoOwnership.previewOldComputedOwnership(atTarget, CATALOG) & (1 << (spec.seq() - 9))) != 0)
+                .as("legacy snapshot: %s threshold %d", key, target).isTrue();
+        assertThat(UnlockRules.isUnlocked(atTarget, spec, CATALOG)).isFalse();
     }
 
     /** 하루 4개 상한을 지키며 간식을 {@code count} 개 <b>세지게</b> 먹인다(밤을 넘기면 하루치가 0 이 된다). */

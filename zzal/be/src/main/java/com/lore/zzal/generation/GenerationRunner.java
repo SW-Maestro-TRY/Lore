@@ -122,12 +122,16 @@ public class GenerationRunner {
                 recorder.failJob(jobId, outcome.error(), total);
                 if (outcome.quotaBlocked()) {
                     // ★★ 바깥이 한도로 막았다 — 다시 구우면 또 막히고 돈만 두 번 나간다.
-                    return RunResult.quotaBlocked(ctx, total, outcome.error());
+                    return RunResult.quotaBlocked(ctx, total, outcome.error()).withDetail(outcome.detail());
                 }
-                // ★ 격자 구조 게이트가 막은 것이면 같은 격자로 다시 해 봐야 소용없다 — 부르는 쪽에 알린다.
-                return outcome.gridRejected()
-                        ? RunResult.gridRejected(ctx, total, outcome.error())
-                        : RunResult.failed(ctx, total, outcome.error());
+                // ★ 격자 구조 게이트가 막았거나 후처리 스크립트가 죽은 것이면 같은 격자로 다시 해 봐야
+                //   소용없다 — 부르는 쪽에 알린다(무엇을 버릴지는 부르는 쪽이 정한다).
+                if (outcome.gridRejected() || outcome.postprocessCrashed()) {
+                    return RunResult.failedWith(ctx, total, outcome.error(),
+                            outcome.gridRejected(), outcome.postprocessCrashed(), outcome.failedGrid())
+                            .withDetail(outcome.detail());
+                }
+                return RunResult.failed(ctx, total, outcome.error()).withDetail(outcome.detail());
             }
         }
 
@@ -152,7 +156,8 @@ public class GenerationRunner {
      *   필요하기 때문이다(→ {@link RunResult#gridRejected}).
      */
     private record StageOutcome(BigDecimal cost, GenErrorCode error, boolean gridRejected,
-                               boolean quotaBlocked) {
+                               boolean quotaBlocked, boolean postprocessCrashed, String failedGrid,
+                               String detail) {
     }
 
     /**
@@ -170,7 +175,12 @@ public class GenerationRunner {
         for (Pending p : todo) {
             Long stepId = recorder.startStep(jobId, p.seq(), p.step().name());
             int limit = limitOverrideSeconds > 0 ? limitOverrideSeconds : p.step().limitSeconds();
-            Callable<StepResult> task = () -> p.step().run(ctx);
+            Callable<StepResult> task = () -> {
+                try(var usage = com.lore.zzal.generation.client.ProviderUsageContext.open(
+                        "generation_" + p.step().name(), ctx.petId(), jobId, "step-" + stepId, 1)) {
+                    return p.step().run(ctx);
+                }
+            };
             running.add(new Running(p.step(), stepId, timeoutExecutor.submit(task),
                     System.nanoTime() + TimeUnit.SECONDS.toNanos(limit)));
         }
@@ -183,6 +193,9 @@ public class GenerationRunner {
         GenErrorCode error = null;
         boolean gridRejected = false;
         boolean quotaBlocked = false;
+        boolean postprocessCrashed = false;
+        String failedGrid = null;
+        String detail = null;
         List<StepResult> done = new ArrayList<>(running.size());
 
         for (Running r : running) {
@@ -198,6 +211,9 @@ public class GenerationRunner {
                 // ★ 끊은 호출은 얼마가 나갔는지 알 길이 없다(응답을 못 받았다). 0 이 맞다.
                 recorder.failStep(r.stepId(), GenErrorCode.TIMEOUT, BigDecimal.ZERO);
                 error = worse(error, GenErrorCode.TIMEOUT);
+                if (detail == null) {
+                    detail = "시간 초과 — " + r.step().name();
+                }
             } catch (Exception e) {
                 Throwable cause = e instanceof ExecutionException ? e.getCause() : e;
                 GenErrorCode code = classify(cause);
@@ -205,12 +221,20 @@ public class GenerationRunner {
                 gridRejected |= gridRejected(cause);
                 // ★ 한 장만 한도에 걸려도 그 시도 전체가 한도에 걸린 것이다(같은 계정·같은 키).
                 quotaBlocked |= quotaBlocked(cause);
+                // ★ 후처리 스크립트가 0 이 아닌 코드로 끝났나(시간 초과 제외) · 어느 격자를 자르다 그랬나.
+                postprocessCrashed |= postprocessCrashed(cause);
+                if (failedGrid == null) {
+                    failedGrid = failedGrid(cause);
+                }
+                if (detail == null) {
+                    detail = r.step().name() + ": " + String.valueOf(cause == null ? e : cause.getMessage());
+                }
                 // ★★ 실패해도 <b>이미 나간 돈</b>은 적는다. 유료 호출은 200 이 돌아온 순간 과금이 끝나므로,
                 //   응답 파싱·S3 업로드에서 터진 실패는 공짜가 아니다. 여기서 안 더하면 원가가
                 //   실제보다 낮게 보여 중복 과금이나 급증을 못 본다.
                 BigDecimal billed = BilledFailureException.billed(e);
                 log.warn("단계 실패 — jobId={} step={} code={} 비용=${} : {}",
-                        jobId, r.step().name(), code, billed, String.valueOf(e));
+                        jobId, r.step().name(), codeLabel(code, cause), billed, String.valueOf(e));
                 recorder.failStep(r.stepId(), code, billed);
                 cost = cost.add(billed);
                 error = worse(error, code);
@@ -227,7 +251,7 @@ public class GenerationRunner {
                 ctx.putText(result.name(), result.text());
             }
         }
-        return new StageOutcome(cost, error, gridRejected, quotaBlocked);
+        return new StageOutcome(cost, error, gridRejected, quotaBlocked, postprocessCrashed, failedGrid, detail);
     }
 
     /**
@@ -289,6 +313,46 @@ public class GenerationRunner {
                 || msg.contains("insufficient_quota")
                 || msg.contains("quota_exceeded")
                 || msg.contains("billing_hard_limit_reached");
+    }
+
+    /**
+     * 후처리 스크립트가 <b>0 이 아닌 코드로</b> 끝났나 — {@code PythonPostProcessor} 가 붙이는
+     * "후처리 실패(exit N)" 문구로 가른다. 시간 초과("후처리 시간 초과")는 여기 안 걸린다(재시도만, 폐기 없음).
+     */
+    static boolean postprocessCrashed(Throwable e) {
+        return e != null && String.valueOf(e.getMessage()).contains(POSTPROCESS_EXIT_MARK);
+    }
+
+    /**
+     * 어느 격자를 자르다 실패했나 — {@code PostProcessStep} 이 예외 메시지 앞에 붙이는
+     * {@code [격자=grid2]} 표식에서 읽는다. 없으면 null(부르는 쪽이 둘 다 버린다).
+     */
+    static String failedGrid(Throwable e) {
+        if (e == null) {
+            return null;
+        }
+        java.util.regex.Matcher m = GRID_SOURCE.matcher(String.valueOf(e.getMessage()));
+        return m.find() ? m.group(1) : null;
+    }
+
+    /** {@code PythonPostProcessor} 가 스크립트 종료 코드를 알릴 때 쓰는 문구. 글자가 같아야 한다. */
+    static final String POSTPROCESS_EXIT_MARK = "후처리 실패(exit ";
+
+    /** {@code PostProcessStep#GRID_SOURCE_FORMAT} 과 짝. */
+    private static final java.util.regex.Pattern GRID_SOURCE = java.util.regex.Pattern.compile("\\[격자=([A-Za-z0-9_]+)]");
+
+    /**
+     * 로그에 찍는 실패 코드. 격자 구조 게이트가 막은 것은 {@code GRID_STRUCTURE_INVALID} 로 적는다.
+     *
+     * ★ 기록({@code zzal_gen_step.error_code})에는 여전히 {@link GenErrorCode} 값이 들어간다 — 그 칼럼은
+     *   값 목록 CHECK 에 묶여 있어 새 값을 넣으려면 마이그레이션이 필요하다({@link RunResult#gridRejected}).
+     *   게이트 거부를 {@code code=UNKNOWN} 으로 찍으면 원인 모를 실패로 읽혀 로그를 다시 뒤지게 된다(#706).
+     */
+    static String codeLabel(GenErrorCode code, Throwable cause) {
+        if (code != GenErrorCode.MODERATION_BLOCKED && gridRejected(cause)) {
+            return GRID_STRUCTURE_MARK;
+        }
+        return String.valueOf(code);
     }
 
     private static boolean gridRejected(Throwable e) {

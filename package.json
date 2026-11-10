@@ -11,6 +11,8 @@
     "dev": "npm run dev --workspace lore-web",
     "build": "npm run build --workspace lore-web",
     "start": "npm run start --workspace lore-web",
-    "lint": "npm run lint --workspace lore-web"
+    "lint": "npm run lint --workspace lore-web",
+    "test:zzal:telemetry": "node --test zzal/fe/tests/*.test.cjs",
+    "test:zzal:focused": "node zzal/fe/tests/focused-browser.cjs"
   }
 }

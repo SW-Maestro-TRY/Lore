@@ -20,6 +20,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import './upload-unification.css';
 import type { CSSProperties, ReactNode } from 'react';
 import { ONB_COPY, GOOD_EX, BAD_EX, PERSONALITY_OF, STEPS, UPLOAD_COPY } from './constants';
 import { LandingV2Stage, LandingV2Style } from '../../LandingV2';
@@ -30,7 +31,21 @@ import { assetUrl } from '../../lib/assets';
 import { CHAR_TEXT_MAX } from '../../lib/pet';
 import type { Yeoul } from './useYeoul';
 import type { HatchBlocked } from '../../lib/hatchBlocked';
-import { OnbDevProvider, OnbChangeList, useOnbFlag, useCharLayout } from './onboardingDev';
+import { OnbDevProvider, useOnbFlag, useCharLayout } from './onboardingDev';
+import { holdForPicker, once, releasePicker, ztrack } from './funnel';
+import InAppBanner from '../parts/InAppBanner';
+import PersonaEgg from './PersonaEgg';
+import LanguageSelector from '../../LanguageSelector';
+import {useUiText} from '../../lib/uiCopy';
+import { eggVariant, type EggVariant } from './personaSteps';
+
+/** 캐릭터 칸에서 채운 묶음 수(이름 포함). 고른 칩이 있거나 글을 쓴 묶음을 하나로 센다 — 글 내용은 안 보낸다. */
+function filledGroups(picks: Record<string, string[]>, texts: Record<string, string>): number {
+  const keys = new Set<string>();
+  for (const [k, v] of Object.entries(picks)) if (v && v.length > 0) keys.add(k);
+  for (const [k, v] of Object.entries(texts)) if (v && v.trim()) keys.add(k);
+  return keys.size + 1;
+}
 
 /**
  * OB-03 진입 등장(stagger) 스타일. 랜딩 v2 의 ztV2Rise 결로, 이미 전역에 심긴 KEYFRAMES 의
@@ -214,9 +229,8 @@ const worldRoom = (chips: readonly string[] | undefined) => {
  * **지금 서버에 저장되지 않는 칸.** 사실만 적는다 — "곧 대화에 반영돼요" 같은 말은 지킬 수
  * 없는 약속이라 적지 않는다(자캐 규범: 주인에게 헛된 기대를 주지 않는다).
  *
- * 근거는 계약 한 곳이다 — `lib/pet.ts` 의 `CharacterInput` 이 보내는 칸은
- * `name`·`personality`·`world`·`note` 넷뿐이다. (서버 DTO 에는 `tone`·`genre`·`personalities`
- * 자리가 이미 있는데 **프론트가 아직 안 보낸다** — 그쪽을 여는 것은 별도 판단거리다.)
+ * 근거는 계약 한 곳이다 — `lib/pet.ts` 의 `CharacterInput`. 채팅 v1(#704)부터 말투·장르·성격 전부를
+ * 보내므로 **남은 것은 성격 자유 입력 하나**다(서버 칸이 없다).
  * ★ 배치 세 가지 중 무엇을 고르든 같은 자리에 뜬다 — 묶음 카드 안이라 배치와 무관하다.
  * ★ 칸 **전체**가 안 가는 묶음(말투·장르)은 머리줄에, 자유 입력**만** 안 가는 묶음(성격)은
  *   그 입력칸 아래에 붙인다 — 무엇을 가리키는 말인지가 자리로 드러나야 한다.
@@ -224,10 +238,7 @@ const worldRoom = (chips: readonly string[] | undefined) => {
 // ★ 2026-09-22 — **묶음 이름을 문장에 넣는다.** 예전에는 두 묶음이 **똑같은 한 문장**이라
 //   말투·장르 카드가 위아래로 놓이는 폭에서 같은 말이 나란히 두 번 떴다(판정 3).
 //   무엇이 저장되지 않는지는 카드 이름이 아니라 **문장 자체**가 말해야 한다.
-const NOT_SAVED_GROUP: Record<string, string> = {
-  tone: '말투는 아직 저장되지 않아요.',
-  genre: '장르는 아직 저장되지 않아요.',
-};
+const NOT_SAVED_GROUP: Record<string, string> = {};
 /** 자유 입력**만** 저장되지 않는 묶음 — 그 입력칸 **아래**에 붙인다(칩은 저장되므로). */
 const NOT_SAVED_TEXT: Record<string, string> = {
   persona: '적어 주신 글은 아직 저장되지 않아요.',
@@ -241,6 +252,19 @@ const NOT_SAVED_TEXT: Record<string, string> = {
 const worldOf = (chips: readonly string[] | undefined, text: string | undefined) =>
   [...(chips ?? []), (text ?? '').trim()].filter(Boolean).join(' · ').slice(0, WORLD_TOTAL);
 
+/** 고른 성격 칩 → 서버 값. 모르는 칩은 버린다. 하나도 없으면 보내지 않는다. */
+const personasOf = (chips: readonly string[] | undefined) => {
+  const all = (chips ?? []).map((c) => PERSONALITY_OF[c]).filter((p): p is NonNullable<typeof p> => !!p);
+  return all.length ? all : undefined;
+};
+
+/**
+ * 말투·장르도 세계관과 **같은 셈**으로 칩과 직접 쓴 말을 한 줄로 합친다(서버 한 칸, 각 100자).
+ * ★ 입력칸 자체가 `CHAR_TEXT_MAX` 로 막혀 있어 칩까지 합치면 넘칠 수 있다 — 넘친 꼬리는 여기서 자른다.
+ */
+const lineOf = (chips: readonly string[] | undefined, text: string | undefined, max: number) =>
+  [...(chips ?? []), (text ?? '').trim()].filter(Boolean).join(' · ').slice(0, max);
+
 /**
  * 업로드 안내의 예시 그림 한 칸.
  *
@@ -249,36 +273,46 @@ const worldOf = (chips: readonly string[] | undefined, text: string | undefined)
  *   담고 있고(부르는 쪽이 좋음/어려움 칸을 다르게 준다), 그림이 뜨면 그 위를 img 가 덮는다.
  *   img 는 투명 배경이라, 캐릭터 둘레로는 칸의 색·빗금이 그대로 비쳐 종이 느낌을 살린다.
  */
+const ROMI_UPLOAD_REGIONS: Record<string, string> = {
+  good_front: '/zzal-entry/upload-examples/romi-good_front-v2.webp',
+  good_solo: '/zzal-entry/upload-examples/romi-good_solo-v2.webp',
+  bad_back: '/zzal-entry/upload-examples/romi-bad_back-v2.webp',
+  bad_small: '/zzal-entry/upload-examples/romi-bad_small-v2.webp',
+  bad_busy: '/zzal-entry/upload-examples/romi-bad_busy-v2.webp',
+};
+const ROMI_UPLOAD_LD = '/zzal-entry/upload-examples/romi-ld-v1.webp';
+const ROMI_UPLOAD_MULTIPLE = ['romi-multi-female.png','romi-multi-male.png','romi-multi-cat.png'].map(name=>'/zzal-entry/upload-examples/'+name);
+// Exact generated source regions; unequal model columns are not stretched into equal cards.
+const ROMI_UPLOAD_CROPS: Record<string, readonly [number, number, number, number]> = {
+  good_front: [0, 0, 397, 474], good_lines: [399, 0, 322, 474], good_solo: [724, 0, 362, 474],
+  bad_multi: [0, 477, 397, 473], bad_back: [400, 477, 320, 473], bad_small: [724, 477, 362, 473],
+  bad_busy: [0, 953, 397, 495],
+};
 function ExampleImg({ src, alt, box, badge }: { src: string; alt: string; box: CSSProperties; badge: ReactNode }) {
   const [failed, setFailed] = useState(false);
-  return (
-    <div style={box}>
-      {failed || !src ? (
-        '그림'
-      ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={src}
-          alt={alt}
-          onError={() => setFailed(true)}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-        />
-      )}
-      {badge}
-    </div>
-  );
+  const key = src.split('/').pop()?.replace(/\.webp$/, '') ?? '';
+  const crop = ROMI_UPLOAD_CROPS[key];
+  const ratio = crop ? crop[2] / crop[3] : .75;
+  const fitWidth = Math.min(1, ratio / .75) * 100, fitHeight = Math.min(1, .75 / ratio) * 100;
+  return <div className="onb-example-image" data-upload-example={key} style={box}>
+    {failed || !src ? <span className="onb-example-unavailable">예시 그림</span> : key==='good_lines' ?
+      <img className="onb-example-full-body" src={ROMI_UPLOAD_LD} alt={alt} draggable={false} onError={()=>setFailed(true)}/> : key==='bad_multi' ?
+      <span className="onb-example-multiple" role="img" aria-label={alt}>{ROMI_UPLOAD_MULTIPLE.map(image=><span key={image}><img src={image} alt="" draggable={false} onError={()=>setFailed(true)}/></span>)}</span> : crop ?
+      <span className="onb-example-crop" style={{width:fitWidth+'%',height:fitHeight+'%',left:(100-fitWidth)/2+'%',top:(100-fitHeight)/2+'%'}}>
+        <img src={ROMI_UPLOAD_REGIONS[key]} alt={alt} draggable={false} onError={()=>setFailed(true)} style={{position:'absolute',maxWidth:'none',width:'100%',height:'100%',left:0,top:0,display:'block'}} />
+      </span> : <img src={src} alt={alt} onError={()=>setFailed(true)} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'contain'}} />}
+    <span className="onb-example-badge" aria-hidden="true">{badge}</span>
+  </div>;
 }
 
 /**
- * ★ 리모컨(기존↔적용후) — 온보딩 겉모습 통일을 변경 단위(OB-01~09)로 토글한다.
- *   provider 가 flags 를 들고, 안쪽 OnboardingInner 가 useOnbFlag 로 읽어 표현만 스왑한다.
- *   OnbChangeList 패널은 useDevVisible 게이팅이라 공개 도메인(*.lorecomic.com)엔 안 뜬다.
+ * 기존 온보딩 표현 설정은 provider에서 읽는다.
+ * 화면 목 리모컨 진입은 제거했고, 제품용 입력·연습방 동작은 그대로 유지한다.
  */
 export default function Onboarding(props: { y: Yeoul }) {
   return (
     <OnbDevProvider>
       <OnboardingInner {...props} />
-      <OnbChangeList />
     </OnbDevProvider>
   );
 }
@@ -292,11 +326,21 @@ function OnboardingInner({ y }: { y: Yeoul }) {
    * ★ **표현만** 가른다. 칩·입력의 핸들러, `data-part`, 서버 호출, 칸 이동은 셋이 완전히 같다.
    */
   const layout = useCharLayout();
+  const [eggMode, setEggMode] = useState<EggVariant>('dots');
+  useEffect(() => {
+    setEggMode(eggVariant());
+    // 리모컨(다른 탭·같은 탭)이 `zzal.devEgg` 를 바꾸면 따라 바꾼다. 주소 `?egg=` 가 있으면 그게 이긴다.
+    const on = () => setEggMode(eggVariant());
+    window.addEventListener('storage', on);
+    window.addEventListener('zzal:devEgg', on);
+    return () => { window.removeEventListener('storage', on); window.removeEventListener('zzal:devEgg', on); };
+  }, []);
   /**
    * 접이식(안 2)에서 **지금 펼쳐 둔 묶음**. 표현 상태라 서버·저장과 아무 상관이 없고,
    * 접어도 고른 값(`s.picks`·`s.texts`)은 그대로 남는다 — 접는 것은 **그리느냐 마느냐**뿐이다.
    */
   const [openGroup, setOpenGroup] = useState<string | null>('persona');
+  const tr=useUiText();
   const o = v.onb;
   const key = o.stepKey;
   /**
@@ -316,6 +360,11 @@ function OnboardingInner({ y }: { y: Yeoul }) {
   const askAuth = () => { askedAuth.current = true; openSignup(); };
   // 랜딩 칸의 제목·부제는 랜딩 v2 무대가 직접 들고 있다(같은 상수 LANDING_COPY). 나머지 칸만 여기서.
   const [title, sub] = ONB_COPY[key];
+  // 계측 — 이름 칸이 처음 채워진 순간 한 번(직접 쓰든 '랜덤' 이든).
+  const hasName = !!s.petName.trim();
+  useEffect(() => {
+    if (hasName) once('name_entered', () => ztrack('zzal_name_entered', { step: 1 }));
+  }, [hasName]);
   // 겉모습 스왑 플래그(전부 OFF=현재 코드 그대로).
   const fShell = useOnbFlag('ob-01');
   const fTitle = useOnbFlag('ob-02');
@@ -372,17 +421,33 @@ function OnboardingInner({ y }: { y: Yeoul }) {
     ? (live.busy ? '올리는 중…' : live.imageKey ? '다음' : needAuth ? UPLOAD_COPY.pendingCta : '그림을 먼저 올려 주세요')
     : (key === 'char' && live.busy ? '준비하는 중…' : o.cta);
 
+  /**
+   * ★ 알 온보딩(2026-10-13) — 캐릭터 칸을 **알 화면 + 한 칸씩**으로 바꾼다(`PersonaEgg`).
+   *   `?egg=dots|glow|off`(없으면 브라우저 저장 `zzal.devEgg`)로 바꿔 보고(기본 dots), off 면 아래 옛 한 화면이 그대로 뜬다.
+   *   첫 렌더(서버)에서는 주소를 못 읽으니 dots 로 두고, 붙은 뒤에 한 번 읽는다.
+   */
+  // Approved landing and its real CTA share this existing onboarding owner.
+  if (key === 'landing') return <div data-part="onb" data-step="landing" style={{flex:'1 1 auto',minHeight:0,overflow:'auto',background:C.paper}}><LandingV2Style/><LandingV2Stage variant="onboarding" onStart={actions.onNext}/></div>;
+
+  if (key === 'char' && eggMode !== 'off') {
+    return (
+      <div data-part="onb" data-step={key} style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, backgroundColor: C.eggBg }}>
+        <PersonaEgg y={y} variant={eggMode} />
+      </div>
+    );
+  }
+
   return (
     <div
       data-part="onb"
       data-step={key}
       data-charlayout={layout}
-      className={fOne ? 'onb-one' : undefined}
+      className={[fOne ? 'onb-one' : '', key === 'upload' ? 'onb-upload' : ''].filter(Boolean).join(' ') || undefined}
       style={{
         flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0,
         // OB-01 셸 질감 — 바탕색은 그대로, 은은한 종이 도트만 얹는다(랜딩 v2 ::before 와 같은 결).
-        backgroundColor: key === 'born' ? C.bornBg : C.onbBg,
-        ...(fShell
+        backgroundColor: key === 'born' ? C.bornBg : key === 'upload' ? C.eggBg : C.onbBg,
+        ...(fShell && key !== 'upload'
           ? { backgroundImage: `radial-gradient(${ink(.07)} .6px, transparent .7px)`, backgroundSize: '8px 8px' }
           : null),
       }}
@@ -396,7 +461,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
         {o.canBack && key !== 'born' && (
           // OB-08 — 뒤로 버튼 크롬만 랜딩 line/paper/pill 톤으로. onBack·canBack·라벨은 그대로.
           <button
-            onClick={actions.onBack} className="onb-back" aria-label="뒤로"
+            onClick={actions.onBack} className="onb-back" aria-label={tr('이전')}
             style={{ width: TAP_MIN, height: TAP_MIN, margin: -8, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', padding: 0 }}
           >
             <span style={{ border: `1px solid ${fDots ? C.lineHard : ink(.13)}`, background: C.paper, borderRadius: radius.pill, width: 28, height: 28, fontSize: fz.md, color: C.sub2, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', ...(fDots ? { boxShadow: `0 1px 2px ${ink(.06)}` } : null) }}>‹</span>
@@ -405,6 +470,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
         <span style={{ flex: 1 }} />
         {/* OB-08 — dots 개수·활성(d.w·d.bg)은 그대로, 모서리만 pill 로 다듬는다. */}
         {o.dots.map((d, i) => <span key={i} style={{ width: d.w, height: 6, borderRadius: fDots ? radius.pill : 3, background: d.bg }} />)}
+        <LanguageSelector/>
       </div>
 
       {/* ★ 칸이 바뀌어도 아래 CTA 버튼은 **같은 DOM 노드**라 포커스가 그대로 남는다 — 눈으로 보는
@@ -420,26 +486,19 @@ function OnboardingInner({ y }: { y: Yeoul }) {
       <div className="onb-scroll" style={{ flex: '1 1 auto', overflow: 'auto', padding: '18px 24px 10px', display: 'flex', flexDirection: 'column', gap: gap.lg }}>
         {/* ★ 랜딩 칸에는 이 머리말이 없다 — 무대(LandingV2Stage)가 같은 인사를 제 <h1> 으로
             들고 있어서, 여기까지 그리면 같은 말이 두 번 나온다. 나머지 칸은 그대로. */}
-        {key !== 'landing' && (
+        {(
         <div className="onb-head" style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
           {/* OB-02 제목 타이포(자간·balance), OB-03 진입 등장(순서 0·70ms). 문구·줄바꿈(pre-line)은 그대로. */}
-          <span className={['onb-title', rise].filter(Boolean).join(' ')} style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h0, lineHeight: fTitle ? 1.2 : 1.25, color: C.ink, whiteSpace: 'pre-line', ...(fTitle ? { letterSpacing: '-.5px', textWrap: 'balance' as const } : null), animationDelay: '0ms' }}>{title}</span>
-          <span className={['onb-sub', rise].filter(Boolean).join(' ')} style={{ fontSize: fz.md, lineHeight: 1.7, color: C.sub2, animationDelay: '70ms' }}>{sub}</span>
+          <span className={['onb-title', rise].filter(Boolean).join(' ')} style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h0, lineHeight: fTitle ? 1.2 : 1.25, color: C.ink, whiteSpace: 'pre-line', ...(fTitle ? { letterSpacing: '-.5px', textWrap: 'balance' as const } : null), animationDelay: '0ms' }}>{tr(title)}</span>
+          <span className={['onb-sub', rise].filter(Boolean).join(' ')} style={{ fontSize: fz.md, lineHeight: 1.7, color: C.sub2, animationDelay: '70ms' }}>{tr(sub)}</span>
         </div>
-        )}
-
-        {/* 첫 칸 = 랜딩 v2. `/zzal/landing` 통짜 페이지와 **같은 부품·같은 스타일 한 벌**이다.
-            CTA 는 그리지 않는다 — 아래 푸터의 `onb-next` 버튼이 그 자리이고, 누르면 올리기 칸으로 간다.
-            (같은 뜻의 버튼을 둘 두면 taste-lint 의 "CTA 중복"이고, 무엇을 눌러야 할지 흐려진다.) */}
-        {key === 'landing' && (
-          <div className="onb-body onb-v2stage zt-v2root" data-part="landing-v2">
-            <LandingV2Style />
-            <LandingV2Stage variant="onboarding" />
-          </div>
         )}
 
         {key === 'upload' && (
           <div className={['onb-body', rise].filter(Boolean).join(' ')} style={{ display: 'flex', flexDirection: 'column', gap: gap.lg, animationDelay: '130ms' }}>
+            {/* 인앱 브라우저(카톡·인스타 …)면 한 줄 — 스크랩북과 같은 부품(2026-10-08 #690).
+                유입 대부분이 인스타 광고라 여울 첫 화면에서도 바깥 브라우저로 나갈 길을 준다. 막지 않는다. */}
+            <InAppBanner />
             {/* ★ 올리는 칸이 **맨 위**다. 예시를 먼저 두었더니 390×844 에서 버튼이 화면 밖으로
                 밀려 스크롤해야 보였다(2026-09-07 상훈님 지적). 여기서 할 일은 하나뿐이므로
                 그 하나가 첫 화면에 있어야 한다. 예시는 참고물이라 아래로 내렸다. */}
@@ -448,7 +507,10 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden
               onChange={(e) => {
                 const f = e.target.files?.[0];
+                // 고르기 창이 닫혔다 — 이제부터의 숨김은 다시 떠남으로 센다(→ funnel `holdForPicker`).
+                releasePicker();
                 if (f) {
+                  ztrack('zzal_image_picked', { count: Math.ceil(f.size / 1024) });
                   actions.onUpload();
                   // 이 그림으로는 아직 안 물어봤다 — 다시 물을 수 있게 푼다.
                   askedAuth.current = false;
@@ -464,6 +526,9 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               onClick={() => {
                 // 고른 그림이 손에 있는데 로그인 전이면 **다시 고르게 하지 않는다** — 가입 창만 다시 연다.
                 if (needAuth) { askAuth(); return; }
+                ztrack('zzal_upload_opened');
+                // ★ 폰의 사진 고르기 창은 페이지를 숨긴다 — 그 숨김을 page_leave 로 세지 않게 표시한다.
+                holdForPicker();
                 file.current?.click();
               }}
               data-action="upload" data-pending-auth={needAuth ? 'true' : undefined} disabled={live.busy}
@@ -471,6 +536,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
               // OB-06 — dash 색·라운드·바탕만 랜딩 토큰으로 정돈. 파일 선택·미리보기·busy/성공/오류·data-action 은 그대로.
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: gap.sm, padding: live.previewUrl ? '16px 20px' : '30px 20px', borderRadius: fDrop ? radius.xl : radius.lg, border: `2px dashed ${live.imageKey ? C.accent : fDrop ? C.lineHard : ink(.18)}`, background: live.imageKey ? C.accentSoft : fDrop ? C.slot : C.paper }}
             >
+              {!live.previewUrl && <svg className="onb-upload-icon" viewBox="0 0 32 32" aria-hidden="true"><rect x="4" y="5" width="24" height="22" rx="5"/><circle cx="12" cy="12" r="2.5"/><path d="m5 23 7-7 5 5 4-5 6 7"/></svg>}
               {/* 실패하면 useHatch 가 미리보기를 지운다 — 실패한 그림이 크게 남으면 성공처럼 읽힌다(판정 19). */}
               {live.previewUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -480,62 +546,62 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                   알아서, 업로드가 실패해도 '그림을 올렸어요' 라고 거짓말을 했다(2026-09-07 실측 S3 403).
                   아래 CTA 는 잠겨 있는데 여기만 성공이라 말하면 사용자가 갇힌다. */}
               <span style={{ fontFamily: GAEGU, fontSize: fz.h2, color: C.ink }}>
-                {live.busy ? '올리는 중…' : live.imageKey ? '그림을 올렸어요' : needAuth ? UPLOAD_COPY.pending : '그림 올리기'}
+                {tr(live.busy ? '올리는 중…' : live.imageKey ? '그림을 올렸어요' : needAuth ? UPLOAD_COPY.pending : '그림 올리기')}
               </span>
               <span style={{ fontSize: fz.sm, color: C.sub2 }}>
-                {live.imageKey ? '다시 누르면 바꿀 수 있어요' : needAuth ? UPLOAD_COPY.pendingNote : 'PNG · JPG · 10MB까지'}
+                {tr(live.imageKey ? '다시 누르면 바꿀 수 있어요' : needAuth ? UPLOAD_COPY.pendingNote : 'PNG · JPG · 10MB까지')}
               </span>
             </button>
             {live.error && (
               <span data-part="upload-error" data-error-kind={live.errorKind ?? 'infra'} style={{ display: 'flex', alignItems: 'flex-start', gap: gap.sm, padding: '10px 12px', borderRadius: radius.sm, background: C.accentSoft }}>
                 <span style={{ width: 5, height: 5, flex: 'none', marginTop: 6, borderRadius: '50%', background: C.accent }} />
                 <span style={{ display: 'flex', flexDirection: 'column', gap: gap.xs }}>
-                  <span style={{ fontSize: fz.sm, lineHeight: 1.6, color: C.accent }}>{live.error}</span>
+                  <span style={{ fontSize: fz.sm, lineHeight: 1.6, color: C.accent }}>{tr(live.error)}</span>
                   {/* ★ 우리 쪽 사정일 때만 한 줄 더. "당신 그림이 문제가 아니다" 를 **말로** 못 박는다 —
                       예시를 감추는 것만으로는 이미 읽은 사람의 오해가 안 풀린다. */}
                   {infraFail && (
-                    <span data-note="infra" style={{ fontSize: fz.sm, lineHeight: 1.6, color: C.sub }}>{UPLOAD_COPY.infraNote}</span>
+                    <span data-note="infra" style={{ fontSize: fz.sm, lineHeight: 1.6, color: C.sub }}>{tr(UPLOAD_COPY.infraNote)}</span>
                   )}
                 </span>
               </span>
             )}
             {/* 가장 먼저 읽혀야 하는 한 줄 — 자캐를 맡기는 사람이 제일 먼저 의심하는 지점이다. */}
-            <span className="onb-privacy" style={{ fontSize: fz.sm, lineHeight: 1.7, color: C.sub2 }}>{UPLOAD_COPY.privacy}</span>
+            <span className="onb-privacy" style={{ fontSize: fz.sm, lineHeight: 1.7, color: C.sub2 }}>{tr(UPLOAD_COPY.privacy)}</span>
 
             {!infraFail && (
               <>
 
-              <span style={{ fontSize: fz.sm, color: C.sub2 }}>{UPLOAD_COPY.goodTitle}</span>
+              <section className="onb-example-group" aria-label={tr(UPLOAD_COPY.goodTitle)}><span className="onb-example-heading" style={{ fontSize: fz.sm, color: C.sub2 }}>{tr(UPLOAD_COPY.goodTitle)}</span>
               <div className="onb-exgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: gap.sm }}>
                 {GOOD_EX.map(([lbl, color, key]) => (
-                  <div key={lbl} className="onb-excell" style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, alignItems: 'center' }}>
+                  <div key={tr(lbl)} className="onb-excell" style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, alignItems: 'center' }}>
                     <ExampleImg
                       src={assetUrl(key)}
-                      alt={`좋은 예: ${lbl}`}
+                      alt={`좋은 예: ${tr(lbl)}`}
                       // OB-07 — 색면+빗금을 종이/slot 계열 차분한 카드로(빗금 약화·테두리). 데이터·onError·✓ 배지는 그대로.
                       box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.md, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,${ink(fEx ? '.03' : '.05')} 0 6px,transparent 6px 14px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8, font: `${monoSize.xs}px ${MONO}`, color: ink(.42) }}
                       badge={<span style={{ position: 'absolute', left: 8, top: 8, width: 15, height: 15, borderRadius: '50%', border: '1.5px solid #5C8452', background: paperA(.85), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: fz.xs, lineHeight: 1, color: '#5C8452' }}>✓</span>}
                     />
-                    <span style={{ fontSize: fz.xs, lineHeight: 1.35, color: C.sub, textAlign: 'center' }}>{lbl}</span>
+                    <span style={{ fontSize: fz.xs, lineHeight: 1.35, color: C.sub, textAlign: 'center' }}>{tr(lbl)}</span>
                   </div>
                 ))}
               </div>
 
-              <span style={{ fontSize: fz.sm, color: C.sub2 }}>{UPLOAD_COPY.badTitle}</span>
+              </section><section className="onb-example-group" aria-label={tr(UPLOAD_COPY.badTitle)}><span className="onb-example-heading" style={{ fontSize: fz.sm, color: C.sub2 }}>{tr(UPLOAD_COPY.badTitle)}</span>
               <div className="onb-exgrid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: gap.sm }}>
                 {BAD_EX.map(([lbl, color, key]) => (
-                  <div key={lbl} className="onb-excell" style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, alignItems: 'center' }}>
+                  <div key={tr(lbl)} className="onb-excell" style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, alignItems: 'center' }}>
                     <ExampleImg
                       src={assetUrl(key)}
-                      alt={`어려운 예: ${lbl}`}
+                      alt={`어려운 예: ${tr(lbl)}`}
                       // OB-07 — 같은 결로 차분하게. 데이터·onError·✕ 배지는 그대로.
                       box={{ position: 'relative', overflow: 'hidden', width: '100%', aspectRatio: '3/4', borderRadius: radius.sm, backgroundColor: fEx ? C.slot : color, backgroundImage: `repeating-linear-gradient(135deg,${ink(fEx ? '.03' : '.05')} 0 5px,transparent 5px 12px)`, ...(fEx ? { border: `1px solid ${C.line}` } : null), display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 6, font: `${monoSize.xs}px ${MONO}`, color: ink(.34) }}
                       badge={<span style={{ position: 'absolute', left: 5, top: 5, width: 14, height: 14, borderRadius: '50%', background: paperA(.85), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: fz.xs, lineHeight: 1, color: C.accent }}>✕</span>}
                     />
-                    <span style={{ fontSize: fz.xs, color: C.sub2, textAlign: 'center' }}>{lbl}</span>
+                    <span style={{ fontSize: fz.xs, color: C.sub2, textAlign: 'center' }}>{tr(lbl)}</span>
                   </div>
                 ))}
-              </div>
+              </div></section>
               </>
             )}
           </div>
@@ -553,7 +619,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                 </div>
               </div>
             ))}
-            <span style={{ fontSize: fz.sm, lineHeight: 1.7, color: C.sub2 }}>전부 선택이에요. 나중에 설정에서 바꿀 수 있어요.</span>
+            <span style={{ fontSize: fz.sm, lineHeight: 1.7, color: C.sub2 }}>{tr('전부 선택이에요. 나중에 설정에서 바꿀 수 있어요.')}</span>
           </div>
         )}
 
@@ -561,8 +627,8 @@ function OnboardingInner({ y }: { y: Yeoul }) {
           <div className={['onb-body', rise].filter(Boolean).join(' ')} style={{ display: 'flex', flexDirection: 'column', gap: gap.xl, animationDelay: '130ms' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
-                <span style={{ fontSize: fz.sm, color: C.sub2 }}>이름 · 12자까지</span>
-                <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: C.accentSoft, color: C.accent, fontSize: fz.xs }}>필수</span>
+                <span style={{ fontSize: fz.sm, color: C.sub2 }}>{tr('이름 · 12자까지')}</span>
+                <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: C.accentSoft, color: C.accent, fontSize: fz.xs }}>{tr('필수')}</span>
               </span>
               <div style={{ display: 'flex', gap: gap.sm }}>
                 <input
@@ -571,21 +637,21 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                   // ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 43px — 1px 모자랐다).
                   style={{ flex: 1, minWidth: 0, boxSizing: 'border-box', minHeight: TAP_MIN, padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.paper, fontSize: fz.lg, color: C.ink, outline: 'none' }}
                 />
-                <button onClick={actions.randomName} style={{ flex: 'none', minHeight: TAP_MIN, padding: '0 17px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.md, color: C.sub2 }}>랜덤</button>
+                <button onClick={actions.randomName} style={{ flex: 'none', minHeight: TAP_MIN, padding: '0 17px', borderRadius: radius.md, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.md, color: C.sub2 }}>{tr('랜덤')}</button>
               </div>
-              {o.nameError && <span style={{ fontSize: fz.sm, color: C.accent }}>이름을 지어 주면 시작할 수 있어요.</span>}
+              {o.nameError && <span style={{ fontSize: fz.sm, color: C.accent }}>{tr('이름을 지어 주면 시작할 수 있어요.')}</span>}
               {/* 두고 간 초안을 이어붙였을 때. 그림을 다시 올리라고 하면 이미 구운 시트를 버리는
                   셈이라(계약 4절), 여기서 이름만 받아 이어 간다. */}
               {live.resumedDraft && (
                 <span style={{ fontSize: fz.sm, lineHeight: 1.6, color: C.sub2 }}>
-                  올려 두신 그림이 있어요. 이름만 지어 주면 이어서 시작해요.
+                  {tr('올려 두신 그림이 있어요. 이름만 지어 주면 이어서 시작해요.')}
                 </span>
               )}
             </div>
 
             <div className="onb-note" style={{ display: 'flex', alignItems: 'flex-start', gap: gap.sm, padding: pad.card, borderRadius: radius.md, background: C.slot }}>
               <span style={{ width: 5, height: 5, flex: 'none', marginTop: 7, borderRadius: '50%', background: C.frameWood }} />
-              <span style={{ fontSize: fz.sm, lineHeight: 1.65, color: C.sub2 }}>아래는 전부 선택이에요. 지금 안 정해도 나중에 여울이 방에서 물어봐요.</span>
+              <span style={{ fontSize: fz.sm, lineHeight: 1.65, color: C.sub2 }}>{tr('아래 항목은 모두 선택이에요. 나중에 캐릭터 정보에서 입력할 수 있어요.')}</span>
             </div>
 
             {/* OB-10 — 이 래퍼는 기본 display:contents(투명)라 OFF 는 원본과 동일. 탭·PC(≥768)에서만 2열 그리드가 되어 세로를 반으로 접는다. */}
@@ -604,14 +670,14 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                     style={{ color: C.ink }}
                   >
                     <span style={{ fontSize: fz.md, color: C.ink }}>{g.title}</span>
-                    <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.sub2, fontSize: fz.xs }}>선택</span>
+                    <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.sub2, fontSize: fz.xs }}>{tr('선택')}</span>
                     <span className="onb-csum" style={{ fontSize: fz.sm, color: C.sub2 }}>{g.summary}</span>
                     <span className="onb-cchev" aria-hidden style={{ borderRight: `1.5px solid ${C.sub2}`, borderBottom: `1.5px solid ${C.sub2}` }} />
                   </button>
                 ) : (
                 <span className="onb-chead" style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
                   <span style={{ fontSize: fz.md, color: C.ink }}>{g.title}</span>
-                  <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.sub2, fontSize: fz.xs }}>선택</span>
+                  <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.sub2, fontSize: fz.xs }}>{tr('선택')}</span>
                   {/* 접기 단추는 **부연보다 앞**이다 — 부연은 제 줄로 내려가므로(flex-basis:100%),
                       뒤에 두면 셋째 줄로 밀려 빈 줄이 하나 생긴다(실측 40px). */}
                   {layout === 'fold' && (
@@ -685,20 +751,20 @@ function OnboardingInner({ y }: { y: Yeoul }) {
                   aria-expanded={false} onClick={() => setOpenGroup('extra')}
                   style={{ color: C.ink }}
                 >
-                  <span style={{ fontSize: fz.md, color: C.ink }}>그 밖에 알려주고 싶은 것</span>
-                  <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.faint, fontSize: fz.xs }}>선택</span>
+                  <span style={{ fontSize: fz.md, color: C.ink }}>{tr('그 밖에 알려주고 싶은 것')}</span>
+                  <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.faint, fontSize: fz.xs }}>{tr('선택')}</span>
                   <span className="onb-csum" style={{ fontSize: fz.sm, color: C.sub2 }}>{o.extraVal ? '적어 둔 말 있음' : '아직 비어 있어요'}</span>
                   <span className="onb-cchev" aria-hidden style={{ borderRight: `1.5px solid ${C.sub2}`, borderBottom: `1.5px solid ${C.sub2}` }} />
                 </button>
               ) : (
                 <>
                   <span className="onb-chead" style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
-                    <span style={{ fontSize: fz.md, color: C.ink }}>그 밖에 알려주고 싶은 것</span>
-                    <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.faint, fontSize: fz.xs }}>선택</span>
+                    <span style={{ fontSize: fz.md, color: C.ink }}>{tr('그 밖에 알려주고 싶은 것')}</span>
+                    <span style={{ padding: '2px 7px', borderRadius: radius.pill, background: ink(.07), color: C.faint, fontSize: fz.xs }}>{tr('선택')}</span>
                   </span>
                   {/* 서버 `@Size(max = 200)` 그대로. 칩이 없어 합산할 것도 없는 유일한 칸이다. */}
                   <input value={o.extraVal} onChange={(e) => o.onExtra(e.target.value)} maxLength={CHAR_TEXT_MAX.extra}
-                    placeholder="좋아하는 것, 버릇, 하면 안 되는 말 아무거나 적어 주세요"
+                    placeholder={tr('좋아하는 것, 버릇, 하면 안 되는 말 아무거나 적어 주세요')}
                     style={{ padding: pad.field, borderRadius: radius.md, border: `1px solid ${C.line}`, background: C.paper, fontSize: fz.md, color: C.ink, outline: 'none' }} />
                 </>
               )}
@@ -731,7 +797,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
         )}
       </div>
 
-      <div style={{ flex: 'none', padding: '10px 24px 30px', display: 'flex', flexDirection: 'column', gap: gap.md }}>
+      <div className={key === 'upload' ? 'onb-upload-footer' : undefined} style={{ flex: 'none', padding: '10px 24px 30px', display: 'flex', flexDirection: 'column', gap: gap.md }}>
         {/* ★ 막힘 안내는 **버튼 바로 위**다(알 화면과 같은 규칙). 스크롤 칸 안에 두면 누른 자리와
             답이 멀어지고, 긴 캐릭터 칸에서는 답이 화면 밖에 남는다. 여기는 안 스크롤된다.
             ★ 두 칸(올리기·캐릭터) 어디서 막히든 같은 자리에 같은 모양으로 뜬다 — 사용자가 규칙을
@@ -746,16 +812,20 @@ function OnboardingInner({ y }: { y: Yeoul }) {
             // 첫 걸음(초안 잡기)은 이미 그림을 올린 순간에 끝났다 — 그래서 여기까지 오는 동안
             // 서버가 캐릭터 시트를 미리 구워 두었다.
             //
-            // ★ 그림에 들어가는 것은 `note` 뿐이다. `personality`·`world` 는 대사 톤에만 쓰인다.
-            //   말투·장르 칩은 보낼 자리가 없어(그리고 그림에 영향도 없어) 아직 화면에만 남는다.
+            // ★ 그림에 들어가는 칸은 없다. 성격·말투·장르·세계관·그 밖에는 전부 대사에만 쓰인다(채팅 v1, #704).
             // ★ **끝나기를 기다린다**(2026-09-10). 전에는 `void` 로 던져 두고 곧바로 넘어가서,
             //   이름 짓기가 실패해도 알이 흔들리기 시작했다 — 굽지도 않는 알을 사람이 지켜본다.
             if (key === 'char' && s.petName) {
+              once('persona_filled', () => ztrack('zzal_persona_filled', { step: filledGroups(s.picks, s.texts) }));
               void (async () => {
                 const ok = await live.setChar({
                   name: s.petName,
-                  // ★ 성격은 여러 개 고를 수 있지만 **서버는 하나만 받는다** — 맨 앞(처음 고른 것)만 간다.
+                  // ★ 성격은 고른 순서 그대로 전부 보낸다 — 맨 앞이 대표(서버가 템플릿·폴백 톤에 쓴다).
+                  //   `personality` 는 옛 서버를 위한 다리다(서버는 `personalities` 가 있으면 그쪽을 쓴다).
                   personality: PERSONALITY_OF[(s.picks.persona ?? [])[0] ?? ''],
+                  personalities: personasOf(s.picks.persona),
+                  tone: lineOf(s.picks.tone, s.texts.tone, CHAR_TEXT_MAX.tone) || undefined,
+                  genre: lineOf(s.picks.genre, s.texts.genre, CHAR_TEXT_MAX.genre) || undefined,
                   world: worldOf(s.picks.world, s.texts.world) || undefined,
                   note: (s.texts.extra ?? '').trim() || undefined,
                 });
@@ -781,7 +851,7 @@ function OnboardingInner({ y }: { y: Yeoul }) {
             boxShadow: blocked ? 'none' : fCta ? `0 6px 16px ${acc(.24)}` : '0 4px 12px rgba(192,104,92,.22)',
             animationDelay: '190ms',
           }}
-        >{ctaLabel}</button>
+        >{tr(ctaLabel)}</button>
       </div>
     </div>
   );

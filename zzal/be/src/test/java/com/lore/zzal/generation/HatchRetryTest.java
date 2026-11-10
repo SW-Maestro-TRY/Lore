@@ -48,13 +48,13 @@ import static org.mockito.Mockito.when;
  * <h3>★ 무엇이 목인가</h3>
  * 실행기(runner)만 실패·성공을 흉내 내고, 그 앞뒤 판단은 전부 진짜 {@link HatchService} 다.
  */
-@DisplayName("부화 재시도 — 상한 2의 경계")
+@DisplayName("부화 재시도 — 상한 5의 경계 · 어느 격자를 버리나")
 class HatchRetryTest {
 
     private static final Long PET = 7L;
     private static final String V = "v1";
     private static final Instant T0 = Instant.parse("2026-09-11T03:00:00Z");
-    private static final int MAX_ATTEMPTS = 2;
+    private static final int MAX_ATTEMPTS = 5;
 
     private GenerationRunner runner;
     private GenerationRecorder recorder;
@@ -112,7 +112,8 @@ class HatchRetryTest {
 
     /** 지금 도는 그 job 한 줄. 실행기가 실패로 끝냈다고 친다. */
     private GenJob failedJob(GenErrorCode code) {
-        GenJob job = jobRepository.save(GenJob.start(PET, GenKind.HATCH, 1, V, T0));
+        // ★ 지금 도는 job 의 attempt = 이미 구운 수 + 1 (PetService·기동 복구가 매기는 방식 그대로)
+        GenJob job = jobRepository.save(GenJob.start(PET, GenKind.HATCH, (int) alreadyAttempted + 1, V, T0));
         job.markRunning(T0);
         job.fail(code, BigDecimal.ZERO, T0);
         return job;
@@ -123,19 +124,70 @@ class HatchRetryTest {
                 .thenAnswer(inv -> RunResult.failed(null, BigDecimal.ZERO, code));
     }
 
+    /** 운영 기본 상한(3, 2026-10-27)으로 만든 서비스. 나머지는 setUp 과 같다. */
+    private HatchService serviceWithLimit(int limit) {
+        ZzalPetRepository petRepository = mock(ZzalPetRepository.class);
+        ZzalPet pet = ZzalPet.draft(1L, "images/zzal/src", T0);
+        pet.character("여울", null, null, null, null, null, T0);
+        when(petRepository.findById(PET)).thenReturn(Optional.of(pet));
+        return new HatchService(runner, recorder, jobRepository, registry, petRepository,
+                quotaBreaker, blockLog, mock(ZzalAlerts.class), limit, mock(MotionSeeder.class));
+    }
+
+    /** 실행기에 넘어간 StepContext 의 시도 차수들. */
+    private List<Integer> capturedAttempts() {
+        List<Integer> attempts = new ArrayList<>();
+        when(runner.run(anyLong(), any(), any(), any())).thenAnswer(inv -> {
+            attempts.add(((StepContext) inv.getArgument(1)).attempt());
+            return RunResult.failed(null, BigDecimal.ZERO, GenErrorCode.TIMEOUT);
+        });
+        return attempts;
+    }
+
     @Test
-    @DisplayName("★ 첫 실패(시도 1회째)는 한 번 더 굽는다 — 새 job 1개, 실행기 2회, 실패 확정 없음")
-    void firstFailureRetriesOnce() {
+    @DisplayName("★★ 상한 3(2026-10-27 운영 기본) — 세 번 실패하면 FAILED 확정, 네 번째는 없다. 단계엔 차수 1·2·3 이 넘어간다")
+    void limitThreeFailsAfterThreeAttempts() {
+        HatchService three = serviceWithLimit(3);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.TIMEOUT);
+        List<Integer> attempts = capturedAttempts();
+
+        three.hatch(job.getId(), PET, V);
+
+        assertThat(jobs.stream().map(GenJob::getAttempt).toList()).containsExactly(1, 2, 3);
+        verify(runner, times(3)).run(anyLong(), any(), any(), any());
+        verify(recorder, times(1)).markPetFailed(PET);
+        assertThat(attempts).as("정체성 단계가 effort 를 고르는 차수").containsExactly(1, 2, 3);
+    }
+
+    @Test
+    @DisplayName("★ 관리자 재굽기(attempt 0)는 단계에 차수 1 로 넘어간다 — 시도 1 과 같은 effort(기본)")
+    void adminRehatchPassesAttemptOneToSteps() {
+        HatchService three = serviceWithLimit(3);
+        GenJob job = jobRepository.save(GenJob.start(PET, GenKind.HATCH, GenJob.ADMIN_REHATCH_ATTEMPT, V, T0));
+        job.markRunning(T0);
+        job.fail(GenErrorCode.TIMEOUT, BigDecimal.ZERO, T0);
+        List<Integer> attempts = capturedAttempts();
+
+        three.hatch(job.getId(), PET, V);
+
+        assertThat(attempts).containsExactly(1, 2, 3);
+        verify(recorder, times(1)).markPetFailed(PET);
+    }
+
+    @Test
+    @DisplayName("★ 계속 실패하면 상한(5)까지 굽고 멈춘다 — 새 job 4개, 실행기 5회, 실패 확정 1번")
+    void keepsRetryingUpToTheLimit() {
         alreadyAttempted(0);
         GenJob job = failedJob(GenErrorCode.UNKNOWN);
         runnerAlwaysFails(GenErrorCode.UNKNOWN);
 
         service.hatch(job.getId(), PET, V);
 
-        assertThat(jobs).as("처음 것 + 재시도 하나").hasSize(2);
-        assertThat(jobs.get(1).getAttempt()).isEqualTo(2);
-        verify(runner, times(2)).run(anyLong(), any(), any(), any());
-        verify(recorder).markPetFailed(PET);      // 재시도까지 실패했으므로 여기서 끝낸다
+        assertThat(jobs).as("처음 것 + 재시도 넷").hasSize(5);
+        assertThat(jobs.stream().map(GenJob::getAttempt).toList()).containsExactly(1, 2, 3, 4, 5);
+        verify(runner, times(5)).run(anyLong(), any(), any(), any());
+        verify(recorder, times(1)).markPetFailed(PET);
     }
 
     @Test
@@ -179,8 +231,8 @@ class HatchRetryTest {
 
         service.hatch(job.getId(), PET, V);
 
-        assertThat(jobs).as("다시 하면 되는 실패는 재시도가 남아 있어야 한다").hasSize(2);
-        verify(runner, times(2)).run(anyLong(), any(), any(), any());
+        assertThat(jobs).as("다시 하면 되는 실패는 재시도가 남아 있어야 한다").hasSize(MAX_ATTEMPTS);
+        verify(runner, times(MAX_ATTEMPTS)).run(anyLong(), any(), any(), any());
     }
 
     @Test
@@ -199,9 +251,9 @@ class HatchRetryTest {
     }
 
     @Test
-    @DisplayName("★★ 상한(2)에 닿으면 새 job 을 안 만들고 실패로 끝낸다 — 여기가 새면 같은 그림에 돈이 세 번")
+    @DisplayName("★★ 상한(5)에 닿으면 새 job 을 안 만들고 실패로 끝낸다 — 여기가 새면 같은 그림에 돈이 한 번 더")
     void atTheLimitNothingIsQueuedAgain() {
-        alreadyAttempted(1);                       // 이미 한 번 구웠다 + 지금 것 = 2
+        alreadyAttempted(4);                       // 이미 네 번 구웠다 + 지금 것 = 5
         GenJob job = failedJob(GenErrorCode.UNKNOWN);
         runnerAlwaysFails(GenErrorCode.UNKNOWN);
 
@@ -213,9 +265,9 @@ class HatchRetryTest {
     }
 
     @Test
-    @DisplayName("★ 상한을 넘긴 값(3)도 같다 — 부등호가 == 이면 여기가 새어 영원히 다시 굽는다")
+    @DisplayName("★ 상한을 넘긴 값(6)도 같다 — 부등호가 == 이면 여기가 새어 영원히 다시 굽는다")
     void beyondTheLimitIsTheSame() {
-        alreadyAttempted(2);
+        alreadyAttempted(5);
         GenJob job = failedJob(GenErrorCode.UNKNOWN);
         runnerAlwaysFails(GenErrorCode.UNKNOWN);
 
@@ -237,8 +289,9 @@ class HatchRetryTest {
 
         List<String> dependents = registry.identityDependents(GenKind.HATCH, V);
         assertThat(dependents).as("폐기 목록이 비어 있으면 이 시험은 아무것도 안 본다").isNotEmpty();
+        // ★ 거부가 이어지면 시도마다 다시 버린다(상한 5 → 재시도 4번 = 4번 폐기)
         for (String step : dependents) {
-            verify(recorder).discardSucceeded(PET, GenKind.HATCH, step);
+            verify(recorder, times(MAX_ATTEMPTS - 1)).discardSucceeded(PET, GenKind.HATCH, step);
         }
     }
 
@@ -254,6 +307,219 @@ class HatchRetryTest {
         verify(recorder, never()).discardSucceeded(anyLong(), any(), anyString());
     }
 
+    // ── 2026-10-07 — 어느 격자를 버리나 ───────────────────────────────────
+
+    private HatchService serviceWith(boolean onlyFailedGrid, boolean onPostprocessCrash) {
+        ZzalPetRepository petRepository = mock(ZzalPetRepository.class);
+        ZzalPet pet = ZzalPet.draft(1L, "images/zzal/src", T0);
+        pet.character("여울", null, null, null, null, null, T0);
+        when(petRepository.findById(PET)).thenReturn(Optional.of(pet));
+        return new HatchService(runner, recorder, jobRepository, registry, petRepository,
+                quotaBreaker, blockLog, mock(ZzalAlerts.class), MAX_ATTEMPTS, mock(MotionSeeder.class),
+                onlyFailedGrid, onPostprocessCrash, RejectedGridArchive.none());
+    }
+
+    private void failsOnceThenSucceeds(RunResult failure) {
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenReturn(failure)
+                .thenReturn(RunResult.ok(new StepContext(PET, "여울", null, V), BigDecimal.ZERO));
+    }
+
+    @Test
+    @DisplayName("★★ 게이트가 2층(grid2)만 막았으면 <b>그 한 장만</b> 버린다 — 멀쩡한 1층을 다시 굽지 않는다")
+    void gridRejectedDiscardsOnlyThatGrid() {
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        failsOnceThenSucceeds(RunResult.failedWith(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN,
+                true, true, PostProcessStep_GRID2));
+
+        service.hatch(job.getId(), PET, V);
+
+        verify(recorder).discardSucceeded(PET, GenKind.HATCH, PostProcessStep_GRID2);
+        verify(recorder, never()).discardSucceeded(PET, GenKind.HATCH, GRID);
+        assertThat(jobs).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("★★ 후처리 예외(exit 1 — 빈 칸 등)도 그 격자를 버린다 — 전에는 같은 격자를 다시 잘라 또 죽었다")
+    void postprocessCrashDiscardsThatGrid() {
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        failsOnceThenSucceeds(RunResult.failedWith(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN,
+                false, true, GRID));
+
+        service.hatch(job.getId(), PET, V);
+
+        verify(recorder).discardSucceeded(PET, GenKind.HATCH, GRID);
+        verify(recorder, never()).discardSucceeded(PET, GenKind.HATCH, PostProcessStep_GRID2);
+    }
+
+    @Test
+    @DisplayName("★ 어느 격자인지 모르면 둘 다 버린다")
+    void unknownGridDiscardsBoth() {
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        failsOnceThenSucceeds(RunResult.failedWith(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN,
+                false, true, null));
+
+        service.hatch(job.getId(), PET, V);
+
+        verify(recorder).discardSucceeded(PET, GenKind.HATCH, GRID);
+        verify(recorder).discardSucceeded(PET, GenKind.HATCH, PostProcessStep_GRID2);
+    }
+
+    @Test
+    @DisplayName("★ 시간 초과는 아무것도 버리지 않고 다시 굽는다")
+    void timeoutRetriesWithoutDiscard() {
+        GenJob job = failedJob(GenErrorCode.TIMEOUT);
+        failsOnceThenSucceeds(RunResult.failed(null, BigDecimal.ZERO, GenErrorCode.TIMEOUT));
+
+        service.hatch(job.getId(), PET, V);
+
+        verify(recorder, never()).discardSucceeded(anyLong(), any(), anyString());
+        assertThat(jobs).hasSize(2);
+        verify(recorder, never()).markPetFailed(anyLong());
+    }
+
+    @Test
+    @DisplayName("스위치 discard-on-postprocess-crash=false — 후처리 예외는 옛 동작대로 폐기하지 않는다")
+    void postprocessCrashSwitchOff() {
+        service = serviceWith(true, false);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        failsOnceThenSucceeds(RunResult.failedWith(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN,
+                false, true, GRID));
+
+        service.hatch(job.getId(), PET, V);
+
+        verify(recorder, never()).discardSucceeded(anyLong(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("스위치 discard-only-failed-grid=false — 게이트 거부면 옛 동작대로 두 장 다 버린다")
+    void onlyFailedGridSwitchOff() {
+        service = serviceWith(false, true);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        failsOnceThenSucceeds(RunResult.failedWith(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN,
+                true, true, PostProcessStep_GRID2));
+
+        service.hatch(job.getId(), PET, V);
+
+        verify(recorder).discardSucceeded(PET, GenKind.HATCH, GRID);
+        verify(recorder).discardSucceeded(PET, GenKind.HATCH, PostProcessStep_GRID2);
+    }
+
+    @Test
+    @DisplayName("★ 관리자 재굽기(attempt 를 1 부터 다시 매김)는 옛 실패 job 이 많아도 상한까지 다시 굽는다")
+    void rehatchStartsAFreshCount() {
+        alreadyAttempted(0);
+        // 표에는 옛 실패 job 이 7개 있다고 친다 — 예전처럼 전체 수를 셌다면 한 번도 다시 못 굽는다
+        when(jobRepository.countByPetIdAndKind(eq(PET), eq(GenKind.HATCH))).thenAnswer(inv -> 7L + jobs.size());
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        runnerAlwaysFails(GenErrorCode.UNKNOWN);
+
+        service.hatch(job.getId(), PET, V);
+
+        verify(runner, times(MAX_ATTEMPTS)).run(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("★★ 관리자 재굽기 job(attempt=0)은 1 로 읽혀 상한(5)까지 굽고, 재시도는 attempt 2~ — 사람 상한 셈(attempt=1)에 안 들어간다")
+    void adminRehatchJobCountsFromOneAndRetriesAreNotFirstAttempts() {
+        GenJob job = jobRepository.save(GenJob.start(PET, GenKind.HATCH, GenJob.ADMIN_REHATCH_ATTEMPT, V, T0));
+        job.markRunning(T0);
+        job.fail(GenErrorCode.UNKNOWN, BigDecimal.ZERO, T0);
+        runnerAlwaysFails(GenErrorCode.UNKNOWN);
+
+        service.hatch(job.getId(), PET, V);
+
+        verify(runner, times(MAX_ATTEMPTS)).run(anyLong(), any(), any(), any());
+        assertThat(jobs.stream().map(GenJob::getAttempt).toList()).containsExactly(0, 2, 3, 4, 5);
+        assertThat(jobs.stream().filter(j -> j.getAttempt() == 1).count())
+                .as("사람이 시작한 부화로 세는 줄(attempt=1)이 하나도 없어야 한다").isZero();
+    }
+
+    @Test
+    @DisplayName("★★ 사람이 시작한 부화가 재시도 3번을 거쳐도 attempt=1 인 줄은 하나뿐이다")
+    void retriesLeaveOnlyOneFirstAttempt() {
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenReturn(RunResult.failed(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN))
+                .thenReturn(RunResult.failed(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN))
+                .thenReturn(RunResult.failed(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN))
+                .thenReturn(RunResult.ok(new StepContext(PET, "여울", null, V), BigDecimal.ZERO));
+
+        service.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).hasSize(4);
+        assertThat(jobs.stream().filter(j -> j.getAttempt() == 1).count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("★★ 버리는 격자는 버리기 직전에 rejected/{jobId}-grid2.png 로 보존한다 — 재시도가 같은 키에 덮어쓴다(2026-10-07)")
+    void discardedGridIsPreservedFirst() {
+        RejectedGridArchive archive = mock(RejectedGridArchive.class);
+        ZzalPetRepository petRepository = mock(ZzalPetRepository.class);
+        ZzalPet pet = ZzalPet.draft(1L, "images/zzal/src", T0);
+        pet.character("여울", null, null, null, null, null, T0);
+        when(petRepository.findById(PET)).thenReturn(Optional.of(pet));
+        service = new HatchService(runner, recorder, jobRepository, registry, petRepository,
+                quotaBreaker, blockLog, mock(ZzalAlerts.class), MAX_ATTEMPTS, mock(MotionSeeder.class),
+                true, true, archive);
+
+        GenStepRecord grid2 = GenStepRecord.start(41L, 3, PostProcessStep_GRID2, T0);
+        grid2.succeed("images/zzal/pets/7/grid2.png", null, "gpt-image-2", BigDecimal.ZERO, T0);
+        GenStepRecord grid1 = GenStepRecord.start(41L, 2, GRID, T0);
+        grid1.succeed("images/zzal/pets/7/grid.png", null, "gpt-image-2", BigDecimal.ZERO, T0);
+        when(recorder.loadSucceeded(PET, GenKind.HATCH)).thenReturn(List.of(grid1, grid2));
+
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        failsOnceThenSucceeds(RunResult.failedWith(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN,
+                true, true, PostProcessStep_GRID2));
+
+        service.hatch(job.getId(), PET, V);
+
+        verify(archive, times(1)).preserve(PET, grid2);
+        verify(archive, never()).preserve(PET, grid1);
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(archive, recorder);
+        order.verify(archive).preserve(PET, grid2);
+        order.verify(recorder).discardSucceeded(PET, GenKind.HATCH, PostProcessStep_GRID2);
+        assertThat(RejectedGridArchive.keyOf(PET, 41L, PostProcessStep_GRID2))
+                .isEqualTo("images/zzal/pets/7/rejected/41-grid2.png");
+    }
+
+    @Test
+    @DisplayName("★★ 실패가 확정되는 마지막 시도의 거부 격자도 rejected/ 로 보존한 뒤 실패로 끝낸다(2026-10-08 운영 job 119·130)")
+    void lastAttemptRejectedGridIsPreservedBeforeFailing() {
+        RejectedGridArchive archive = mock(RejectedGridArchive.class);
+        ZzalPetRepository petRepository = mock(ZzalPetRepository.class);
+        ZzalPet pet = ZzalPet.draft(1L, "images/zzal/src", T0);
+        pet.character("여울", null, null, null, null, null, T0);
+        when(petRepository.findById(PET)).thenReturn(Optional.of(pet));
+        service = new HatchService(runner, recorder, jobRepository, registry, petRepository,
+                quotaBreaker, blockLog, mock(ZzalAlerts.class), MAX_ATTEMPTS, mock(MotionSeeder.class),
+                true, true, archive);
+
+        GenStepRecord grid = GenStepRecord.start(130L, 2, GRID, T0);
+        grid.succeed("images/zzal/pets/7/grid.png", null, "gpt-image-2", BigDecimal.ZERO, T0);
+        when(recorder.loadSucceeded(PET, GenKind.HATCH)).thenReturn(List.of(grid));
+
+        // 이미 4번 구웠고 지금이 5번째(마지막) — 재시도가 남아 있지 않다
+        alreadyAttempted(MAX_ATTEMPTS - 1);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenReturn(RunResult.failedWith(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN, true, false, GRID));
+
+        service.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).as("재시도 job 은 만들지 않는다").hasSize(1);
+        verify(archive, times(1)).preserve(PET, grid);
+        verify(recorder, never()).discardSucceeded(anyLong(), any(), anyString());
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(archive, recorder);
+        order.verify(archive).preserve(PET, grid);
+        order.verify(recorder).markPetFailed(PET);
+    }
+
+    private static final String GRID = com.lore.zzal.generation.steps.GridStep.NAME;
+    private static final String PostProcessStep_GRID2 = com.lore.zzal.generation.steps.PostProcessStep.GRID2;
+
     @Test
     @DisplayName("첫 판이 성공하면 재시도도 실패 확정도 없다")
     void successOnTheFirstTryDoesNothingElse() {
@@ -267,5 +533,132 @@ class HatchRetryTest {
         assertThat(jobs).hasSize(1);
         verify(runner, times(1)).run(anyLong(), any(), any(), any());
         verify(recorder, never()).markPetFailed(anyLong());
+    }
+
+    // ── 작업 1.10 그림 단계 상한(2026-11-01 켬) ───────────────────────────────────────
+
+    /** 운영 기본(전체 3 · 그림 n)으로 만든 서비스. */
+    private HatchService imageCapped(int imageMax) {
+        HatchService s = serviceWithLimit(3);
+        s.setImageMaxAttempts(imageMax);
+        s.setAutoCliEnabled(true);
+        return s;
+    }
+
+    @Test
+    @DisplayName("★★ 자동 CLI 꺼짐이면 그림 상한을 안 건다 — 격자 검사 탈락 두 번 뒤에도 세 번째 판(그림 호출)을 굽는다")
+    void imageCap2_autoCliOff_keepsThirdImageCall() {
+        HatchService s = imageCapped(2);
+        s.setAutoCliEnabled(false);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenAnswer(inv -> RunResult.gridRejected(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN));
+
+        s.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).as("이어 받는 쪽이 없으면 기존 3회").hasSize(3);
+        verify(runner, times(3)).run(anyLong(), any(), any(), any());
+        verify(recorder, times(1)).markPetFailed(PET);
+    }
+
+    @Test
+    @DisplayName("★★ 그림 상한 2 — 격자 검사 탈락 두 번이면 세 번째 판(그림 호출)을 안 굽고 FAILED, 격자는 보존")
+    void imageCap2_stopsAfterSecondGridRejection() {
+        HatchService capped = imageCapped(2);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenAnswer(inv -> RunResult.gridRejected(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN));
+
+        capped.hatch(job.getId(), PET, V);
+
+        assertThat(jobs.stream().map(GenJob::getAttempt).toList()).as("세 번째 job 이 생기면 그림 API 를 또 부른다")
+                .containsExactly(1, 2);
+        verify(runner, times(2)).run(anyLong(), any(), any(), any());
+        verify(recorder, times(1)).markPetFailed(PET);
+    }
+
+    @Test
+    @DisplayName("★★ 그림 상한 2 — 격자 단계 호출이 두 번 FAILED(표에서 셈)면 세 번째 판 없이 FAILED")
+    void imageCap2_stopsAfterTwoFailedGridSteps() {
+        HatchService capped = imageCapped(2);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        runnerAlwaysFails(GenErrorCode.TIMEOUT);
+        // 판마다 격자 단계가 FAILED 로 남았다고 친다 — 지금까지 돈 판 수 = 실패한 격자 행 수
+        when(recorder.countFailedSteps(eq(PET), eq(GenKind.HATCH), eq(job.getId()), any()))
+                .thenAnswer(inv -> (long) jobs.size());
+
+        capped.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).hasSize(2);
+        verify(runner, times(2)).run(anyLong(), any(), any(), any());
+        verify(recorder, times(1)).markPetFailed(PET);
+    }
+
+    @Test
+    @DisplayName("★ 정체성 문단만 실패한 재시도는 그림 실패로 안 센다 — 전체 상한 3 그대로")
+    void identityFailure_notCountedAsImage() {
+        HatchService capped = imageCapped(2);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        runnerAlwaysFails(GenErrorCode.UNKNOWN);
+        when(recorder.countFailedSteps(anyLong(), any(), anyLong(), any())).thenReturn(0L);
+
+        capped.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).hasSize(3);
+        verify(runner, times(3)).run(anyLong(), any(), any(), any());
+        verify(recorder, times(1)).markPetFailed(PET);
+    }
+
+    @Test
+    @DisplayName("★ 그림 실패 한 번 + 시간 초과(후처리) 한 번은 상한 2 에 안 닿는다 — 세 번째 판을 굽는다")
+    void oneImageFailureThenTimeout_keepsGoing() {
+        HatchService capped = imageCapped(2);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenReturn(RunResult.gridRejected(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN))
+                .thenAnswer(inv -> RunResult.failed(null, BigDecimal.ZERO, GenErrorCode.TIMEOUT));
+
+        capped.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).hasSize(3);
+        verify(runner, times(3)).run(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("★ 그림 상한 0 = 끔 — 검사 탈락이 계속돼도 전체 상한 3 까지 굽는다(옛 동작)")
+    void imageCap0_keepsThreeAttempts() {
+        HatchService off = imageCapped(0);
+        alreadyAttempted(0);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        when(runner.run(anyLong(), any(), any(), any()))
+                .thenAnswer(inv -> RunResult.gridRejected(null, BigDecimal.ZERO, GenErrorCode.UNKNOWN));
+
+        off.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).hasSize(3);
+        verify(runner, times(3)).run(anyLong(), any(), any(), any());
+        verify(recorder, never()).countFailedSteps(anyLong(), any(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("★ 기동 복구(attempt>1)는 이 펫의 부화 job 전체부터 센다 — 복구가 시도 수를 세는 방식과 같다")
+    void recoveryCountsFromAllJobs() {
+        HatchService capped = imageCapped(2);
+        alreadyAttempted(1);
+        GenJob job = failedJob(GenErrorCode.UNKNOWN);
+        runnerAlwaysFails(GenErrorCode.TIMEOUT);
+        // 복구 전 판 하나 + 이번 판 하나가 격자 단계에서 FAILED
+        when(recorder.countFailedSteps(eq(PET), eq(GenKind.HATCH), eq(0L), any())).thenReturn(2L);
+
+        capped.hatch(job.getId(), PET, V);
+
+        assertThat(jobs).as("복구 판(attempt 2) 하나로 끝난다").hasSize(1);
+        verify(runner, times(1)).run(anyLong(), any(), any(), any());
+        verify(recorder, times(1)).markPetFailed(PET);
     }
 }

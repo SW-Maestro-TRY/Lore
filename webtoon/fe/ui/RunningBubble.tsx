@@ -69,7 +69,7 @@ export default function RunningBubble({ view, runId, go }: { view: View; runId?:
     let alive = true;
     myActiveJobs().then((r) => {
       if (!alive) return;
-      const j = r.jobs?.[0];
+      const j = r.jobs?.find((x) => x.status !== "error");   // 이어서 만들 수 있는 실패는 마이페이지에만
       if (j) { watchJob(j.id); setJobId(j.id); setJob(j); }
       else { setJobId(null); setJob(null); }
     }).catch(() => { /* 못 찾으면 안 띄운다 */ });

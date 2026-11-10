@@ -20,18 +20,19 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * 내려받는 파일에 <b>LORECOMIC 도장이 실제로 찍히는가</b>.
+ * 내려받는 파일에 <b>LORE 도장이 실제로 찍히는가</b>.
  *
  * 이 검사가 지키는 것은 유입 경로다. 만든 사람이 결과물을 SNS 에 올릴 때
  * 어디서 만든 것인지가 안 남으면, 퍼질수록 우리는 아무것도 못 얻는다.
- * 도장은 <b>조용히 안 찍히기 쉬운</b> 종류의 기능이라(글꼴이 없거나, 루
- * 그림을 못 읽거나) 그림에서 직접 확인한다.
+ * 도장은 <b>조용히 안 찍히기 쉬운</b> 종류의 기능이라(글꼴이 없거나)
+ * 그림에서 직접 확인한다.
  *
  * 눈으로 볼 때는 {@code LORE_STAMP_IN=<그림>} · {@code LORE_STAMP_OUT=<저장할 png>}
  * 환경변수를 주고 돌린다 — 실제 장에 도장을 찍어 저장한다.
@@ -106,6 +107,25 @@ class EpisodeExportTest {
     }
 
     @Test
+    @DisplayName("편집실에서 벌린 여백만큼 장 사이를 비운다 — 마지막 장 뒤는 안 비운다")
+    void 고친_여백을_비운다() throws IOException {
+        sheet(1, 800, 500, Color.BLACK);
+        sheet(2, 800, 400, Color.BLACK);
+        sheet(3, 800, 300, Color.BLACK);
+        OverlayStore overlays = mock(OverlayStore.class);
+        // 1장 뒤는 「크게 쉼」(폭의 0.62배), 3장 뒤(마지막)도 적어 두지만 안 비운다.
+        when(overlays.gapsOf("run-1", 1)).thenReturn(Map.of(1, 3, 3, 2));
+        export.setOverlays(overlays);
+
+        BufferedImage out = exported();
+
+        int gap = (int) Math.round(800 * 0.62);
+        assertThat(out.getHeight()).isEqualTo(500 + gap + 400 + 300);
+        // 여백 자리는 흰색이다
+        assertThat(painted(out, 0, 500, 100, 500 + gap, 0xFFFFFF)).isFalse();
+    }
+
+    @Test
     @DisplayName("장마다 오른쪽 아래에 도장을 찍는다 — 한 장만 잘라 가도 딸려 가야 한다")
     void 장마다_찍는다() throws IOException {
         sheet(1, 800, 500, Color.WHITE);
@@ -113,7 +133,7 @@ class EpisodeExportTest {
 
         BufferedImage out = exported();
 
-        // 두 장 각자의 오른쪽 아래(폭의 17% 남짓)에 루와 글자가 찍혀 있어야 한다.
+        // 두 장 각자의 오른쪽 아래에 글자와 그림자가 찍혀 있어야 한다.
         assertThat(inked(out, 600, 350, 800, 500, 0xFFFFFF)).as("첫 장 도장").isGreaterThan(1500);
         assertThat(inked(out, 600, 850, 800, 1000, 0xFFFFFF)).as("둘째 장 도장").isGreaterThan(1500);
         // 왼쪽 위는 깨끗하다 — 도장은 구석에만.
@@ -121,13 +141,14 @@ class EpisodeExportTest {
     }
 
     @Test
-    @DisplayName("어두운 장에서도 보인다 — 흰 글자에 짙은 테두리")
+    @DisplayName("어두운 장에서도 보인다 — 흰 글자")
     void 어두운_장에서도() throws IOException {
         sheet(1, 800, 500, Color.BLACK);
 
         BufferedImage out = exported();
 
-        assertThat(inked(out, 600, 350, 800, 500, 0x000000)).as("어두운 장 도장").isGreaterThan(1500);
+        // 검은 장에서는 그림자가 안 보이니 흰 글자만 센다.
+        assertThat(inked(out, 600, 350, 800, 500, 0x000000)).as("어두운 장 도장").isGreaterThan(500);
     }
 
     @Test
@@ -200,5 +221,51 @@ class EpisodeExportTest {
     void 그림이_없으면() {
         when(pages.keysOf(anyString())).thenReturn(new LinkedHashMap<>());
         assertThat(export.png("run-1")).isNull();
+    }
+    @Test
+    @DisplayName("그림만 받기는 구운 판을 건너뛰고 밑그림을 잇는다 — 도장은 그대로 찍는다")
+    void 그림만_받기() throws IOException {
+        sheet(1, 800, 500, Color.BLACK);
+        // 구운 판(키 "9")은 흰 장 — 보통 받기는 이것을, 그림만 받기는 검은 밑그림을 써야 한다.
+        BufferedImage baked = new BufferedImage(800, 500, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = baked.createGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, 800, 500);
+        g.dispose();
+        sheets.put(9, baked);
+        when(bakery.keysOf(anyString())).thenReturn(new LinkedHashMap<>(Map.of(1, "9")));
+
+        BufferedImage normal = ImageIO.read(new ByteArrayInputStream(export.png("run-1")));
+        BufferedImage plain = ImageIO.read(new ByteArrayInputStream(export.png("run-1", true)));
+        BufferedImage onePlain = ImageIO.read(new ByteArrayInputStream(export.pagePng("run-1", 1, true)));
+
+        assertThat(normal.getRGB(10, 10) & 0xFFFFFF).isEqualTo(0xFFFFFF);
+        assertThat(plain.getRGB(10, 10) & 0xFFFFFF).isEqualTo(0x000000);
+        assertThat(onePlain.getRGB(10, 10) & 0xFFFFFF).isEqualTo(0x000000);
+        // 오른쪽 아래 구석에 도장이 찍혔다.
+        assertThat(painted(plain, 600, 400, 800, 500, 0x000000)).isTrue();
+        assertThat(painted(onePlain, 600, 400, 800, 500, 0x000000)).isTrue();
+    }
+
+
+    @Test
+    @DisplayName("그림만 받기도 직접 그린 선(리터치)은 남긴다 — 고친 그림이 고치기 전으로 돌아가면 안 된다")
+    void 그림만_받기_리터치() throws IOException {
+        sheet(1, 800, 500, Color.BLACK);
+        OverlayStore overlays = mock(OverlayStore.class);
+        when(overlays.gapsOf(anyString(), anyInt())).thenReturn(Map.of());
+        // 가운데를 가로지르는 흰 붓 선
+        var scenes = new com.fasterxml.jackson.databind.ObjectMapper().readTree(
+                "{\"scenes\":{\"1\":{\"paint\":{\"v\":1,\"strokes\":[{\"k\":\"b\",\"c\":\"#ffffff\",\"w\":400,"
+                        + "\"p\":[1000,5000,9000,5000]}]}}}}");
+        when(overlays.read(anyString(), anyInt())).thenReturn(scenes);
+        export.setOverlays(overlays);
+
+        BufferedImage all = ImageIO.read(new ByteArrayInputStream(export.png("run-1", true)));
+        BufferedImage one = ImageIO.read(new ByteArrayInputStream(export.pagePng("run-1", 1, true)));
+
+        assertThat(all.getRGB(400, 250) & 0xFFFFFF).isEqualTo(0xFFFFFF);
+        assertThat(one.getRGB(400, 250) & 0xFFFFFF).isEqualTo(0xFFFFFF);
+        assertThat(all.getRGB(10, 10) & 0xFFFFFF).isEqualTo(0x000000);    // 선 밖은 밑그림 그대로
     }
 }

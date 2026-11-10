@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="330" viewBox="0 0 760 330" role="img" aria-label="동시 인원별 응답 95% 시간">
+<style>
+.bg{fill:#fcfcfb} .t1{fill:#0b0b0b} .t2{fill:#52514e} .mu{fill:#898781} .grid{stroke:#e4e3df} .axis{stroke:#898781}
+.b{fill:#86b6ef} .hi{fill:#1c5cab} text{font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif}
+@media (prefers-color-scheme: dark){ .bg{fill:#1a1a19} .t1{fill:#fff} .t2{fill:#c3c2b7} .grid{stroke:#383835} .b{fill:#184f95} .hi{fill:#6da7ec} }
+</style>
+<rect class="bg" width="760" height="330" rx="8"/>
+<text class="t1" x="20" y="30" font-size="16" font-weight="700">보기·진행 화면 부하 — 응답 95% 시간 (staging t3.small)</text>
+<text class="t2" x="20" y="50" font-size="12">초 · 생성 없이 둘러보기·완성본·진행 화면 3초 폴링 · 약 18만 요청 중 오류 0건</text>
+<line class="grid" x1="60" y1="250.0" x2="730" y2="250.0"/><text class="mu" x="52" y="254.0" font-size="11" text-anchor="end">0초</text>
+<line class="grid" x1="60" y1="193.33333333333334" x2="730" y2="193.33333333333334"/><text class="mu" x="52" y="197.33333333333334" font-size="11" text-anchor="end">1초</text>
+<line class="grid" x1="60" y1="136.66666666666669" x2="730" y2="136.66666666666669"/><text class="mu" x="52" y="140.66666666666669" font-size="11" text-anchor="end">2초</text>
+<line class="grid" x1="60" y1="80.0" x2="730" y2="80.0"/><text class="mu" x="52" y="84.0" font-size="11" text-anchor="end">3초</text>
+<path class="b" d="M80.0,250 V250.0 Q80.0,246.03333333333333 83.96666666666667,246.03333333333333 H166.03333333333333 Q170.0,246.03333333333333 170.0,250.0 V250 Z"/>
+<text class="t1" x="125.0" y="238.03333333333333" font-size="13" text-anchor="middle" font-weight="700">0.07초</text>
+<text class="t1" x="125.0" y="270" font-size="13" text-anchor="middle">동시 150명</text>
+<text class="t2" x="125.0" y="288" font-size="11" text-anchor="middle">서버 CPU 42%</text>
+<path class="b" d="M263.3333333333333,250 V248.9 Q263.3333333333333,244.9 267.3333333333333,244.9 H349.3333333333333 Q353.3333333333333,244.9 353.3333333333333,248.9 V250 Z"/>
+<text class="t1" x="308.3333333333333" y="236.9" font-size="13" text-anchor="middle" font-weight="700">0.09초</text>
+<text class="t1" x="308.3333333333333" y="270" font-size="13" text-anchor="middle">동시 300명</text>
+<text class="t2" x="308.3333333333333" y="288" font-size="11" text-anchor="middle">서버 CPU 77%</text>
+<path class="hi" d="M446.66666666666663,250 V180.33333333333331 Q446.66666666666663,176.33333333333331 450.66666666666663,176.33333333333331 H532.6666666666666 Q536.6666666666666,176.33333333333331 536.6666666666666,180.33333333333331 V250 Z"/>
+<text class="t1" x="491.66666666666663" y="168.33333333333331" font-size="13" text-anchor="middle" font-weight="700">1.3초</text>
+<text class="t1" x="491.66666666666663" y="270" font-size="13" text-anchor="middle">동시 450명</text>
+<text class="t2" x="491.66666666666663" y="288" font-size="11" text-anchor="middle">서버 CPU 95%</text>
+<path class="hi" d="M630.0,250 V100.99999999999997 Q630.0,96.99999999999997 634.0,96.99999999999997 H716.0 Q720.0,96.99999999999997 720.0,100.99999999999997 V250 Z"/>
+<text class="t1" x="675.0" y="88.99999999999997" font-size="13" text-anchor="middle" font-weight="700">2.7초</text>
+<text class="t1" x="675.0" y="270" font-size="13" text-anchor="middle">동시 840명</text>
+<text class="t2" x="675.0" y="288" font-size="11" text-anchor="middle">서버 CPU 100%</text>
+<text class="t2" x="20" y="316" font-size="11">강조한 막대 = 서버 CPU 95% 이상. 원인은 SQL 로그 출력(CPU 의 절반 가까이) → #622 에서 끔, 끈 뒤 재측정은 아직</text>
+</svg>

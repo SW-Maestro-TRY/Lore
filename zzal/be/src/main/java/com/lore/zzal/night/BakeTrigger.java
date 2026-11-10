@@ -83,6 +83,8 @@ public class BakeTrigger {
      */
     @Transactional
     public void onTutorialDone(ZzalPet pet, Instant now) {
+        // Legacy gift generation is retired; the tutorial/game effect remains independent.
+        if (com.lore.zzal.motion.RetiredRewardGeneration.isRetiredGift(101)) return;
         ZzalMotion gift = firstGiftRow(pet.getId());
         if (gift == null || gift.getStatus() != MotionStatus.NONE) {
             return;
@@ -92,7 +94,7 @@ public class BakeTrigger {
                     pet.getId(), gift.getName());
             return;
         }
-        if (!gift.queue(AwakeClock.dateOf(now))) {
+        if (!gift.queue(AwakeClock.dateOf(now, pet.zone()))) {
             return;     // 이미 굽는 중이거나 판정을 지난 자리 — 되돌리면 두 번 굽는다
         }
         log.info("튜토리얼 완주 보상 큐 등록 — petId={} key={}", pet.getId(), gift.getName());
@@ -116,6 +118,8 @@ public class BakeTrigger {
      */
     @Transactional
     public void onFirstGameLoss(ZzalPet pet, Instant now) {
+        // Legacy gift generation is retired; the tutorial/game effect remains independent.
+        if (com.lore.zzal.motion.RetiredRewardGeneration.isRetiredGift(102)) return;
         ZzalMotion gift = secondGiftRow(pet.getId());
         if (gift == null || gift.getStatus() != MotionStatus.NONE) {
             return;     // 이미 굽는 중이거나 받은 사람 — 두 번 주지 않는다
@@ -125,7 +129,7 @@ public class BakeTrigger {
                     pet.getId(), gift.getName());
             return;
         }
-        if (!gift.queue(AwakeClock.dateOf(now))) {
+        if (!gift.queue(AwakeClock.dateOf(now, pet.zone()))) {
             return;
         }
         log.info("첫 패배 선물 큐 등록 — petId={} key={}", pet.getId(), gift.getName());
@@ -140,7 +144,7 @@ public class BakeTrigger {
     @Transactional
     public void onSleep(ZzalPet pet, Instant now) {
         // ★ 밤 리듬 — 여기가 실패한 줄을 다시 굽는 하루 한 번의 자리다(NightPlanner.Occasion).
-        int queued = planner.plan(pet, AwakeClock.dateOf(now), NightPlanner.Occasion.NIGHT);
+        int queued = planner.plan(pet, AwakeClock.dateOf(now, pet.zone()), NightPlanner.Occasion.NIGHT);
         if (queued > 0) {
             claimAndBake(freshlyQueued(pet.getId()), now);
         }
@@ -166,7 +170,7 @@ public class BakeTrigger {
     public void onPieceComplete(ZzalPet pet, Instant now) {
         // ★★ 여기는 낮에도 돈다 — 방금 찬 조각의 새 동작만 올리고, <b>실패한 줄은 건드리지 않는다.</b>
         //   같은 지시문으로 여러 번 굽는 것이 설계지만 그 리듬은 밤 한 번이다(NightPlanner.Occasion).
-        int queued = planner.plan(pet, AwakeClock.dateOf(now), NightPlanner.Occasion.PIECE);
+        int queued = planner.plan(pet, AwakeClock.dateOf(now, pet.zone()), NightPlanner.Occasion.PIECE);
         if (queued > 0) {
             claimAndBake(freshlyQueued(pet.getId()), now);
         }
@@ -176,6 +180,7 @@ public class BakeTrigger {
     private List<ZzalMotion> freshlyQueued(Long petId) {
         return motionRepository.findByPetIdOrderBySeqAsc(petId).stream()
                 .filter(m -> m.getStatus() == MotionStatus.QUEUED)
+                .filter(m -> !com.lore.zzal.motion.RetiredRewardGeneration.isRetiredNewMotion(m.getSeq()))
                 .toList();
     }
 
@@ -212,6 +217,7 @@ public class BakeTrigger {
         //   엔티티로 상태만 바꾸면 두 곳이 동시에 "내가 집었다" 고 볼 수 있다.
         List<Long> ids = rows.stream()
                 .filter(m -> m.getStatus() == MotionStatus.QUEUED)
+                .filter(m -> !com.lore.zzal.motion.RetiredRewardGeneration.isRetiredNewMotion(m.getSeq()))
                 .map(ZzalMotion::getId)
                 .filter(id -> motionRepository.claim(id, now, server) == 1)
                 .toList();
@@ -251,5 +257,23 @@ public class BakeTrigger {
         } catch (Exception e) {
             return "unknown";
         }
+    }
+
+    /**
+     * dev(리모컨) — 그 줄을 지금 큐에 올리고 집어서 굽는다(선물·심화 아무 seq). 굽기는 운영과 같은 길
+     * ({@code motionService.bakeNow})이고 그림 클라이언트가 가짜면 돈 0, 진짜면 한 판 값이 나간다.
+     *
+     * @return 실제로 집었으면 true. 이미 굽는 중·판정을 지난 줄이면 false
+     */
+    @Transactional
+    public boolean devBake(ZzalMotion row, Instant now) {
+        // 폐기된 구 선물/해금은 개발 리모컨에서도 새로 생성하지 않는다.
+        if (com.lore.zzal.motion.RetiredRewardGeneration.isRetiredNewMotion(row.getSeq())) return false;
+        // dev 전용 — 펫을 안 받으므로 날짜는 KST(운영 판정과 무관한 확인용 칸이다).
+        if (!row.queue(AwakeClock.dateOf(now))) {
+            return false;
+        }
+        claimAndBake(List.of(row), now);
+        return true;
     }
 }

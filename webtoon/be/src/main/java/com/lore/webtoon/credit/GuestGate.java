@@ -131,6 +131,11 @@ public class GuestGate {
         return loggedIn() || freePerDay <= 0 ? null : hash(clientIp(request));
     }
 
+    /** 토큰은 있지만 그 계정이 이 DB 에 없는 사람(다른 환경의 쿠키) — 로그인 여부를 보지 않고 게스트 열쇠를 준다(2026-11-03). */
+    public String keyOfAsGuest(HttpServletRequest request) {
+        return freePerDay <= 0 ? null : hash(clientIp(request));
+    }
+
     /**
      * 열쇠로 되돌린다. 만들기가 <b>한참 뒤에</b> 실패했을 때 쓴다.
      *

@@ -25,10 +25,12 @@ public interface UsageRepository extends JpaRepository<UsageRecord, Long> {
      *
      * <b>캐릭터 만들기(char-)는 편수에서 뺀다</b> — 돈(krwBetween)에는 들어가지만
      * 웹툰 한 편이 아니다. 안 빼면 캐릭터를 만들 때마다 웹툰 몫이 줄어든다(#444).
+     * 설정집 정리(lore-extract-)와 다음 화 앞의 회차 정리(series-digest-)도 같은 이유로 뺀다.
      */
     @Query("select count(distinct u.runId) from UsageRecord u "
             + "where u.calledAt >= :from and u.calledAt < :to "
-            + "and u.runId not like 'char-%'")
+            + "and u.runId not like 'char-%' and u.runId not like 'lore-extract-%' "
+            + "and u.runId not like 'series-digest-%'")
     long runsBetween(@Param("from") Instant from, @Param("to") Instant to);
 
     /** 무엇에 얼마나 썼는지 — [단계, 모델, 원, 건수]. 그림이 대부분이라 그것부터 보인다. */

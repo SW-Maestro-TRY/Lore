@@ -98,6 +98,36 @@ public class AnalyticsEvent {
     @Column(name = "received_at", nullable = false)
     private Instant receivedAt;
 
+    @Column(name = "event_origin", nullable = false, length = 16)
+    private String eventOrigin="browser";
+    public AnalyticsEvent serverOrigin() { eventOrigin="server"; return this; }
+    public String getEventOrigin() { return eventOrigin; }
+    @Column(name = "identity_status", length = 24)
+    private String identityStatus;
+    public AnalyticsEvent identityStatus(String value) { identityStatus=value; return this; }
+    public String getIdentityStatus() { return identityStatus; }
+    @Column(name = "reported_ts")
+    private Long reportedTs;
+    @Column(name = "timestamp_quality", length = 24)
+    private String timestampQuality;
+    public AnalyticsEvent reportedTime(Long ts, String quality) { reportedTs=ts; timestampQuality=quality; return this; }
+    public Long getReportedTs() { return reportedTs; }
+    public String getTimestampQuality() { return timestampQuality; }
+    @Column(name = "event_id", length = 36)
+    private String eventId;
+    @Column(name = "schema_version")
+    private Integer schemaVersion;
+    @Column(name = "session_id", length = 36)
+    private String sessionId;
+    @Column(length = 16)
+    private String context;
+    @Column(name = "source_screen", length = 64)
+    private String sourceScreen;
+
+    public AnalyticsEvent envelope(String eventId, Integer schemaVersion, String sessionId, String context, String sourceScreen) {
+        this.eventId=eventId; this.schemaVersion=schemaVersion; this.sessionId=sessionId;
+        this.context=context; this.sourceScreen=sourceScreen; return this;
+    }
     protected AnalyticsEvent() {
     }
 
@@ -138,4 +168,16 @@ public class AnalyticsEvent {
     public Instant getOccurredAt() {
         return occurredAt;
     }
+    public String getProps() { return props; }
+    public String getPath() { return path; }
+    public String getReferrer() { return referrer; }
+    public String getSource() { return source; }
+    public String getDevice() { return device; }
+    public String getVariant() { return variant; }
+    public Instant getReceivedAt() { return receivedAt; }
+    public String getEventId() { return eventId; }
+    public Integer getSchemaVersion() { return schemaVersion; }
+    public String getSessionId() { return sessionId; }
+    public String getContext() { return context; }
+    public String getSourceScreen() { return sourceScreen; }
 }

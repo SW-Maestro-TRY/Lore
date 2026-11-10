@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="376" viewBox="0 0 760 376" role="img" aria-label="동시 20명이 만들 때 마지막 사람 대기 시간">
+<style>
+.bg{fill:#fcfcfb} .t1{fill:#0b0b0b} .t2{fill:#52514e} .mu{fill:#898781} .grid{stroke:#e4e3df} .axis{stroke:#898781}
+.b{fill:#86b6ef} .hi{fill:#1c5cab} text{font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif}
+@media (prefers-color-scheme: dark){ .bg{fill:#1a1a19} .t1{fill:#fff} .t2{fill:#c3c2b7} .grid{stroke:#383835} .b{fill:#184f95} .hi{fill:#6da7ec} }
+</style>
+<rect class="bg" width="760" height="376" rx="8"/>
+<text class="t1" x="20" y="30" font-size="16" font-weight="700">20명이 동시에 「만들기」를 누르면, 마지막 사람이 받기까지</text>
+<text class="t2" x="20" y="50" font-size="12">분 · 가짜 하네스 실측(실제의 1/10 속도) × 10 · 실패 0건</text>
+<line class="grid" x1="250.0" y1="64" x2="250.0" y2="342"/><text class="mu" x="250.0" y="358" font-size="11" text-anchor="middle">0분</text>
+<line class="grid" x1="338.0" y1="64" x2="338.0" y2="342"/><text class="mu" x="338.0" y="358" font-size="11" text-anchor="middle">10분</text>
+<line class="grid" x1="426.0" y1="64" x2="426.0" y2="342"/><text class="mu" x="426.0" y="358" font-size="11" text-anchor="middle">20분</text>
+<line class="grid" x1="514.0" y1="64" x2="514.0" y2="342"/><text class="mu" x="514.0" y="358" font-size="11" text-anchor="middle">30분</text>
+<line class="grid" x1="602.0" y1="64" x2="602.0" y2="342"/><text class="mu" x="602.0" y="358" font-size="11" text-anchor="middle">40분</text>
+<line class="grid" x1="690.0" y1="64" x2="690.0" y2="342"/><text class="mu" x="690.0" y="358" font-size="11" text-anchor="middle">50분</text>
+<text class="t1" x="238" y="86" font-size="13" text-anchor="end" font-weight="400">workers 2 · page-workers 3</text>
+<text class="t2" x="238" y="102" font-size="11" text-anchor="end">코드 기본값 · staging</text>
+<path class="b" d="M250,74 H668.4 Q672.4,74 672.4,78 V94 Q672.4,98 668.4,98 H250 Z"/>
+<text class="t1" x="680.4" y="91" font-size="13" font-weight="400">약 48분</text>
+<text class="t1" x="238" y="132" font-size="13" text-anchor="end" font-weight="700">workers 3 · page-workers 4</text>
+<text class="t2" x="238" y="148" font-size="11" text-anchor="end">운영 (2026-10-04~)</text>
+<path class="hi" d="M250,120 H545.2 Q549.2,120 549.2,124 V140 Q549.2,144 545.2,144 H250 Z"/>
+<text class="t1" x="557.2" y="137" font-size="13" font-weight="700">약 34분</text>
+<text class="t1" x="238" y="178" font-size="13" text-anchor="end" font-weight="400">workers 2 · page-workers 6</text>
+<path class="b" d="M250,166 H527.6 Q531.6,166 531.6,170 V186 Q531.6,190 527.6,190 H250 Z"/>
+<text class="t1" x="539.6" y="183" font-size="13" font-weight="400">약 32분</text>
+<text class="t1" x="238" y="224" font-size="13" text-anchor="end" font-weight="400">workers 3 · page-workers 6</text>
+<text class="t2" x="238" y="240" font-size="11" text-anchor="end">다음 단계 후보</text>
+<path class="b" d="M250,212 H466.0 Q470.0,212 470.0,216 V232 Q470.0,236 466.0,236 H250 Z"/>
+<text class="t1" x="478.0" y="229" font-size="13" font-weight="400">약 25분</text>
+<text class="t1" x="238" y="270" font-size="13" text-anchor="end" font-weight="400">workers 4 · page-workers 6</text>
+<path class="b" d="M250,258 H457.2 Q461.2,258 461.2,262 V278 Q461.2,282 457.2,282 H250 Z"/>
+<text class="t1" x="469.2" y="275" font-size="13" font-weight="400">약 24분</text>
+<text class="t1" x="238" y="316" font-size="13" text-anchor="end" font-weight="400">workers 6 · page-workers 6</text>
+<path class="b" d="M250,304 H439.6 Q443.6,304 443.6,308 V324 Q443.6,328 439.6,328 H250 Z"/>
+<text class="t1" x="451.6" y="321" font-size="13" font-weight="400">약 22분</text>
+</svg>

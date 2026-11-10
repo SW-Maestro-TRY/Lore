@@ -8,6 +8,7 @@
  * 로그인이 필요한 자리(`/my/...`)만 공용 클라이언트(`@common/api/client`)로
  * 부른다 — 그쪽은 봉투(`{success, data}`)를 벗겨 준다. */
 import { request as appRequest } from "@common/api/client";
+import { getMe } from "@common/auth/api";
 import { translateNow } from "./i18n";
 import "./serverI18n";   // 서버가 보내는 한국어 문구의 사전
 
@@ -90,8 +91,40 @@ export class WebtoonApiError extends Error {
   }
 }
 
+/* ---- 로그인이 끊기지 않게 -------------------------------------------------
+ *
+ * 로그인 쿠키(access)는 30분이면 만료된다. 공용 요청(`@common/api/client`)은 401 을
+ * 받으면 refresh 로 새로 받아 한 번 더 보내는데, 웹툰 요청은 봉투 모양이 달라서 그
+ * 함수를 못 쓰고 fetch 를 바로 불러 왔다. 그래서 편집실·만들기에서 30분쯤 지나면
+ * 멀쩡히 로그인한 사람에게 「로그인이 필요합니다」가 떴다(2026-10-28 사용자 제보).
+ *
+ * **refresh 를 여기서 직접 부르지 않는다.** 서버는 refresh 를 회전시키고, 이미 쓴
+ * refresh 가 다시 오면 탈취로 보고 그 사람의 토큰을 전부 폐기한다 — 공용 쪽과 동시에
+ * 두 번 부르면 곧바로 전 기기 로그아웃이다. 그래서 공용의 `getMe()` 를 불러, 공용 요청의
+ * 한 줄기 갱신(refreshOnce)을 그대로 탄다. 갱신이 되면 원래 요청을 한 번만 다시 보낸다. */
+let renewing: Promise<boolean> | null = null;
+
+function renewSession(): Promise<boolean> {
+  if (!renewing) {
+    renewing = getMe()
+      .then(() => true, () => false)
+      .finally(() => {
+        renewing = null;
+      });
+  }
+  return renewing;
+}
+
+/** fetch 와 같다. 다만 401 이면 로그인을 이어 붙여 보고, 되면 한 번 더 보낸다. */
+export async function authFetch(input: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, init);
+  if (res.status !== 401) return res;
+  if (!(await renewSession())) return res;
+  return fetch(input, init);
+}
+
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(BASE + path, {
+  const res = await authFetch(BASE + path, {
     ...init,
     /* 이 브라우저가 누구인지 늘 같이 보낸다 — 캐릭터는 로그인 없이도 만들
        수 있어서, 게스트가 만든 것은 이 값으로만 자기 것임을 말할 수 있다. */
@@ -104,7 +137,11 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
     /* 본문이 JSON 이 아닐 수 있다 */
   }
   if (!res.ok) {
-    throw new WebtoonApiError(reasonOf(body) || `요청이 실패했습니다 (${res.status})`, res.status);
+    /* 서버까지 못 간 403 은 본문이 없다(방화벽). 숫자만 보여 주면 무엇을 해야 할지 알 수 없다. */
+    const fallback = res.status === 403
+      ? "보안 검사에 막혀 보내지 못했습니다. 글을 조금 줄이거나 특수 기호를 빼고 다시 시도해 주세요"
+      : `요청이 실패했습니다 (${res.status})`;
+    throw new WebtoonApiError(reasonOf(body) || fallback, res.status);
   }
   return body as T;
 }
@@ -115,6 +152,27 @@ function post<T>(path: string, body?: unknown): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body ?? {}),
   });
+}
+
+export type WebtoonContactCategory = "WEBTOON" | "ACCOUNT_CREDITS" | "ERROR" | "OTHER";
+
+/** 웹툰 문의를 운영 메일로 보낸다. 답장 주소와 본문은 서버가 길이와 형식을 다시 확인한다. */
+export function sendWebtoonContact(input: {
+  email: string;
+  category: WebtoonContactCategory;
+  message: string;
+  privacyConsent: boolean;
+  files: File[];
+  website?: string;
+}): Promise<{ sent: boolean }> {
+  const body = new FormData();
+  body.append("email", input.email);
+  body.append("category", input.category);
+  body.append("message", input.message);
+  body.append("privacyConsent", String(input.privacyConsent));
+  body.append("website", input.website || "");
+  input.files.forEach((file) => body.append("files", file));
+  return call("/contact", { method: "POST", body });
 }
 
 /* ---- 만들기 전에: 무엇으로 만드나 ----------------------------------------- */
@@ -128,12 +186,19 @@ export interface Allowance {
   free_per_day?: number;
   balance?: number;
   blocked?: string | null;
-  qualities?: { key: string; label: string; credits: number }[];
+  qualities?: { key: string; label: string; credits: number; regular_credits?: number; base_pages?: number; extra_page_credits?: number }[];
   quality_default?: string;
+  /** 함께 주인공 한 사람당 값(조연 시트 값과 같다)과 고를 수 있는 수(#899). */
+  co_sheet_credits?: number;
+  co_max?: number;
 }
 
 export function readAllowance(): Promise<Allowance> {
   return call<Allowance>("/nh/allowance");
+}
+
+export function readPlayAllowance(): Promise<Allowance> {
+  return call<Allowance>("/play/allowance");
 }
 
 /** 딱지 한 줄. 적을 것이 없으면 빈 문자열. */
@@ -209,6 +274,7 @@ export interface NhDirection {
 
 /** 만들기에서 적은 것(#548). 이야기·제목은 장면 확인 화면의 「이야기 (고치기)」가 고치고, 여기서는 보기만 한다. */
 export interface NhJobInput {
+  lorebook?: LoreBook | null;
   name: string;
   description: string;
   genre: string;
@@ -237,7 +303,8 @@ export interface NhJob {
   /** 장면 확인 차례(awaiting_scenes)에만 — 장면 초안 목록(#548). */
   scenes?: NhScene[] | null;
   /** own 길에서 장면 확인 차례에만 — 적은 내용을 1화 본문으로 다듬은 것(#548). */
-  story?: { title: string; body: string; /** own 길에서 1화를 다시 만든 횟수(#548) — 첫 번째는 무료 */ redraws?: number } | null;
+  story?: { title: string; body: string; /** own 길에서 1화를 다시 만든 횟수(#548) — 첫 번째는 무료 */ redraws?: number;
+    /** 연재 2화부터 작품 제목(1화 제목). 이때 title 은 이 화의 소제목이다. */ series_title?: string } | null;
   /** 장면 확인 차례에만 — 사람이 만들기에서 적은 것 그대로(#548). 「내가 적은 것」 카드가 보여 준다. */
   input?: NhJobInput | null;
   /** 시트가 다 그려졌나. 그림체를 바꾸면 다시 그리는 동안 false(#548). 없으면 그려진 것으로 본다. */
@@ -248,11 +315,24 @@ export interface NhJob {
   sheet_fix_left?: number;
   /** 다 만들었지만 이미지 안전 기준에 걸려 빈 장으로 둔 장 번호들(#626) */
   unsafe_pages?: number[];
+  /** 몇 화인가 — 다음 화로 만든 작업이면 2 이상. 없으면 1화 */
+  episode?: number;
+  /** 서버 재시작으로 끊겨 「이어서 만들기」를 할 수 있나, 그때 받는 크레딧(0 이면 무료) */
+  resumable?: boolean;
+  resume_cost?: number;
   /** 보관된 옛 시트 수(#548). 다시 만들 때마다 전 것이 1, 2, … 로 남고 sheetVersionUrl 로 본다. */
   sheet_versions?: number | null;
   /** 조연 시트(#548) — 뽑기를 누른 인물마다 상태. ready 가 false 면 그리는 중. */
   cast_sheets?: { name: string; ready: boolean }[] | null;
+  /** 함께 주인공의 시트(#899) — 그림은 castSheetImageUrl 자리. 주인공이 한 명이면 없다.
+      versions: 보관한 옛 판 수 · persona: 그 사람의 주인공 카드 · blocked: 이 사람 시트가 안전 기준에 걸려 멈췄나 ·
+      description: 시트 고치기 칸의 처음 값. */
+  co_sheets?: { name: string; ready: boolean; versions?: number; persona?: NhPersona | null; blocked?: boolean;
+    description?: string }[] | null;
   pick: number | null;
+  /** 게스트가 이야기 고르기에서 앞으로 몇 초 안에 골라야 하나(#851). 화면이 앞에 떠 있는 동안은 묻을 때마다
+      다시 채워진다. 로그인했거나 고르는 자리가 아니면 없다 — 끝없이 기다린다. */
+  pick_seconds_left?: number | null;
   style: string;
   style_label: string;
   stage: string;
@@ -274,6 +354,7 @@ export interface NhJob {
 }
 
 export interface NhCreateRequest {
+  lorebook?: LoreBook | null;
   name: string;
   character: string;
   photo_note: string;
@@ -290,12 +371,64 @@ export interface NhCreateRequest {
   agree_ip: boolean;
   checkpoints: boolean;
   character_id?: string;
-  /** 어느 길로 만드나(#548). own 이면 checkpoints 는 항상 true 로 보낸다. */
+  /** 함께 주인공으로 고른 내 캐릭터(#899). 없으면 한 명. */
+  co_character_ids?: string[];
+  /** 어느 길로 만드나(#548). */
   mode?: NhMode;
   /** own 길의 「설정 더 적기」 — 인물·세계·지킬 것을 한 칸에 적은 자유 글. 없으면 빈 문자열. */
   settings?: string;
   /** own 길의 제목(선택). 비우면 AI 가 짓는다. */
   title?: string;
+}
+
+export function listPlayWorlds<T>(): Promise<{ worlds: T[] }> {
+  return call("/play/worlds");
+}
+
+/**
+ * 세계관 체험 만화가 사건의 원래 전개와 갈라진 곳(2026-11-04, 서버 PlayBranch). 갈림 정리 전의 옛 작품엔 없다.
+ * page 는 갈라진 장면이 그려진 장 번호(0 이면 안 갈림), group 은 같은 선택끼리 묶는 갈래 이름.
+ */
+export interface PlayBranch {
+  at: number; scene: number; page: number;
+  canon: string; this: string; why: string; end: string; label: string; group: string;
+  canon_end: string; canon_lines: string[];
+}
+/** 세계관 체험으로 만든 만화 — 일반 작품 카드에 어느 세계 · 사건이었는지가 붙는다. */
+export type PlayRunCard = RunCard & { world_id: string; world_name: string; event_id: string; event_title: string; branch?: PlayBranch };
+/** 내가 체험한 만화(최근 순). 게스트는 브라우저 번호(uid)로 찾는다. */
+export function myPlayRuns(): Promise<{ runs: PlayRunCard[] }> {
+  return call("/play/runs/mine");
+}
+/** 이 사건에서 다른 사람들이 만든 만화(공개 · 완성된 것만). */
+export function eventPlayRuns(eventId: string): Promise<{ runs: PlayRunCard[] }> {
+  return call(`/play/events/${encodeURIComponent(eventId)}/runs`);
+}
+
+/** 최근 체험 만화(공개 · 완성된 것, 최근 순). world 를 주면 그 세계 것만 — 홈 칸과 세계 안 사건별 선반. */
+export function recentPlayRuns(world?: string): Promise<{ runs: PlayRunCard[] }> {
+  return call(`/play/runs${world ? `?world=${encodeURIComponent(world)}` : ""}`);
+}
+
+/** 세계관 만들기 · AI 로 채우기 — 바로 { id, making:"running" } 을 주고 뒤에서 짓는다. id 를 넣으면 다시 만들기.
+ *  빈 칸이 채워지고 examples 에 새로 그린 캐릭터 둘이 들어간다. 끝났는지는 readPlayWorld 의 making 이 "idle" 인지로 본다. */
+export function makePlayWorld(body: { id?: string; draft: object; lorebook_id?: string; note?: string }): Promise<{ id: string; making: string }> {
+  return post("/play/worlds/make", body);
+}
+export function readPlayWorld<T>(id: string): Promise<T> {
+  return call(`/play/worlds/${encodeURIComponent(id)}`);
+}
+
+/** 세계관 만들기 — 만든 사람이 정한 세계 · 등장인물 · 사건 · 예시 캐릭터를 올린다(로그인 필요). */
+export function savePlayWorld(body: object, id?: string): Promise<{ id: string }> {
+  return call(id ? `/play/worlds/${encodeURIComponent(id)}` : "/play/worlds", {
+    method: id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+}
+
+/** 세계관 체험 시작. 실패하면 서버 문구 그대로 WebtoonApiError 로 던진다(402 · 429 · 400). */
+export function startPlayRun(body: { world_id: string; event_id: string; character_id: string; agree_ip: boolean; quality: string; language: string }): Promise<{ id: string; queue_position?: number }> {
+  return post("/play/runs", { ...body, uid: getUid() });
 }
 
 export function createJob(form: NhCreateRequest): Promise<{ id: string; credit_balance?: number }> {
@@ -332,8 +465,14 @@ export function myActiveJobs(): Promise<{ jobs: NhJob[]; cards?: NhActiveCard[] 
   return call<{ jobs: NhJob[]; cards?: NhActiveCard[] }>(`/nh/jobs/mine?uid=${encodeURIComponent(getUid())}`);
 }
 
-export function decideSheet(id: string, decision: "approve" | "retry", note = "") {
-  return post(`/nh/jobs/${encodeURIComponent(id)}/sheet-decision`, note ? { decision, note } : { decision });
+/** 서버 재시작으로 끊긴 작업을 멈춘 걸음부터 이어서 만든다 — 그린 장은 다시 안 그린다. */
+export function resumeJob(id: string) {
+  return post(`/nh/jobs/${encodeURIComponent(id)}/resume`, {});
+}
+
+export function decideSheet(id: string, decision: "approve" | "retry", note = "", who?: string | null) {
+  /* who — 함께 주인공의 시트를 다시 만들 때 그 이름(#899). 없으면 첫 주인공. */
+  return post(`/nh/jobs/${encodeURIComponent(id)}/sheet-decision`, { decision, ...(note ? { note } : {}), ...(who ? { who } : {}) });
 }
 
 /** 인물 단계의 답 — 고른 상대 번호(1~), 적은 인물을 확인하고 진행이면 0. */
@@ -384,7 +523,7 @@ export function retryDirections(id: string, note = "") {
 }
 
 /** 걸린 캐릭터 시트를 사진·외모 설명을 바꿔 다시 그린다(#626). 사진은 만들기처럼 S3 로 먼저 올린다. */
-export function fixSheet(id: string, body: { photo_keys?: string[]; photos_data?: string[]; character?: string; note?: string }) {
+export function fixSheet(id: string, body: { photo_keys?: string[]; photos_data?: string[]; character?: string; note?: string; who?: string }) {
   return post<{ ok: boolean }>(`/nh/jobs/${encodeURIComponent(id)}/sheet-fix`, body);
 }
 
@@ -408,6 +547,11 @@ export function pushUnsubscribe(endpoint: string): Promise<{ ok: boolean }> {
   return post("/push/unsubscribe", { endpoint });
 }
 
+/** 앱 출시 알림 신청(출시날 50크레딧, #981). 같은 이메일은 한 번만 적힌다 — already 가 true 면 이미 있던 이메일. */
+export function joinAppWaitlist(email: string, where: string, device?: string, lang?: string): Promise<{ ok: boolean; already: boolean }> {
+  return post("/app-waitlist", { email, where, device, lang, uid: getUid() });
+}
+
 export function notifyByEmail(id: string, email: string): Promise<{ email: string | null }> {
   return post(`/nh/jobs/${encodeURIComponent(id)}/notify`, { email });
 }
@@ -416,12 +560,12 @@ export function sheetImageUrl(jobId: string, v: number | string = ""): string {
   return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet.png${v ? `?v=${v}` : ""}`;
 }
 /** v 번째 옛 시트 그림(#548). */
-export function sheetVersionUrl(jobId: string, v: number): string {
-  return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet-v${v}.png`;
+export function sheetVersionUrl(jobId: string, v: number, who?: string | null): string {
+  return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet-v${v}.png${who ? `?who=${encodeURIComponent(who)}` : ""}`;
 }
-/** v 번째 옛 시트를 현재 시트로 되돌린다(#548). */
-export function restoreSheet(id: string, v: number) {
-  return post<NhJob>(`/nh/jobs/${encodeURIComponent(id)}/sheet-restore`, { v });
+/** v 번째 옛 시트를 현재 시트로 되돌린다(#548). who 가 있으면 그 함께 주인공의 시트(#899). */
+export function restoreSheet(id: string, v: number, who?: string | null) {
+  return post<NhJob>(`/nh/jobs/${encodeURIComponent(id)}/sheet-restore`, who ? { v, who } : { v });
 }
 
 /** 조연 시트 그림(#548). */
@@ -443,21 +587,36 @@ export function jobPageUrl(jobId: string, no: number, width = 260): string {
 export interface RunCard {
   run_id: string;
   character: string;
+  /** 작품 제목 — 연재 2화부터는 1화 제목이다. */
   title: string;
+  /** 연재 2화부터 이 화의 소제목. */
+  subtitle?: string;
+  /** 이 카드가 몇 화인가 — 연재로 묶은 카드는 1. */
+  episode?: number;
   genre: string;
   episodes: number[];
+  /** 연재 회차 버튼이 각 회차 완성본으로 이동할 때 쓰는 run_id. */
+  episode_run_ids?: Record<string, string>;
   next_episode?: number;
   cover_episode?: number;
   cover_page?: number;
   page_count: number;
   style_label?: string;
   public?: boolean;
+  /** 공개 범위 세 단계(#898) — 내 목록에만 온다. */
+  visibility?: Visibility;
   /** 찜 수(#247). 서버가 카드마다 붙인다. */
   likes?: number;
+  /** 본 사람 수 — 둘러보기 목록에만 온다(조회순 정렬). 연재는 회차를 더한 값. */
+  views?: number;
+  /** 인기순 자리 — 관리자가 정한다. 작을수록 앞, 비어 있으면 정해진 것들 뒤(조회순). 둘러보기 목록에만 온다. */
+  rank?: number | null;
   /** 내가 찜했나. 찜 목록(/my/likes)에서만 서버가 붙이고, 둘러보기는 likedAmong 으로 화면이 채운다. */
   liked?: boolean;
   /** 관리자 처리(#638) — 내 목록 · 휴지통에서만 온다. */
   moderation?: ModerationNote;
+  /** 잘라 둔 썸네일이 있다 — 카드는 표지 대신 thumbUrl 을 쓴다(2026-11-04). */
+  thumb?: boolean;
 }
 
 /** 관리자 처리 한 칸(#638). state 가 없으면 경고만 받은 작품이다. */
@@ -509,14 +668,96 @@ export function myBrowserRuns(): Promise<RunCard[]> {
     .then((got) => got.runs || []);
 }
 
+/* ---- 「링크 공유(일부공개)」 작품의 열쇠(#898) -----------------------------------
+ *
+ * 링크 공유 작품은 작품 번호만으로는 안 열리고, 공유 주소의 `k` 가 실려 와야 연다. 그 작품을 읽는 모든
+ * 주소(결과 · 장 그림 · 표지 · 내려받기 · 회차 목록)에 같은 열쇠를 붙여야 해서 여기 한 곳에서 붙인다 —
+ * `<img src>` 에는 머리말을 못 실으므로 주소에 싣는다.
+ *
+ * 받은 열쇠는 작품 번호마다 이 브라우저에 기억한다(최근 본 작품 표지를 다시 그릴 때도 쓰려고). 못 남겨도
+ * 이번 화면에서는 돈다. */
+const SHARE_KEYS = "wt-share-keys";
+const shareKeys = new Map<string, string>();
+let shareKeysLoaded = false;
+
+function loadShareKeys() {
+  if (shareKeysLoaded || typeof window === "undefined") return;
+  shareKeysLoaded = true;
+  try {
+    const got = JSON.parse(localStorage.getItem(SHARE_KEYS) || "{}") as Record<string, string>;
+    for (const [run, key] of Object.entries(got)) if (typeof key === "string" && key) shareKeys.set(run, key);
+  } catch { /* 저장소가 막혀도 이번 화면은 돈다 */ }
+}
+
+/** 공유 주소로 들어온 열쇠를 기억한다. 주인이 결과에서 받은 열쇠도 여기 넣는다. */
+export function rememberShareKey(runId: string, key: string | null | undefined) {
+  if (!runId || !key) return;
+  loadShareKeys();
+  if (shareKeys.get(runId) === key) return;
+  shareKeys.set(runId, key);
+  try {
+    localStorage.setItem(SHARE_KEYS, JSON.stringify(Object.fromEntries([...shareKeys].slice(-200))));
+  } catch { /* 위와 같다 */ }
+}
+
+/** 비공개로 바꿔 열쇠가 버려졌을 때 — 남은 열쇠로 계속 부르지 않게. */
+export function forgetShareKey(runId: string) {
+  loadShareKeys();
+  if (!shareKeys.delete(runId)) return;
+  try { localStorage.setItem(SHARE_KEYS, JSON.stringify(Object.fromEntries(shareKeys))); } catch { /* 위와 같다 */ }
+}
+
+export function shareKeyOf(runId: string): string | undefined {
+  loadShareKeys();
+  return shareKeys.get(runId);
+}
+
+/** 그 작품의 열쇠가 있으면 주소에 `k` 로 붙인다. */
+function withKey(url: string, runId: string): string {
+  const key = shareKeyOf(runId);
+  return key ? `${url}${url.includes("?") ? "&" : "?"}k=${encodeURIComponent(key)}` : url;
+}
+
+/* ---- 카드 썸네일(2026-11-04) -------------------------------------------------
+ * 장 그림에서 잘라 낸 한 장면. 서버가 기본으로 가장 큰 컷을 자르고, 주인이 바꿀 수 있다. 아직 없으면 서버가
+ * 첫 장 그림으로 넘겨 주고 뒤에서 만든다. 바꾼 뒤에는 같은 주소가 새 그림을 가리키도록 v 를 붙인다. */
+const thumbVersion = new Map<string, number>();
+export function thumbUrl(runId: string): string {
+  const v = thumbVersion.get(runId);
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/thumb${v ? `?v=${v}` : ""}`, runId);
+}
+/** 카드 그림 — 썸네일이 있으면 썸네일, 없으면 표지(첫 장). */
+export function cardImageUrl(r: { run_id: string; cover_page?: number; cover_episode?: number; thumb?: boolean }): string | null {
+  if (r.thumb) return thumbUrl(r.run_id);
+  return r.cover_page ? coverUrl(r.run_id, r.cover_page, r.cover_episode ?? 1) : null;
+}
+export interface ThumbBox { page: number; x: number; y: number; w: number; h: number }
+/** 지금 썸네일 자리와 고를 수 있는 장 번호. 주인 · 관리자만. */
+export function readThumb(runId: string): Promise<{ pages: number[]; by_owner?: boolean } & Partial<ThumbBox>> {
+  return call(`/my/runs/${encodeURIComponent(runId)}/thumb`);
+}
+export async function saveThumb(runId: string, box: ThumbBox): Promise<void> {
+  await call(`/my/runs/${encodeURIComponent(runId)}/thumb`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(box) });
+  thumbVersion.set(runId, Date.now());
+}
+export async function resetThumb(runId: string): Promise<void> {
+  await call(`/my/runs/${encodeURIComponent(runId)}/thumb`, { method: "DELETE" });
+  thumbVersion.set(runId, Date.now());
+}
+
 export function coverUrl(runId: string, page: number, episode = 1): string {
-  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${page}?w=320&ep=${episode}`;
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/page/${page}?w=320&ep=${episode}`, runId);
 }
 
 export interface RunResult {
+  /** 이 회차의 찜 수 */
+  likes?: number;
   run_id: string;
   character: string;
+  /** 작품 제목 — 연재 2화부터는 1화 제목이다. 이 화의 제목은 subtitle. */
   title: string;
+  /** 연재 2화부터 이 화의 소제목. 제목 고치기는 이것을 고친다. */
+  subtitle?: string;
   genre: string;
   style_label: string;
   logline: string;
@@ -527,14 +768,33 @@ export interface RunResult {
   preview: boolean;
   /** 둘러보기에 심어 둔 예시 작품 — 내 것이 아니어도 내려받을 수 있다. */
   example?: boolean;
+  /** 세계관 체험 만화면 원래 전개와 갈라진 곳(갈림 정리를 했을 때만) */
+  branch?: PlayBranch;
   /** 관리자가 열 때만 온다(#329, #428) — 만들 때 넣은 설정. */
   inputs?: RunInputs;
   /** 이미지 안전 기준에 걸려 빈 장으로 완성된 장 번호들(#626) */
   unsafe_pages?: number[];
+  /** 그 장마다 걸린 이유(선정성·폭력·잔혹 …) — 장 번호 → 사람이 읽는 말(2026-10-27) */
+  unsafe_reasons?: Record<string, string>;
+  /** 같은 이유를 코드로(sexual · violence …) — 화면이 언어마다 이름을 붙인다. 빈 목록이면 「안전 기준」 */
+  unsafe_kinds?: Record<string, string[]>;
+  /** 크레딧이 모자라 아직 안 그린 장 번호들 — 한 편 값은 기본 장 수(base_pages)까지다 */
+  pending_pages?: number[];
+  /** 남은 장의 장면 한 줄 — 잠긴 장을 웹툰 흐름 안에서 「다음 장면」으로 보여 준다 */
+  pending_scenes?: { no: number; caption: string }[];
+  /** 기본 장 수를 넘는 장 하나 값(이 작품의 화질 기준) */
+  extra_page_credits?: number;
+  base_pages?: number;
+  /** 남은 장 중 지금 그리는 중인 장 번호 */
+  drawing_pages?: number[];
   /** 관리자 처리(#638) — 주인과 관리자에게만 온다. */
   moderation?: ModerationNote;
-  /** 남이 열 수 있나(#638). false 면 공유 링크가 받은 사람에게 404 라 공유 버튼을 감춘다. */
+  /** 남이 열 수 있나(#638). false 면 공유 링크가 받은 사람에게 404 라 공유 버튼을 감춘다. 링크 공개도 false. */
   public?: boolean;
+  /** 공개 범위 세 단계(#898). */
+  visibility?: Visibility;
+  /** 링크 공유 작품의 열쇠 — 주인과 관리자에게만 온다. 공유 주소의 k 다. */
+  share_key?: string;
 }
 
 export interface RunInputs {
@@ -548,19 +808,38 @@ export interface RunInputs {
 }
 
 export function readResult(runId: string): Promise<RunResult> {
-  return call<RunResult>(`/runs/${encodeURIComponent(runId)}/result`);
+  return call<RunResult>(withKey(`/runs/${encodeURIComponent(runId)}/result`, runId));
+}
+
+/** 장 하나를 그리는 일의 진행 — 편집실 다시 그리기와 같은 모양이다. */
+export interface PageDrawStatus {
+  id: string;
+  page: number;
+  status: "queued" | "running" | "done" | "error" | "cancelled" | string;
+  error?: string | null;
+}
+
+/** 남겨 둔 장을 잔액이 닿는 데까지 앞에서부터 이어 그린다. 한 장도 못 그리면 402(크레딧이 모자라요). */
+export function continuePages(runId: string, count?: number): Promise<{ started: PageDrawStatus[]; left: number }> {
+  return post(`/runs/${encodeURIComponent(runId)}/continue`, count ? { count } : undefined);
+}
+
+/** 장 하나를 그리는 일이 어디까지 왔나. */
+export function pageDrawStatus(id: string): Promise<PageDrawStatus> {
+  return call<PageDrawStatus>(`/regens/${encodeURIComponent(id)}`);
 }
 
 export function pageUrl(runId: string, no: number, width = 1080, raw = false): string {
-  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}?w=${width}${raw ? "&raw=1" : ""}`;
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/page/${no}?w=${width}${raw ? "&raw=1" : ""}`, runId);
 }
 
-export function episodeDownloadUrl(runId: string): string {
-  return `${BASE}/runs/${encodeURIComponent(runId)}/episode.png`;
+/** 한 편 내려받기. plain 이면 편집실에서 얹은 것을 빼고 밑그림으로(LORE 표시는 그대로). */
+export function episodeDownloadUrl(runId: string, plain = false): string {
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/episode.png${plain ? "?plain=1" : ""}`, runId);
 }
 
-export function pageDownloadUrl(runId: string, no: number): string {
-  return `${BASE}/runs/${encodeURIComponent(runId)}/page/${no}/download`;
+export function pageDownloadUrl(runId: string, no: number, plain = false): string {
+  return withKey(`${BASE}/runs/${encodeURIComponent(runId)}/page/${no}/download${plain ? "?plain=1" : ""}`, runId);
 }
 
 export function renameRun(runId: string, title: string): Promise<{ title: string }> {
@@ -594,6 +873,11 @@ export function myLikes(): Promise<RunCard[]> {
   return appRequest<RunCard[]>("/api/webtoon/v1/my/likes");
 }
 
+/** 내가 댓글 단 웹툰 — 최근에 단 것부터. 모양은 둘러보기 카드와 같다. */
+export function myCommented(): Promise<RunCard[]> {
+  return appRequest<RunCard[]>("/api/webtoon/v1/my/commented");
+}
+
 /** 이 목록 중 내가 찜한 작품 번호. 둘러보기 카드에 하트를 칠할 때. */
 export function likedAmong(runIds: string[]): Promise<string[]> {
   if (runIds.length === 0) return Promise.resolve([]);
@@ -623,11 +907,24 @@ export function restoreRun(runId: string): Promise<{ runId: string; restored: bo
     `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/restore`, { method: "POST" });
 }
 
-export function setVisibility(runId: string, isPublic: boolean) {
-  return appRequest<{ runId: string; public: boolean }>(
+/** 공개 범위 세 단계(#898). public = 둘러보기에 공개 · link = 링크 공유(일부공개) · private = 나만. */
+export type Visibility = "public" | "link" | "private";
+
+/** 카드 · 결과에 실린 값으로 지금 공개 범위를 읽는다. visibility 가 없는 옛 서버는 public 만 본다. */
+export function visibilityOf(run: { visibility?: string; public?: boolean }): Visibility {
+  if (run.visibility === "public" || run.visibility === "link" || run.visibility === "private") return run.visibility;
+  return run.public === false ? "private" : "public";
+}
+
+export function setVisibility(runId: string, visibility: Visibility) {
+  return appRequest<{ runId: string; public: boolean; visibility?: Visibility; share_key?: string | null }>(
     `/api/webtoon/v1/my/runs/${encodeURIComponent(runId)}/visibility`,
-    { method: "POST", body: { public: isPublic } },
-  );
+    { method: "POST", body: { visibility, public: visibility === "public" } },
+  ).then((out) => {
+    if (out.share_key) rememberShareKey(runId, out.share_key);
+    else if ((out.visibility ?? visibility) === "private") forgetShareKey(runId);
+    return out;
+  });
 }
 
 /** 웹툰이 다 만들어졌을 때 계정 이메일로 알릴지. 행이 없으면(안 건드렸으면)
@@ -675,14 +972,18 @@ export interface CharacterCard {
   fate: string[];
   /** 하네스 그림체 이름(romance_fantasy …). 1화를 같은 그림체로 그릴 때 그대로 보낸다. */
   style: string;
+  /** 사용자가 카드를 고쳤나. 고쳤으면 웹툰 만들기에 고친 값만 들어간다. */
+  edited?: boolean;
 }
 
 export interface Character {
+  community_public?: boolean;
+  community_blocked?: boolean;
   id: string;
   name: string;
   description: string;
   art_url: string | null;
-  source: "photo" | "prompt" | "builtin";
+  source: "photo" | "prompt" | "builtin" | "upload" | "replaced_upload";
   status: "drawing" | "ready" | "error";
   error: string | null;
   builtin: boolean;
@@ -691,6 +992,8 @@ export interface Character {
   /** 관리자가 열 때만 온다(#428) — 사람이 넣은 이름·세계관 그대로(#329). 안 넣었으면 빈 문자열. */
   inputs?: { name: string; world: string };
   card?: CharacterCard;
+  /** 카드 캐릭터에만 온다 — 사람이 적은 설정 글 그대로. description 은 이것이 비면 카드 칸을 이어 붙인 글이다. */
+  own_description?: string;
   /** 내 카드에만 온다(#332) — 공유 링크로 남이 몇 명 봤고, 무료 횟수를 몇 번 돌려받았나. */
   share_visits?: number;
   share_bonus?: number;
@@ -736,6 +1039,8 @@ export function tryCharacter(body: {
   name?: string;
   description?: string;
   photos_data?: string[];
+  /** presign 으로 S3 에 먼저 올린 사진의 키. 있으면 photos_data 는 안 본다(#660). */
+  photo_keys?: string[];
   /** 프리셋 키 또는 직접 쓴 한 줄. 비우면 무작위. */
   world?: string;
   /** 카드 글의 언어 — 화면 언어. 서버가 모르는 값(zh 등)은 ko 로 돌린다. */
@@ -745,8 +1050,36 @@ export function tryCharacter(body: {
 }
 
 /** 직접 만들기(초상 한 장) — 백로그이지만 서버 길은 남아 있다. */
-export function createCharacter(body: { name: string; description: string; photos_data?: string[]; style?: string; language?: string }) {
+export function createCharacter(body: { name: string; description: string; photos_data?: string[]; photo_keys?: string[]; style?: string; language?: string }) {
   return post<Character>("/characters", body);
+}
+
+/** 업로드 원본 등록/교체. AI 캐릭터 뽑기와 분리한다. */
+export function saveOriginalCharacter(body: {name:string;description:string;photo_keys:string[]}, id?:string) {
+  return call<Character>(id ? `/characters/${encodeURIComponent(id)}/original` : "/characters/original", {
+    method: id ? "PATCH" : "POST", headers: {"Content-Type":"application/json"}, body:JSON.stringify(body),
+  });
+}
+
+/** 짤(키우기)에서 키운 캐릭터 — 가져오기 창이 고를 목록. 짤 캐릭터 상태는 안 바뀐다. */
+export interface ZzalCharacter {
+  pet_id: number;
+  name: string;
+  /** 가져오면 웹툰 캐릭터 설정이 될 글. */
+  description: string;
+  /** 사용자가 올린 원본 그림. */
+  image_url: string | null;
+  /** 짤이 만든 캐릭터 시트. */
+  sheet_url: string | null;
+}
+
+export function listZzalCharacters(): Promise<{ characters: ZzalCharacter[]; logged_in: boolean }> {
+  return call<{ characters: ZzalCharacter[]; logged_in: boolean }>("/characters/zzal");
+}
+
+/** 짤 캐릭터를 웹툰 내 캐릭터로 가져온다. AI 호출·크레딧 없음. */
+export function importZzalCharacter(petId: number, image: "image" | "sheet"): Promise<Character> {
+  return post<Character>(`/characters/zzal/${petId}`, { image });
 }
 
 export function renameCharacter(id: string, name: string, description: string) {
@@ -757,8 +1090,43 @@ export function renameCharacter(id: string, name: string, description: string) {
   });
 }
 
+/** AI 캐릭터 카드 고치기 — 이름·설정 글과 카드 칸을 한 번에. 빈 값·빈 목록은 그 칸을 지운다. */
+export interface CardEdit {
+  name: string;
+  description: string;
+  world: string;
+  world_label: string;
+  genre: string;
+  species: string;
+  role: string;
+  role_tier: string;
+  twist: string;
+  fate: string[];
+  dialogue: { who: string; text: string }[];
+}
+
+export function editCharacterCard(id: string, body: CardEdit) {
+  return call<Character>(`/characters/${encodeURIComponent(id)}/card`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+/** 지우기 — 바로 없애지 않고 휴지통에 넣는다(keep_days 일 보관 뒤 영구 삭제). */
 export function removeCharacter(id: string) {
-  return call<{ ok: boolean }>(`/characters/${encodeURIComponent(id)}`, { method: "DELETE" });
+  return call<{ ok: boolean; keep_days?: number }>(`/characters/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export type TrashCharacter = Character & { deleted_at: string; purge_at: string };
+
+/** 캐릭터 휴지통 — 최근에 지운 것부터. */
+export function characterTrash(): Promise<{ keep_days: number; characters: TrashCharacter[] }> {
+  return call("/characters/trash");
+}
+
+export function restoreCharacter(id: string) {
+  return post<{ ok: boolean; restored: boolean }>(`/characters/${encodeURIComponent(id)}/restore`, {});
 }
 
 /* ---- 편집실 설정 ------------------------------------------------------------ */
@@ -828,6 +1196,168 @@ export function adminSurveyRows(limit = 200): Promise<SurveyRow[]> {
   return call(`/admin/feedback?limit=${limit}`);
 }
 
+/* ---- 관리자 대시보드(#779) — 관리자만 ---------------------------------------- */
+
+/** 누구를 세나 — external(기본)은 관리자 · 멘토 · 지인을 뺀다. */
+export type AdminWho = "external" | "internal" | "all";
+
+export interface AdminKpi {
+  key: string;
+  label: string;
+  definition: string;
+  base: number;
+  hit: number;
+  /** 분모가 0이면 null */
+  pct: number | null;
+  note?: string;
+}
+
+export interface AdminOverview {
+  from: string;
+  to: string;
+  who: AdminWho;
+  totals: {
+    visitors: number;
+    signups: number;
+    createStarted: number;
+    /** 충전 창을 연 사람 · 「N원 결제하기」를 누른 사람 · 누른 횟수 */
+    chargeOpen: number;
+    chargeSubmit: number;
+    chargeSubmitClicks: number;
+    jobs: number;
+    jobsDone: number;
+    jobsFailed: number;
+    makersDone: number;
+  };
+  kpi: AdminKpi[];
+  daily: { day: string; visitors: number; createStarted: number; jobsDone: number }[];
+  /** 같은 기간 우리 쪽(관리자 · 멘토 · 지인) 방문 사람 수 */
+  internalVisitors: number;
+  /** 지금 줄 서 있거나 돌거나 사람을 기다리는 작업 */
+  runningJobs: number;
+}
+
+export function adminOverview(from: string, to: string, who: AdminWho): Promise<AdminOverview> {
+  const q = new URLSearchParams({ from, to, who });
+  return call<AdminOverview>(`/admin/dash/overview?${q}`);
+}
+
+/** 유입 출처 한 줄 — utm 을 source/medium/campaign/content 로 나눈 것. 출처가 없으면 source 가 빈 문자열 */
+export interface AdminSourceRow {
+  source: string;
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string;
+  utmContent: string;
+  visitors: number;
+  /** 입력 · 고르기 · 만들기처럼 보기 말고 무언가를 한 사람 — 광고 검토용 자동 접속은 여기 안 잡힌다 */
+  engaged: number;
+  createStarted: number;
+  loggedIn: number;
+  /** 작업이 끝난 브라우저 수 · 끝난 작업 수 */
+  makersDone: number;
+  jobsDone: number;
+}
+
+export function adminSources(from: string, to: string, who: AdminWho): Promise<{ rows: AdminSourceRow[] }> {
+  const q = new URLSearchParams({ from, to, who });
+  return call<{ rows: AdminSourceRow[] }>(`/admin/dash/sources?${q}`);
+}
+
+/* ---- 오늘 생성 상한(#617) — 관리자만. 서버를 다시 띄우지 않고 오늘(한국 자정까지)만 바꾼다 ---------- */
+
+export interface AdminSpendPair { krw: number; runs: number }
+
+export interface AdminSpend {
+  /** 한국 날짜 */
+  day: string;
+  /** 오늘 적힌 돈 · 편수 */
+  used: AdminSpendPair;
+  /** 아직 안 끝난 작업이 쓸 몫 — 상한은 이것까지 더해서 본다 */
+  reserved: AdminSpendPair;
+  /** 지금 쓰는 상한 */
+  cap: AdminSpendPair;
+  /** 설정값(Parameter Store) — 자정이 지나면 돌아갈 값 */
+  defaults: AdminSpendPair;
+  /** 오늘만 바꾼 값. 없으면 설정값을 쓰는 중 */
+  today: { krw: number | null; runs: number | null; setBy: number | null; setAt: string } | null;
+  /** 지금 새로 만들면 막히는가 */
+  blocked: boolean;
+}
+
+export function adminSpend(): Promise<AdminSpend> {
+  return call<AdminSpend>("/admin/spend");
+}
+
+export function adminSetSpend(krw: number, runs: number): Promise<AdminSpend> {
+  return call<AdminSpend>("/admin/spend", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ krw, runs }),
+  });
+}
+
+export function adminClearSpend(): Promise<AdminSpend> {
+  return call<AdminSpend>("/admin/spend", { method: "DELETE" });
+}
+
+export interface AdminPage<T> { rows: T[]; total: number; page: number; pageSize: number }
+
+export type AdminWorkState = "public" | "link" | "private" | "hidden" | "removed" | "trash";
+
+export interface AdminWorkRow {
+  run_id: string;
+  title: string | null;
+  owner_email: string | null;
+  guest: boolean;
+  state: AdminWorkState;
+  moderation_reason: string | null;
+  created_at: string;
+  pages: number;
+  cover_url: string | null;
+}
+
+export function adminWorkList(filter: string, q: string, page: number): Promise<AdminPage<AdminWorkRow>> {
+  const p = new URLSearchParams({ filter, q, page: String(page) });
+  return call(`/admin/dash/works?${p}`);
+}
+
+export interface AdminCharacterRow {
+  id: string;
+  name: string;
+  owner_email: string | null;
+  guest: boolean;
+  source: string | null;
+  status: string | null;
+  shared: boolean;
+  blocked: boolean;
+  world: string | null;
+  genre: string | null;
+  created_at: string;
+  art_url: string | null;
+  description: string | null;
+}
+
+export interface AdminCharacterDetail extends AdminCharacterRow {
+  error: string | null;
+  species: string | null;
+  role: string | null;
+  twist: string | null;
+  quote: string | null;
+  style: string | null;
+  asked_name: string | null;
+  asked_world: string | null;
+}
+
+export function adminCharacterList(filter: string, q: string, page: number): Promise<AdminPage<AdminCharacterRow>> {
+  const p = new URLSearchParams({ filter, q, page: String(page) });
+  return call(`/admin/dash/characters?${p}`);
+}
+
+export function adminCharacter(id: string): Promise<AdminCharacterDetail> {
+  return call(`/admin/dash/characters/${encodeURIComponent(id)}`);
+}
+
 /* ---- 예시 작품 관리(#614 · #619) — 관리자만 ---------------------------------------- */
 
 export interface AdminExampleRow {
@@ -855,7 +1385,8 @@ export function adminExamples(): Promise<{ examples: AdminExampleRow[] }> {
 
 /** 번들 하나를 올린다. 운영·staging 은 WAF 가 큰 본문을 막으므로 S3 로 직접 올리고 키로 심는다.
  *  S3 로 못 올리면(로컬 창고의 CORS 등) 본문으로 바로 올린다 — 로컬 · dev 는 이 길도 된다. */
-export async function adminImportBundle(file: File, dryRun: boolean): Promise<AdminImportResult> {
+/** visible=false 면 비공개로 심는다(그림도 안 열리는 자리). 나중에 예시 목록의 공개 스위치로 연다. */
+export async function adminImportBundle(file: File, dryRun: boolean, visible = true): Promise<AdminImportResult> {
   let put: Response | null = null;
   let key = "";
   try {
@@ -866,9 +1397,9 @@ export async function adminImportBundle(file: File, dryRun: boolean): Promise<Ad
     put = null;
   }
   if (put && put.ok) {
-    return post<AdminImportResult>("/admin/examples/import-key", { key, dryRun });
+    return post<AdminImportResult>("/admin/examples/import-key", { key, dryRun, public: visible });
   }
-  return call<AdminImportResult>(`/admin/examples/import?dryRun=${dryRun}`, {
+  return call<AdminImportResult>(`/admin/examples/import?dryRun=${dryRun}&public=${visible}`, {
     method: "POST",
     headers: { "Content-Type": "application/zip" },
     body: file,
@@ -881,6 +1412,15 @@ export function adminUpdateExample(runId: string, body: { example?: boolean; pub
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+  });
+}
+
+/** 둘러보기 인기순 자리를 정한다(관리자). null 이면 비운다. */
+export function adminSetBrowseRank(runId: string, rank: number | null): Promise<{ run_id: string; rank: number | null }> {
+  return call<{ run_id: string; rank: number | null }>(`/admin/browse-rank/${encodeURIComponent(runId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rank }),
   });
 }
 
@@ -914,6 +1454,8 @@ export interface ModerationState {
   run_id: string;
   title: string;
   public: boolean;
+  /** 공개 범위 세 단계(#898). 옛 서버는 안 보낸다. */
+  visibility?: Visibility;
   trashed: boolean;
   example: boolean;
   moderation: ModerationNote | null;
@@ -961,4 +1503,73 @@ export function adminRemovedWorks(): Promise<{ rows: RemovedRow[] }> {
 
 export function adminOwnerCounts(): Promise<{ rows: OwnerCountRow[] }> {
   return call("/admin/works/owners");
+}
+
+
+export interface SeriesChapter {
+  episode: number; run_id: string | null; job_id?: string; status: string; title: string;
+}
+export interface SeriesInfo { episode: number; chapters: SeriesChapter[] }
+/** 앞 화 정리(다음 화 버튼을 누르면 AI 가 앞 화를 읽고 칸을 채운다). SAVED 는 사람이 초안을 저장한 뒤. */
+export interface SeriesDigestState { status: "NONE"|"RUNNING"|"DONE"|"ERROR"|"SAVED"; error?: string }
+export interface SeriesEntry extends LoreEntry { new?: boolean; updated?: boolean; named?: boolean }
+export interface SeriesDraft {
+  episode: number; fixed_settings: string; progress_state: string; story: string; revision: number;
+  entries: SeriesEntry[]; progress: LoreProgress[]; digest: SeriesDigestState;
+  previous_state: string; source_scenes: string[]; source_run: string; title: string;
+  credit_cost: number; balance: number; blocked: string | null;
+}
+export interface SeriesForm {
+  fixed_settings: string; progress_state: string; story: string; revision: number;
+  confirmed: boolean; request_token: string; entries: SeriesEntry[]; progress: LoreProgress[];
+  /** false 면 「바로 만들기」 — 확인 자리 없이 끝까지. 만들기 요청에만 싣는다. */
+  checkpoints?: boolean;
+}
+export function readSeries(run: string): Promise<SeriesInfo> {
+  return call(withKey(`/series/${encodeURIComponent(run)}`, run));
+}
+/** 써 두고 아직 만들지 않은 다음 화 초안 — 마이페이지 「만드는 중」. */
+export interface SeriesDraftCard { run: string; episode: number; title: string; story: string }
+export function mySeriesDrafts(): Promise<SeriesDraftCard[]> {
+  return call("/series/drafts");
+}
+export function readSeriesDraft(run: string): Promise<SeriesDraft> {
+  return call(`/series/${encodeURIComponent(run)}/draft`);
+}
+export function saveSeriesDraft(run: string, form: SeriesForm): Promise<{revision: number}> {
+  return post(`/series/${encodeURIComponent(run)}/draft`, {...form, uid: getUid()});
+}
+export function startSeriesDigest(run: string): Promise<SeriesDigestState> {
+  return post(`/series/${encodeURIComponent(run)}/digest`, {});
+}
+export function createNextEpisode(run: string, form: SeriesForm): Promise<{id: string}> {
+  return post(`/series/${encodeURIComponent(run)}/next`, {...form, uid: getUid()});
+}
+
+/** 「출석으로 모아서 다음 화 만들기」 알림(2026-11-03). push 는 서버가 푸시를 보낼 수 있나, device 는 이 계정에 구독한 기기가 있나. */
+export interface AttendRemindState { on: boolean; run: string | null; episode: number | null; cost: number | null; push: boolean; device: boolean }
+export function readAttendRemind(): Promise<AttendRemindState> {
+  return call("/attend-remind");
+}
+export function attendRemindOn(run: string, episode: number, cost: number): Promise<AttendRemindState> {
+  return post("/attend-remind", { run, episode, cost });
+}
+export function attendRemindOff(): Promise<AttendRemindState> {
+  return call("/attend-remind", { method: "DELETE" });
+}
+
+export interface LoreEntry {id?:string;title:string;content:string;kind:string;keys:string[];always:boolean;enabled:boolean;evidence?:string;}
+export interface LoreBook {library_id?:string;library_owner?:number;books?:LoreBook[];id?:string;name:string;source:string;fixed_settings:string;progress_state:string;entries:LoreEntry[];progress?:LoreProgress[];confirmed:boolean;}
+/** 진행 상태 한 줄. key 가 항목 id 면 그 항목을 「→ 지금:」으로 덮어쓴다(2층 로어북). */
+export interface LoreProgress {key:string;title:string;text:string;}
+export interface LoreCatalog {books:LoreBook[];personal_books?:LoreBook[];extract_limit:number;extract_left:number;}
+export interface LoreExtraction {id:string;status:"RUNNING"|"DONE"|"ERROR";book?:LoreBook;error?:string;}
+export function listLorebooks():Promise<LoreCatalog>{return call("/lorebooks");}
+export function extractLorebook(text:string,language:string):Promise<LoreExtraction>{return post("/lorebooks/extract",{text,language,agree_ip:true});}
+export function readLoreExtraction(id:string):Promise<LoreExtraction>{return call(`/lorebooks/extract/${encodeURIComponent(id)}`);}
+
+/** 저장된 사용자 설정집은 현재 로그인 계정만 읽고 쓴다. 공개/공유 인자를 받지 않는다. */
+export function savePrivateLorebook(book:LoreBook):Promise<LoreBook>{
+ const path=book.library_id?`/lorebooks/mine/${encodeURIComponent(book.library_id)}`:"/lorebooks/mine";
+ return call(path,{method:book.library_id?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(book)});
 }

@@ -70,4 +70,15 @@ class MotionImageKeysTest {
                 .as("앵커를 안 내던 버전으로 적힌 옛 기록").isFalse();
         assertThat(MotionImageKeys.hasAnchors(null, 1)).isFalse();
     }
+
+    @Test
+    @DisplayName("★ 저장용 GIF 키는 webp 키의 확장자만 바꾼다(#713) — 프론트 gifUrlOf·backfill_gif.py 와 같은 규칙")
+    void gifKeySitsBesideTheWebp() {
+        assertThat(MotionImageKeys.gifOf(MotionImageKeys.basic(7L, 2, "eat")))
+                .isEqualTo("images/zzal/pets/7/basic/2/eat.gif");
+        assertThat(MotionImageKeys.gifOf(MotionImageKeys.advanced(7L, 9L, 2)))
+                .isEqualTo("images/zzal/pets/7/motions/9/2/motion.gif");
+        assertThat(MotionImageKeys.gifOf("images/zzal/pets/7/grid.png")).as("webp 가 아니면 GIF 도 없다").isNull();
+        assertThat(MotionImageKeys.gifOf(null)).isNull();
+    }
 }

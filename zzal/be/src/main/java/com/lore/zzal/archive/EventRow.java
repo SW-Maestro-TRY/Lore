@@ -26,7 +26,12 @@ public record EventRow(
         String device,
         String variant,
         Instant occurredAt,
-        Instant receivedAt) {
+        Instant receivedAt, String eventId, Integer schemaVersion, String sessionId, String context, String sourceScreen, Long reportedTs, String timestampQuality, String identityStatus, String eventOrigin) {
+    public EventRow(long id, String name, String anonId, Long userId, String props, String path,
+                    String referrer, String source, String device, String variant, Instant occurredAt, Instant receivedAt) {
+        this(id,name,anonId,userId,props,path,referrer,source,device,variant,occurredAt,receivedAt,null,null,null,null,null,null,null,null,null);
+    }
+
 
     /**
      * 이 줄이 들어갈 날짜 칸({@code dt=}).

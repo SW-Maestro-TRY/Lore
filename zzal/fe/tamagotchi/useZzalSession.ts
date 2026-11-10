@@ -223,14 +223,14 @@ export function useZzalSession(): ZzalSession {
       clearChatReply: pet.clearChatReply,
       hatchSpanSeconds: estimateSec,
       reload: pet.reload,
-      care: pet.care, sleep: pet.sleep, wake: pet.wake,
+      care: pet.care, sleep: pet.sleep, wake: pet.wake, callBack: pet.callBack,
       setPersonality: pet.setPersonality, setBackground: pet.setBackground, share: pet.share,
       answerChat: pet.answerChat, markSeen: pet.markSeen,
       create, dismissFailed, markUploadOpened, markImagePicked, markNameEntered,
     };
   }, [
     source, mock, pet.pet, pet.loading, pet.acting, pet.error, pet.reload, pet.justUnlocked, pet.clearJustUnlocked, pet.noteUnlocked, pet.applyExternal, pet.chat, pet.chatReply,
-    pet.clearChatReply, pet.care, pet.sleep, pet.wake, pet.setPersonality, pet.setBackground, pet.share, pet.answerChat, pet.markSeen,
+    pet.clearChatReply, pet.care, pet.sleep, pet.wake, pet.callBack, pet.setPersonality, pet.setBackground, pet.share, pet.answerChat, pet.markSeen,
     auth.isLoading, authenticated, listed, creating, notice, clearNotice, estimateSec, create, dismissFailed,
     markUploadOpened, markImagePicked, markNameEntered,
   ]);

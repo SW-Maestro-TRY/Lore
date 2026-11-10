@@ -6,11 +6,12 @@
  *
  * 숫자가 끼는 문구는 그 자리를 `{n}` 처럼 적어 둔다 — lib/i18n.tsx 가 자리를 아무
  * 글자로 보고 맞춰 본 뒤 번역문의 같은 자리에 넣는다. */
-import { registerDict, type Dict } from "./i18n";
+import { registerComposer, registerDict, type Dict } from "./i18n";
 
 const dict: Dict = {
   /* ---- 부르기 공통 (lib/api.ts · lib/photoFile.ts) ---- */
   "요청이 실패했습니다 ({n})": { en: "The request failed ({n})", ja: "リクエストに失敗しました（{n}）", zh: "请求失败（{n}）" },
+  "보안 검사에 막혀 보내지 못했습니다. 글을 조금 줄이거나 특수 기호를 빼고 다시 시도해 주세요": { en: "A security check blocked this request. Please shorten the text or remove special symbols and try again.", ja: "セキュリティチェックで送信できませんでした。文章を短くするか、特殊記号を除いてもう一度お試しください。", zh: "请求被安全检查拦截。请缩短文字或去掉特殊符号后重试。" },
   "사진을 올리지 못했습니다 ({n})": { en: "Couldn't upload the photo ({n})", ja: "写真をアップロードできませんでした（{n}）", zh: "照片上传失败（{n}）" },
   "이 브라우저가 못 여는 사진입니다. JPG 나 PNG 로 바꿔서 올려 주세요": { en: "This browser can't open that photo. Please convert it to JPG or PNG and upload again.", ja: "このブラウザでは開けない写真です。JPGかPNGに変換してアップロードしてください", zh: "此浏览器无法打开这张照片，请转换为 JPG 或 PNG 后再上传" },
   "오늘 무료 {n}편": { en: "{n} free today", ja: "今日の無料 {n}本", zh: "今日免费 {n} 部" },
@@ -122,6 +123,8 @@ const dict: Dict = {
   "기타": { en: "Other", ja: "その他", zh: "其他" },
 
   /* ---- 바로 써 볼 수 있는 캐릭터 (character/BuiltinCharacters) ---- */
+  "클로에": { en: "Chloe", ja: "クロエ", zh: "克洛伊" },
+  "겨울 무도회에서도 레이스 부채를 놓지 않는다. 숨이 가빠지면 부채부터 펼친다.": { en: "Never lets go of her lace fan, even at the winter ball. When her breath grows short, the fan comes open first.", ja: "冬の舞踏会でもレースの扇を手放さない。息が苦しくなると、まず扇を広げる。", zh: "即使在冬季舞会上也不放下蕾丝扇。一旦呼吸急促，先把扇子展开。" },
   "하린": { en: "Harin", ja: "ハリン", zh: "夏琳" },
   "국밥집 창가 자리가 자기 자리인 줄 안다. 누구에게나 잘 웃는데 정작 자기 얘기는 안 한다.": { en: "Acts like the window seat at the gukbap place is hers. Smiles at everyone, but never talks about herself.", ja: "クッパ屋の窓際の席を自分の席だと思っている。誰にでもよく笑うのに、自分の話はしない。", zh: "把汤饭店靠窗的位子当成自己的专座。对谁都笑，却从不谈自己。" },
   "리스엘": { en: "Riselle", ja: "リセル", zh: "莉丝艾尔" },
@@ -147,6 +150,25 @@ const dict: Dict = {
   "몽이": { en: "Mongi", ja: "モンイ", zh: "梦伊" },
   "로판 악역 영애로 태어난 강아지. 구두를 물어뜯은 것이 첫 번째 악행이다.": { en: "A puppy reborn as the villainess of a romance fantasy. Her first villainous deed: chewing up a shoe.", ja: "ロマンスファンタジーの悪役令嬢に生まれた子犬。靴をかじったのが最初の悪行。", zh: "转生成浪漫奇幻恶役千金的小狗。第一桩恶行是啃坏了鞋子。" },
 
+  /* ---- 그림 안전 검사 (job/JobRunner · runs/RegenService) ---- */
+  "모든 장면이 이미지 안전 기준(선정성)에 걸렸어요. 한 번 더 그려 봤지만 같았어요. 이야기 속 노출이나 선정적·잔혹한 장면이 원인일 수 있으니, 표현을 바꿔 다시 만들어 주세요.": { en: "Every scene was blocked by the image safety filter (sexual content). We tried once more with the same result. Nudity or sexual or violent scenes in the story may be the cause — please change the wording and create again.", ja: "すべての場面が画像の安全基準（性的表現）に引っかかりました。もう一度描いてみましたが同じでした。ストーリー中の露出や性的・残酷な場面が原因かもしれません。表現を変えてもう一度作ってください。", zh: "所有场景都未通过图片安全标准（色情）。我们又试了一次，结果相同。原因可能是故事里的暴露或色情、血腥场景，请修改表达后重新制作。" },
+  "모든 장면이 이미지 안전 기준에 걸렸어요. 한 번 더 그려 봤지만 같았어요. 이야기 속 노출이나 선정적·잔혹한 장면이 원인일 수 있으니, 표현을 바꿔 다시 만들어 주세요.": { en: "Every scene was blocked by the image safety filter. We tried once more with the same result. Nudity or sexual or violent scenes in the story may be the cause — please change the wording and create again.", ja: "すべての場面が画像の安全基準に引っかかりました。もう一度描いてみましたが同じでした。ストーリー中の露出や性的・残酷な場面が原因かもしれません。表現を変えてもう一度作ってください。", zh: "所有场景都未通过图片安全标准。我们又试了一次，结果相同。原因可能是故事里的暴露或色情、血腥场景，请修改表达后重新制作。" },
+  "이 장면이 이미지 안전 기준에 걸려 빈 장으로 두었어요. 편집실에서 장면 설명을 고쳐 다시 그려 주세요.": { en: "This scene was blocked by the image safety filter, so we left the page blank. Edit the scene description in the editor and redraw it.", ja: "この場面は画像の安全基準に引っかかったため、空白のページにしました。編集室で場面の説明を直して描き直してください。", zh: "此场景未通过图片安全标准，已留作空白页。请在编辑室修改场景描述后重新绘制。" },
+  "다시 그린 그림이 이미지 안전 기준(선정성)에 걸렸어요. 빈 장은 그대로예요. 장면 설명에서 노출이나 선정적인 부분을 바꿔 다시 그려 주세요.": { en: "The redrawn picture was blocked by the image safety filter (sexual content). The blank page stays as it was. Change any nudity or sexual parts in the scene description and redraw.", ja: "描き直した絵が画像の安全基準（性的表現）に引っかかりました。空白のページはそのままです。場面の説明から露出や性的な部分を変えて描き直してください。", zh: "重绘的图片未通过图片安全标准（色情）。空白页保持不变。请修改场景描述中暴露或色情的部分后重新绘制。" },
+  "다시 그린 그림이 이미지 안전 기준(선정성)에 걸렸어요. 원래 그림은 그대로예요. 장면 설명에서 노출이나 선정적인 부분을 바꿔 다시 그려 주세요.": { en: "The redrawn picture was blocked by the image safety filter (sexual content). The original picture is unchanged. Change any nudity or sexual parts in the scene description and redraw.", ja: "描き直した絵が画像の安全基準（性的表現）に引っかかりました。元の絵はそのままです。場面の説明から露出や性的な部分を変えて描き直してください。", zh: "重绘的图片未通过图片安全标准（色情）。原图保持不变。请修改场景描述中暴露或色情的部分后重新绘制。" },
+  "다시 그린 그림이 이미지 안전 기준에 걸렸어요. 빈 장은 그대로예요. 장면 설명에서 노출이나 선정적인 부분을 바꿔 다시 그려 주세요.": { en: "The redrawn picture was blocked by the image safety filter. The blank page stays as it was. Change any nudity or sexual parts in the scene description and redraw.", ja: "描き直した絵が画像の安全基準に引っかかりました。空白のページはそのままです。場面の説明から露出や性的な部分を変えて描き直してください。", zh: "重绘的图片未通过图片安全标准。空白页保持不变。请修改场景描述中暴露或色情的部分后重新绘制。" },
+  "다시 그린 그림이 이미지 안전 기준에 걸렸어요. 원래 그림은 그대로예요. 장면 설명에서 노출이나 선정적인 부분을 바꿔 다시 그려 주세요.": { en: "The redrawn picture was blocked by the image safety filter. The original picture is unchanged. Change any nudity or sexual parts in the scene description and redraw.", ja: "描き直した絵が画像の安全基準に引っかかりました。元の絵はそのままです。場面の説明から露出や性的な部分を変えて描き直してください。", zh: "重绘的图片未通过图片安全标准。原图保持不变。请修改场景描述中暴露或色情的部分后重新绘制。" },
+  "이 장을 그리지 못했습니다 — 크레딧은 돌려드렸어요": { en: "Couldn't draw this page — your credits were refunded.", ja: "このページを描けませんでした — クレジットはお返ししました", zh: "未能绘制此页——积分已退还" },
+  /* 빈 장마다 걸린 이유 — 서버는 코드(unsafe_kinds)로 주고 화면이 이 이름으로 바꾼다(UNSAFE_KIND_KO). */
+  "미성년 관련": { en: "minors", ja: "未成年関連", zh: "涉及未成年人" },
+  "선정성": { en: "sexual content", ja: "性的表現", zh: "色情" },
+  "자해": { en: "self-harm", ja: "自傷", zh: "自残" },
+  "폭력·잔혹": { en: "violence/gore", ja: "暴力・残酷", zh: "暴力・血腥" },
+  "혐오": { en: "hate", ja: "ヘイト", zh: "仇恨" },
+  "괴롭힘": { en: "harassment", ja: "嫌がらせ", zh: "骚扰" },
+  "불법 행위": { en: "illegal activity", ja: "違法行為", zh: "违法行为" },
+  "안전 기준": { en: "safety standards", ja: "安全基準", zh: "安全标准" },
+
   /* ---- 만드는 중 화면에서 빠져 있던 것 (screens/progress) ---- */
   "루와 놀기": { en: "Play with Lou", ja: "Louと遊ぶ", zh: "和 Lou 玩" },
   "둘러보기 하며 기다리기": { en: "Browse while you wait", ja: "見て回りながら待つ", zh: "边逛边等" },
@@ -156,3 +178,110 @@ const dict: Dict = {
 };
 
 registerDict(dict);
+
+/* ---- 빈 장의 이유 (RunResult.unsafe_kinds) ---------------------------------
+ * 서버가 주는 코드 → 한국어 이름. 이름은 위 사전의 키이고 서버 JobRunner.KIND_KO 와 같다. */
+export const UNSAFE_KIND_KO: Record<string, string> = {
+  minor: "미성년 관련",
+  sexual: "선정성",
+  self_harm: "자해",
+  violence: "폭력·잔혹",
+  hate: "혐오",
+  harassment: "괴롭힘",
+  illicit: "불법 행위",
+};
+
+/** 화면 언어의 나열 구분자. 일본어·중국어는 「、」. */
+function listSep(lang?: string): string {
+  const l = lang ?? (typeof document !== "undefined" ? document.documentElement.lang : "ko");
+  return /^(ja|zh)/.test(l) ? "、" : ", ";
+}
+
+/**
+ * 빈 장 하나의 이유를 화면 언어로. 코드가 있으면 코드로, 옛 서버라 한국어 문장만 있으면 그 문장을 t 로
+ * 옮겨 본다. 둘 다 없으면 빈 글자.
+ */
+export function unsafeWhy(t: (s: string) => string, kinds?: string[] | null, fallback?: string | null): string {
+  if (Array.isArray(kinds)) {
+    const names = kinds.map((k) => UNSAFE_KIND_KO[k]).filter(Boolean);
+    return (names.length ? names : ["안전 기준"]).map((n) => t(n)).join(listSep());
+  }
+  return fallback ? t(fallback) : "";
+}
+
+/* ---- 글 검사에 걸린 곳 (safety/SafetyGuard.messageFor) ----------------------
+ * 서버는 「MESSAGE 걸린 곳: 「칸」 칸 「문장」 · 이유: 종류, 종류」 를 정해진 조각으로 잇는다. 칸 이름과
+ * 종류도 정해진 말이라 조각마다 옮기고, 문장은 사용자가 쓴 글이라 그대로 둔다. 서버의 조각을 바꾸면
+ * 여기도 같이 바꾼다(SafetyGuardTest 가 서버 쪽 이름이 여기 다 있는지 본다). */
+const SAFETY_MESSAGE = "이 내용으로는 만들 수 없어요. 선정적이거나 잔혹한 묘사, 혐오 표현이 들어가면 걸러져요. 표현을 바꿔서 다시 시도해 주세요.";
+const SAFETY_SPOT = " 걸린 곳: ";
+const SAFETY_WHY = " · 이유: ";
+
+type Tri = { en: string; ja: string; zh: string };
+
+/** 만들기·캐릭터 화면의 칸 이름(JobService · CharacterService 의 Field.of). */
+const SAFETY_FIELDS: Record<string, Tri> = {
+  "이름": { en: "Name", ja: "名前", zh: "名字" },
+  "캐릭터 설명": { en: "Character description", ja: "キャラクター説明", zh: "角色描述" },
+  "세계관": { en: "World", ja: "世界観", zh: "世界观" },
+  "장르": { en: "Genre", ja: "ジャンル", zh: "类型" },
+  "이야기": { en: "Story", ja: "ストーリー", zh: "故事" },
+  "사진 메모": { en: "Photo note", ja: "写真メモ", zh: "照片备注" },
+  "추가 설정": { en: "Extra settings", ja: "追加設定", zh: "补充设定" },
+  "제목": { en: "Title", ja: "タイトル", zh: "标题" },
+  "회차": { en: "Episode", ja: "話数", zh: "话数" },
+  "캐릭터 카드": { en: "Character card", ja: "キャラクターカード", zh: "角色卡" },
+};
+
+/** 글 검사의 이유 종류(SafetyGuard.KIND). */
+const SAFETY_KINDS: Record<string, Tri> = {
+  "선정적인 표현": { en: "sexual content", ja: "性的な表現", zh: "色情内容" },
+  "미성년자를 성적으로 다루는 표현": { en: "sexual content involving minors", ja: "未成年者を性的に扱う表現", zh: "涉及未成年人的色情内容" },
+  "혐오 표현": { en: "hate speech", ja: "ヘイト表現", zh: "仇恨言论" },
+  "위협이 담긴 혐오 표현": { en: "threatening hate speech", ja: "脅迫を含むヘイト表現", zh: "带有威胁的仇恨言论" },
+  "위협·괴롭힘": { en: "threats or harassment", ja: "脅迫・嫌がらせ", zh: "威胁或骚扰" },
+  "잔혹한 폭력 묘사": { en: "graphic violence", ja: "残酷な暴力描写", zh: "血腥暴力描写" },
+  "자해 묘사": { en: "self-harm", ja: "自傷の描写", zh: "自残描写" },
+  "자해 의도": { en: "intent to self-harm", ja: "自傷の意図", zh: "自残意图" },
+  "자해 방법": { en: "self-harm instructions", ja: "自傷の方法", zh: "自残方法" },
+  "폭력적인 불법 행위": { en: "violent illegal activity", ja: "暴力的な違法行為", zh: "暴力违法行为" },
+};
+
+const SAFETY_PARTS: Record<string, Tri> = {
+  spot: { en: "Flagged: ", ja: "引っかかった箇所: ", zh: "被拦截的位置：" },
+  why: { en: " · Reason: ", ja: " · 理由: ", zh: " · 原因：" },
+  wrote: { en: "what you wrote", ja: "入力した内容", zh: "填写的内容" },
+  field: { en: "the {label} field", ja: "「{label}」欄", zh: "「{label}」栏" },
+  fieldSentence: { en: "\u201c{sentence}\u201d in the {label} field", ja: "「{label}」欄の「{sentence}」", zh: "「{label}」栏中的「{sentence}」" },
+  sentence: { en: "\u201c{sentence}\u201d", ja: "「{sentence}」", zh: "「{sentence}」" },
+};
+
+function safetyBlocked(src: string, tr: (s: string) => string, lang: "en" | "ja" | "zh"): string | null {
+  if (!src.startsWith(SAFETY_MESSAGE + SAFETY_SPOT)) return null;
+  let rest = src.slice(SAFETY_MESSAGE.length + SAFETY_SPOT.length);
+  let kinds: string[] = [];
+  const at = rest.lastIndexOf(SAFETY_WHY);
+  if (at >= 0) {
+    kinds = rest.slice(at + SAFETY_WHY.length).split(", ").filter(Boolean);
+    rest = rest.slice(0, at);
+  }
+  const part = (k: string, v: Record<string, string> = {}) =>
+    SAFETY_PARTS[k][lang].replace(/\{(\w+)\}/g, (m, n) => (n in v ? v[n] : m));
+  let where: string;
+  const field = /^「([^」]+)」 칸(?: 「([\s\S]*)」)?$/.exec(rest);
+  if (field) {
+    const label = SAFETY_FIELDS[field[1]]?.[lang] ?? field[1];
+    where = field[2] != null ? part("fieldSentence", { label, sentence: field[2] }) : part("field", { label });
+  } else if (rest === "적은 내용") {
+    where = part("wrote");
+  } else if (rest.startsWith("「") && rest.endsWith("」")) {
+    where = part("sentence", { sentence: rest.slice(1, -1) });
+  } else {
+    return null;
+  }
+  const why = kinds.map((k) => SAFETY_KINDS[k]?.[lang] ?? k).join(listSep(lang));
+  return tr(SAFETY_MESSAGE) + " " + part("spot") + where + (why ? part("why") + why : "");
+}
+
+registerComposer(safetyBlocked);
+

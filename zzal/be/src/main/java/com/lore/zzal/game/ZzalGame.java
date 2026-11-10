@@ -212,4 +212,12 @@ public class ZzalGame {
     public Instant getFinishedAt() {
         return finishedAt;
     }
+
+    /**
+     * dev(리모컨)·시험 — 지금 회차의 답. 화면에는 절대 안 나간다(응답 DTO 에 없다).
+     * ★ 리모컨의 "게임 승/패" 는 이 답을 보고 실제 {@code guess} 길을 그대로 태운다 — 보상·조각·선물이 운영과 같은 자리에서 난다.
+     */
+    public char devAnswerAt(int round) {
+        return answers.charAt(round);
+    }
 }

@@ -227,13 +227,13 @@ export const UPLOAD_COPY = {
 export const ONB_COPY: Record<StepKey, readonly [string, string]> = {
   landing: [LANDING_COPY.greeting, LANDING_COPY.sub],
   upload: ['캐릭터 이미지를 업로드해 주세요', '한 장만 올릴 수 있어요. 얼굴이 잘 보이는 그림일수록 좋아요.'],
-  user: ['당신은 어떤 분인가요', '알려주면 아이가 더 살갑게 대해요. 전부 선택이에요.'],
+  user: ['당신은 어떤 분인가요', '모두 선택 항목이에요. 대화에 참고할 내용을 알려 주세요.'],
   char: ['어떤 아이인가요', '이름만 정하면 시작할 수 있어요.'],
   born: ['태어났어요', '이제 이 아이의 첫날이에요.'],
 };
 
 /** 튜토리얼 · 샘플 방(여울이 연습을 시킨다). */
-export interface TutorStep { at: string; room: string | null; act: 'a' | 'pet' | null; done: string; text: string }
+export interface TutorStep { at: string; room: string | null; act: 'a' | 'b' | 'pet' | null; done: string; text: string }
 export const TUTOR: readonly TutorStep[] = [
   { at: '0분', room: null, act: null, done: 'any', text: '안녕하세요, 저는 여울이에요. 당신의 아이가 나올 동안 여기서 연습해요.' },
   { at: '3분', room: null, act: 'pet', done: 'pet', text: '제 몸을 톡 눌러 보세요. 언제든 다시 해도 돼요.' },
@@ -392,6 +392,18 @@ export type NeedStyle = (typeof NEED_STYLES)[number];
 export const CHAT_HINTS = ['잘 지냈어', '조금 피곤해', '보고 싶었어', '오늘 빵 만들었어'] as const;
 export const CHAT_QUICK = ['잘 지냈어', '빵 만들었어', '조금 피곤해'] as const;
 export const CHAT_REPLY = ['그 얘기 기억해 둘게요.', '오늘도 들려줘서 좋아요.', '나도 그런 날이 있어요.', '음, 그랬구나.'] as const;
+/** 연습방(목) 대화 한 판의 닫기 줄 — 서버의 닫기 턴과 같은 자리. */
+export const CHAT_CLOSE = '나 잠깐 창밖 구경하러 갈게요. 또 말 걸게요.';
+/** 대화 한 판의 왕복 상한(서버 `app.zzal.chat.max-rounds` 기본값과 같다). 연습방 목이 쓴다 — 서버 방은 서버 값. */
+export const CHAT_MAX_ROUNDS = 5;
+/**
+ * 진짜 방에서 **닫는 말을 최소한 띄워 두는 시간**(ms). 2026-10-10 dev 실측(#714).
+ *
+ * ★ 판이 닫히면 서버는 답 응답에 닫는 턴을 싣고, 곧바로 뒤따르는 `GET /chat` 은 `session: null`·`turns: []` 를
+ *   준다(45ms 뒤). 화면이 그 GET 만 보고 말풍선을 그리면 닫는 말이 **한 번도 안 보인다**. 그래서 답 응답에서
+ *   받은 닫는 말을 화면이 붙잡아 둔다 — 대화창이 열려 있는 동안은 계속, 창을 일찍 닫아도 이 시간만큼은 무대에.
+ */
+export const CHAT_CLOSE_HOLD_MS = 4000;
 
 /** 다음에 배울 동작 — 왼쪽 아래 작은 카드가 이 표를 보고 하나를 고른다. */
 /**
@@ -422,7 +434,7 @@ export const TUTOR_ROOM: readonly TutorStep[] = [
   { at: '3칸', room: 'chat', act: null, done: 'CHAT', text: '뭐라고 말을 거네요. 오른쪽 아래 말풍선을 눌러 답해 주세요.' },
   // ★ 정본 §12 는 이 칸을 **"이 성격이 맞나요"**(확인·수정)로 적는다 — 성격은 부화 전 캐릭터
   //   정보 화면에서 이미 받았으므로 여기서 처음 고르는 것이 아니다(정본 1.3·1.6).
-  { at: '4칸', room: 'info', act: null, done: 'PERSONALITY', text: '이 성격이 맞나요. 아이 정보에서 확인해 주세요.' },
+  { at: '4칸', room: 'info', act: null, done: 'PERSONALITY', text: '캐릭터 정보에서 성격과 설정을 확인해 주세요.' },
   // ★ 목욕 규칙도 **욕실 칸**에서(판정 F8). 목욕 버튼이 같은 팝오버에 있다.
   { at: '5칸', room: 'bath', act: 'a', done: 'CLEAN', text: '바닥에 흔적이 생겼어요. 욕실에서 치워 주세요. 한 번 쓸면 하나예요. 목욕은 하루 한 번이에요.' },
   { at: '6칸', room: 'play', act: 'a', done: 'GAME', text: '같이 놀아 볼까요. 마당에서 좌우 맞히기를 한 판 시작해 주세요. 시작하면 오늘 세 판 중 하나예요. 중간에 나가면 그 판은 져요.' },
@@ -431,6 +443,28 @@ export const TUTOR_ROOM: readonly TutorStep[] = [
   // ★ 간식·목욕은 각자 쓰는 칸으로 옮겼다(판정 F8). 여기 남는 것은 **그 칸이 없는 규칙** 둘뿐이다.
   { at: '9칸', room: null, act: null, done: 'DONE', text: '이제 혼자서도 괜찮아요. 여기부터는 시간이 흐르기 시작해요. 저녁 7시가 되면 재워 주세요. 약은 아플 때만 줄 수 있어요.' },
 ];
+
+/**
+ * 6칸(게임)을 **한 게임 결과까지** 붙잡아 두는 동안의 안내(2026-10-10 상훈님 "5판 3선의 결과가 나는 걸 보고 가는 걸로").
+ *
+ * ★ 왜 — 서버는 판을 시작하자마자 이 칸을 넘겨서, 1판만 치면 카드가 앨범을 가리켰고 게임은 이어지지
+ *   않은 채 닫히기만 했다(dev 실측 · 이 칸에서 이탈). 이제 결과 화면이 날 때까지 이 칸에 머문다.
+ * ★ 게임 중 ✕ 로 나가도 칸은 안 끝난다 — 그때 카드가 이 문구로 한 게임을 다시 권한다.
+ */
+export const TUTOR_GAME_UNTIL_RESULT = '한 게임은 다섯 판이에요. 세 번 맞히면 이겨요. 결과가 나올 때까지 같이 해 봐요.';
+/** 6칸(게임)의 자리 — 붙잡는 동안 점·`6 / 9` 표시가 이 칸을 가리킨다. */
+export const TUTOR_GAME_IDX = TUTOR_ROOM.findIndex((x) => x.done === 'GAME');
+export const TUTOR_GAME_STEP: TutorStep = TUTOR_ROOM[TUTOR_GAME_IDX];
+
+/**
+ * 7칸(앨범) 안에서의 **두 단계 안내**(2026-10-10 상훈님 "앨범은 기본 동작 하이라이트, 저장 하이라이트").
+ *
+ * ★ 왜 — 앨범에 들어간 뒤 어느 액자를 눌러 저장·공유하는지가 안 보였다(dev 실측). 그래서
+ *   1단계 = 1층 기본 동작 액자 하나를 빛내고, 누르면 2단계 = 액자 안 「저장」을 빛낸다.
+ *   저장(또는 공유)을 누르면 칸이 끝난다(서버도 공유 기록 `share` 로 이 칸을 넘긴다).
+ */
+export const TUTOR_ALBUM_PICK = '빛나는 액자를 눌러 크게 열어 보세요.';
+export const TUTOR_ALBUM_SAVE = '「저장」을 눌러 이 모습을 가져가 보세요.';
 
 /**
  * 안내판 「배울 것」의 **목 폴백**. 서버에 붙으면 이 표는 안 쓰인다 — 그때는 도감(`motions`)이

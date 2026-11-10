@@ -6,6 +6,7 @@ import com.lore.webtoon.job.HarnessProcess;
 import com.lore.webtoon.job.RunFiles;
 import com.lore.webtoon.job.JobRunner;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -67,9 +68,6 @@ public class RegenService {
     private final PageRegenRepository regens;
     private final ObjectMapper json = new ObjectMapper();
     private final com.lore.webtoon.credit.CreditGate credits;
-    /** 다시 그리기 번호 -> (누가, 어떤 기록으로) 냈나. 실패하면 이걸로 돌려준다(#626). 서버가 다시 뜨면
-     *  돌던 다시 그리기도 같이 사라지므로 메모리에만 둔다. */
-    private final Map<String, String[]> paid = new java.util.concurrent.ConcurrentHashMap<>();
     private final PageStore pages;
     private final BakeService bakery;
     private final HarnessProcess harness;
@@ -78,11 +76,14 @@ public class RegenService {
     private final RunFiles files;
     /** 다시 그리기도 그림 값이 나간다 — 원가 장부에 적는다(#444). */
     private final com.lore.webtoon.job.AfterRun after;
+    private final com.lore.webtoon.story.StoryStore stories;
 
     public RegenService(PageRegenRepository regens, PageStore pages, BakeService bakery,
                         HarnessProcess harness, PageUploader uploader, JobRunner runner,
                         RunFiles files, com.lore.webtoon.job.AfterRun after,
-                        com.lore.webtoon.credit.CreditGate credits) {
+                        com.lore.webtoon.credit.CreditGate credits,
+                        com.lore.webtoon.story.StoryStore stories) {
+        this.stories = stories;
         this.credits = credits;
         this.regens = regens;
         this.pages = pages;
@@ -94,22 +95,67 @@ public class RegenService {
         this.after = after;
     }
 
+    /** 다시 그리기 값의 장부 번호. 받을 때와 돌려줄 때 같은 번호여야 한다. */
+    static String regenRef(String runId, int pageNo, String id) {
+        return "regen:" + runId + ":" + pageNo + ":" + id;
+    }
+
+    /** 남은 장 이어 그리기 값의 장부 번호. */
+    static String pagesRef(String runId, int pageNo, String id) {
+        return "pages:" + runId + ":" + pageNo + ":" + id;
+    }
+
     /**
-     * 다시 그리기를 줄에 넣는다. -> 진행을 물을 번호
+     * 다시 그리기 기록을 만든다. -> 진행을 물을 번호. 줄에는 {@link #go} 로 넣는다.
+     *
+     * {@code quality} 가 비었으면 작품을 만든 화질 그대로다. 너울 작품의 한 장을 파도로 다시 그리면
+     * 값도 파도 값이다 — 값은 부르는 쪽이 같은 화질로 받는다.
+     *
+     * <b>값을 내는 사람({@code payer})을 기록에 같이 적는다(#864).</b> 못 그리면 이걸로 돌려준다 — 전에는
+     * 메모리에만 적어서, 배포·재시작 때 줄에 있던 장은 못 그리고도 값을 못 돌려줬다. 무료(빈 장)면 {@code null}.
      *
      * @throws NoSuchElementException 그 작품에 그런 장이 없을 때. S3 에 실제로
      *         올라와 있는 장 번호로 가린다 — 하네스 폴더의 파일 유무가 아니라
      *         <b>제품이 안다고 적어 둔 것</b>을 기준으로 삼는다.
      */
     @Transactional
-    public String start(String runId, int pageNo, String note) {
+    public String queue(String runId, int pageNo, String note, String quality, Long payer) {
         if (!pages.pageNumbersOf(runId).contains(pageNo)) {
             throw new NoSuchElementException("그 페이지가 없습니다");
         }
         String id = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String clean = note == null ? "" : note.strip();
-        regens.save(PageRegen.queued(id, runId, pageNo,
-                clean.substring(0, Math.min(500, clean.length())), Instant.now()));
+        PageRegen one = PageRegen.queued(id, runId, pageNo,
+                clean.substring(0, Math.min(500, clean.length())), quality, Instant.now());
+        regens.save(payer == null ? one : one.paidBy(payer, regenRef(runId, pageNo, id)));
+        return id;
+    }
+
+    /**
+     * 아직 안 그린 장의 기록을 만든다 — 크레딧이 모자라 뒤 장을 남긴 채 완성한 작품을 이어 그릴 때.
+     * 줄에는 {@link #go} 로 넣는다.
+     *
+     * 다시 그리기와 같은 줄 · 같은 길({@link #run})로 그린다. 장면은 이미 {@code scenes.json} 에 있고
+     * 하네스는 그 장 파일이 없으면 그린다. 다른 점은 <b>그 장이 아직 없어야 한다</b>는 것뿐이다.
+     *
+     * @throws NoSuchElementException 이미 그린 장이거나, 그 작품에 그런 장면이 없을 때
+     */
+    @Transactional
+    public String queuePending(String runId, int pageNo, List<Integer> pending, Long payer) {
+        if (!pending.contains(pageNo)) {
+            throw new NoSuchElementException("이어 그릴 장이 아닙니다");
+        }
+        String id = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        PageRegen one = PageRegen.queued(id, runId, pageNo, "", Instant.now());
+        regens.save(payer == null ? one : one.paidBy(payer, pagesRef(runId, pageNo, id)));
+        return id;
+    }
+
+    /**
+     * 줄에 넣는다. <b>값을 받은 뒤에 부른다(#864).</b> 줄이 놀고 있으면 넣자마자 그리기 시작해서, 받기 전에
+     * 실패하면 장부에 돌려줄 줄이 아직 없다 — 그 뒤에 값만 빠진다.
+     */
+    public void go(String id) {
         /* **커밋된 뒤에 줄에 넣는다(#626).** 줄이 놀고 있으면 바로 run() 이 도는데, 그때는 이 기록이
            아직 커밋 전이라 안 보인다 — run() 은 못 찾으면 조용히 끝나서 화면이 「대기 중」에 영영 머물렀다. */
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -122,7 +168,18 @@ public class RegenService {
         } else {
             runner.enqueue(() -> run(id));
         }
-        return id;
+    }
+
+    /**
+     * 지금 줄에 있거나 그리는 중인 장 번호. 서버가 다시 뜨면 끊긴 기록은 기동 때 치우지만({@link #buryInterrupted}),
+     * 그래도 한 시간이 지난 것은 끝난 것으로 본다(한 장은 1~2분이다).
+     */
+    @Transactional(readOnly = true)
+    public List<Integer> drawingPages(String runId) {
+        return regens.findByRunIdAndStatusInAndCreatedAtAfter(runId,
+                        List.of(RegenStatus.QUEUED.wire(), RegenStatus.RUNNING.wire()),
+                        Instant.now().minus(java.time.Duration.ofHours(1)))
+                .stream().map(PageRegen::getPageNo).distinct().sorted().toList();
     }
 
     /** 편집실(진행 화면)이 읽는 모양 — 파이썬의 {@code regen_status}와 같다. */
@@ -243,6 +300,8 @@ public class RegenService {
            표시를 남기는데, 원래 그림은 그대로이므로 그 표시는 지워야 한다 — 안 지우면 멀쩡한 장이
            「빈 장」으로 보이고 다시 그리기가 공짜가 된다. */
         boolean wasUnsafe = runner.isUnsafePage(runId, no);
+        /* 아직 안 그린 장을 이어 그리는 것인가 — 크레딧이 모자라 남겨 둔 장(startPending). */
+        boolean wasDrawn = pages.pageNumbersOf(runId).contains(no);
 
         try {
             /* **참조할 그림부터 되살린다.** 이어그리기는 직전 장 그림을 붙여
@@ -254,7 +313,7 @@ public class RegenService {
 
             List<String> args = new ArrayList<>(List.of("--run-id", runId, "--page",
                     String.valueOf(no)));
-            if (!Files.isRegularFile(runner.runDir(runId).resolve("pages.json"))) {
+            if (!wasDrawn || !Files.isRegularFile(runner.runDir(runId).resolve("pages.json"))) {
                 args.add("--detail-pages");
             }
             if (one.getNote() != null && !one.getNote().isBlank()) {
@@ -268,9 +327,19 @@ public class RegenService {
             }
             /* **같은 화질로 다시 그린다.** 안 넘기면 이 장만 하네스 기본값으로
                나와서 한 편 안에서 밀도가 갈린다 — 그림체를 맞추는 것과 같은
-               이유다. 옛 작업은 화질이 없어서 기본값으로 돌아간다. */
+               이유다. 옛 작업은 화질이 없어서 기본값으로 돌아간다.
+               편집실에서 화질을 따로 골랐으면 그것으로 그린다 — 사람이 값을 보고 고른 것이다. */
+            String quality = one.getQuality() == null ? qualityOf(runId) : one.getQuality();
             env.put("OPENAI_IMAGE_QUALITY",
-                    com.lore.webtoon.job.WebtoonQuality.harnessValue(qualityOf(runId)));
+                    com.lore.webtoon.job.WebtoonQuality.harnessValue(quality));
+            env.put("PAGE_IMAGE_MODEL", one.getQuality() == null
+                    ? com.lore.webtoon.job.WebtoonQuality.pageImageModelOf(runner.runDir(runId))
+                    : com.lore.webtoon.job.WebtoonQuality.pageImageModel(quality));
+
+            /* 완성본에서 고친 제목은 DB 에만 있다. 넘기지 않으면 표지에 처음 제목을 다시 그린다. */
+            stories.chosenOf(runId).map(com.lore.webtoon.story.WebtoonStory::displayTitle)
+                    .filter(t -> t != null && !t.isBlank())
+                    .ifPresent(t -> env.put("NH_TITLE", t));
 
             /* 다시 그리기는 취소 대상이 아니라 번호를 안 준다 — 작업이 아니라
                편집실에서 한 장을 고치는 일이고, 멈추는 길이 따로 없다. */
@@ -280,6 +349,14 @@ public class RegenService {
                실패해도 나간 값은 나갔다 — 성공 여부를 보기 전에 적는다. 겹치는 줄은
                (작품, 몇 번째)로 걸러진다. */
             after.cost(runId);
+            if (code != 0 && runner.isUnsafePage(runId, no) && !wasDrawn) {
+                /* 이어 그리던 장이 걸렸다 — 원래 그림이 없으니 다른 장처럼 빈 장으로 두고(#626) 편집실에서
+                   장면을 고쳐 무료로 다시 그리게 한다. 값은 돌려준다. */
+                runner.writeBlankPage(runId, no);
+                reupload(runId);
+                fail(id, "이 장면이 이미지 안전 기준에 걸려 빈 장으로 두었어요. 편집실에서 장면 설명을 고쳐 다시 그려 주세요.");
+                return;
+            }
             if (code != 0 && runner.isUnsafePage(runId, no)) {
                 boolean sexual = unsafeSexual(runId, no);
                 if (!wasUnsafe) {
@@ -291,7 +368,8 @@ public class RegenService {
                 return;
             }
             if (code != 0 || !Files.isRegularFile(dest)) {
-                fail(id, "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
+                fail(id, wasDrawn ? "다시 그리지 못했습니다 — 원래 그림은 그대로입니다"
+                        : "이 장을 그리지 못했습니다 — 크레딧은 돌려드렸어요");
                 return;
             }
             reupload(runId);
@@ -300,7 +378,6 @@ public class RegenService {
                다시 그릴 때마다 원본이 서버에 쌓인다(로컬은 RunFiles 가 안 지운다). */
             files.sweepUploaded(runId);
             move(id, RegenStatus.DONE);
-            settled(id);
         } catch (Exception e) {
             log.error("다시 그리지 못했습니다 (run={}, 장={})", runId, no, e);
             fail(id, "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
@@ -324,9 +401,30 @@ public class RegenService {
         }
         Path vdir = versionsDir(runId);
         Files.createDirectories(vdir);
+        /* 지금 그림이 이미 있는 판과 똑같으면 또 남기지 않는다(#993). 「이 판으로 바꾸기」는 그 판을
+           복사해 지금 그림으로 걸기 때문에, 다른 판을 누를 때마다 방금 건 그림이 새 번호로 한 장씩
+           늘었다 — 판을 오가기만 해도 같은 그림이 줄줄이 쌓였다. */
+        if (sameAsAVersion(src, vdir, pageNo)) {
+            return;
+        }
         int next = versionsOf(runId, pageNo).stream()
                 .mapToInt(row -> (int) row.get("version")).max().orElse(0) + 1;
         Files.copy(src, vdir.resolve("page%02d.v%d.png".formatted(pageNo, next)));
+    }
+
+    /** 이 장의 남긴 판 가운데 {@code src} 와 바이트까지 같은 것이 있는가. */
+    private static boolean sameAsAVersion(Path src, Path vdir, int pageNo) throws IOException {
+        long size = Files.size(src);
+        try (var found = Files.list(vdir)) {
+            for (Path p : found.toList()) {
+                Matcher m = VERSION_FILE.matcher(p.getFileName().toString());
+                if (m.matches() && Integer.parseInt(m.group(1)) == pageNo
+                        && Files.size(p) == size && Files.mismatch(src, p) == -1L) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private Path pageFile(String runId, int pageNo) {
@@ -337,8 +435,8 @@ public class RegenService {
         return runner.runDir(runId).resolve("pages").resolve("versions");
     }
 
-    /** 남겨 둔 화질. 없으면(옛 작품) 기본값으로 떨어진다. */
-    private String qualityOf(String runId) {
+    /** 남겨 둔 화질. 없으면(옛 작품) 기본값으로 떨어진다. 다시 그리기 값도 이걸 본다(#787). */
+    String qualityOf(String runId) {
         try {
             return Files.readString(runner.runDir(runId).resolve("quality.txt")).strip();
         } catch (IOException e) {
@@ -365,6 +463,15 @@ public class RegenService {
     /* ---- 안전 검사로 비워 둔 장(#626) ---- */
 
     /** 안전 검사에 걸려 빈 장으로 둔 장 번호들. 결과 화면·편집실이 안내를 띄운다. */
+    public java.util.Map<Integer, String> unsafeReasons(String runId) {
+        return runner.unsafeReasons(runId);
+    }
+
+    /** 그 장마다 걸린 이유 종류 코드(sexual · violence …). 화면이 언어마다 이름을 붙인다. */
+    public java.util.Map<Integer, List<String>> unsafeKinds(String runId) {
+        return runner.unsafeKinds(runId);
+    }
+
     public List<Integer> unsafePages(String runId) {
         return runner.unsafePages(runId);
     }
@@ -424,29 +531,59 @@ public class RegenService {
         return v instanceof Number num ? num.intValue() : null;
     }
 
-    /** 다시 그리기 값을 받았다고 적어 둔다 — 실패하면 {@link #fail} 이 돌려준다(#626). */
-    public void charged(String id, Long userId, String ref) {
-        if (id != null && userId != null && ref != null) {
-            paid.put(id, new String[]{String.valueOf(userId), ref});
-        }
-    }
-
-    /** 끝났다 — 잘 됐으면 받은 값은 그대로 두고 기억만 지운다. */
-    private void settled(String id) {
-        paid.remove(id);
-    }
-
     private void fail(String id, String reason) {
         /* **실패하면 받은 값을 돌려준다(#626).** 웹툰 만들기와 같은 원칙 — 전에는 다시 그리기가 안전 검사에
            걸리거나 실패해도 크레딧이 그대로 빠졌다(로컬 시험에서 3크레딧). */
-        String[] who = paid.remove(id);
-        if (who != null) {
-            credits.refund(Long.valueOf(who[0]), who[1]);
-        }
         regens.findById(id).ifPresent(one -> {
+            refund(one);
             one.fail(reason, Instant.now());
             regens.save(one);
         });
+    }
+
+    /**
+     * 기록에 적힌 사람에게 그 장부 번호로 낸 값을 돌려준다. -> 돌려준 양
+     *
+     * 낸 적이 없으면(무료 · 받기 실패) 장부에 낸 줄이 없어서 0 이다. 같은 번호로 두 번 불려도 한 번만 돌려준다.
+     */
+    private int refund(PageRegen one) {
+        if (one.getPaidBy() == null || one.getPaidRef() == null) {
+            return 0;
+        }
+        String ref = one.getPaidRef();
+        return credits.refund(one.getPaidBy(), ref,
+                ref.startsWith("pages:") ? "이어 그리지 못한 장 돌려드림" : "다시 그리지 못한 장 돌려드림");
+    }
+
+    static final String INTERRUPTED = "서버가 다시 시작되어 그리지 못했어요";
+
+    /**
+     * 서버가 뜰 때 — 줄에 서 있거나 그리던 기록을 끊긴 것으로 적고 받은 값을 돌려준다(#864).
+     *
+     * 줄은 이 서버의 메모리에만 있어서({@link JobRunner#enqueue}) 다시 뜨면 꺼내 그릴 일꾼이 없다. 안 치우면
+     * 편집실이 그 장을 끝나지 않는 「그리는 중」으로 묻고, 낸 값도 물린 채 남는다. 만들기 작업을 치우는
+     * {@code StaleJobs} 와 같은 자리 · 같은 이유다 — 막 뜬 이 서버는 아무것도 안 그리고 있으므로, 지금
+     * queued · running 인 것은 전부 앞선 목숨이 남긴 것이다.
+     *
+     * <b>이어 그리지는 않는다.</b> 오래 서 있던 기록을 뒤늦게 그리면 그 사이 사람이 다시 그리거나 되돌린 장을
+     * 덮는다. 값을 돌려주고 사람이 다시 누르게 한다. 낸 사람이 안 적힌 옛 기록은 끊긴 것으로만 적는다.
+     */
+    @PostConstruct
+    void buryInterrupted() {
+        List<PageRegen> ghosts = regens.findByStatusIn(
+                List.of(RegenStatus.QUEUED.wire(), RegenStatus.RUNNING.wire()));
+        for (PageRegen one : ghosts) {
+            try {
+                int back = refund(one);
+                one.fail(INTERRUPTED + (back > 0 ? " — 크레딧은 돌려드렸어요" : " — 다시 눌러 주세요"), Instant.now());
+                regens.save(one);
+            } catch (RuntimeException e) {      // 하나 때문에 기동을 막지 않는다
+                log.error("끊긴 다시 그리기를 못 치웠습니다 (id={})", one.getId(), e);
+            }
+        }
+        if (!ghosts.isEmpty()) {
+            log.warn("서버가 죽을 때 줄에 있던 다시 그리기 {}개를 끊긴 것으로 적었습니다", ghosts.size());
+        }
     }
 
     private static byte[] scaled(BufferedImage src, int width) throws IOException {

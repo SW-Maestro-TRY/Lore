@@ -130,6 +130,24 @@ public class PrivateArt {
     }
 
     /**
+     * 올려 둔 그림의 <b>앞부분만</b> 읽는다(Range 요청). 크기만 알면 되는 자리
+     * (편집실의 장 비율)에서 전체를 내려받지 않으려고 둔다. 없거나 못 읽으면
+     * {@code null}. 파일이 그보다 짧으면 있는 만큼만 온다.
+     */
+    public byte[] readHead(String key, int bytes) {
+        if (!ready() || key == null || key.isBlank() || bytes <= 0) {
+            return null;
+        }
+        try {
+            return s3.getObjectAsBytes(GetObjectRequest.builder()
+                    .bucket(bucket).key(key).range("bytes=0-" + (bytes - 1)).build()).asByteArray();
+        } catch (RuntimeException e) {
+            log.warn("그림 앞부분을 못 읽었습니다 (key={})", key, e);
+            return null;
+        }
+    }
+
+    /**
      * 잠깐 열리는 주소. 주인 확인은 <b>부르는 쪽이</b> 먼저 한다 — 여기까지
      * 오면 이미 봐도 되는 사람이다.
      */

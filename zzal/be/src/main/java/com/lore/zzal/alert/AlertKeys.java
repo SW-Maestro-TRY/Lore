@@ -20,6 +20,9 @@ public final class AlertKeys {
     /** 밤 굽기 실패. 값 = 실패를 알린 날(KST). */
     public static final String NIGHT_BAKE_FAILED = "night_bake_failed";
 
+    /** 2층 배경 굽기가 재시도를 다 썼다(#696). 값 = 마지막으로 알린 펫 id. */
+    public static final String LAYER2_FAILED = "layer2_failed";
+
     private AlertKeys() {
     }
 }

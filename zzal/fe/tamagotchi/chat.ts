@@ -72,7 +72,7 @@ export function clampChat(text: string): string {
 // 실서버는 chat.mode=template 로 같은 구조(5그룹 × 3슬롯 × 3벌 + 반응 3벌)를 갖는다(플랜 "기획 구멍").
 // 여기 문장은 세션 초안이고 상훈님 톤 리뷰 전이다. 원망 패턴은 위 필터가 잡는다.
 
-const CALL: Record<ChatSlot, Record<Personality, string[]>> = {
+const CALL: Record<Exclude<ChatSlot, 'CONTINUOUS'>, Record<Personality, string[]>> = {
   BABY: {
     GENTLE: ['안녕하세요… 여기가 어디예요?', '처음 보는 곳이에요', '당신이 저를 데려온 사람이에요?'],
     LIVELY: ['우와! 여기 뭐예요?', '안녕! 나 지금 태어났어!', '같이 놀 거예요?'],
@@ -140,7 +140,7 @@ export function templateCall(
   /** 기분 좋은 날의 첫 부름인가(그날의 첫 한 번만 true 로 넘긴다). */
   goodDay = false,
 ): string {
-  const line = sanitizeLine(pickBy(CALL[slot][personality ?? 'GENTLE'], seed));
+  const line = sanitizeLine(pickBy(CALL[slot === 'CONTINUOUS' ? 'NOON' : slot][personality ?? 'GENTLE'], seed));
   return goodDay ? sanitizeLine(GOOD_DAY_PREFIX[personality ?? 'GENTLE'] + line) : line;
 }
 

@@ -1,0 +1,6 @@
+package com.lore.zzal.admin;
+import com.lore.common.exception.*;import org.junit.jupiter.api.*;import org.springframework.jdbc.core.JdbcTemplate;import software.amazon.awssdk.services.s3.S3Client;import java.util.*;import static org.junit.jupiter.api.Assertions.*;import static org.mockito.Mockito.*;import static org.mockito.ArgumentMatchers.*;
+class AdminCustomSequenceTest{
+ @Test void adminGuardRunsBeforeAnyDatabaseOrStorageRead(){var db=mock(JdbcTemplate.class);var guard=mock(AdminGuard.class);var s3=mock(S3Client.class);doThrow(new BusinessException(ErrorCode.ADMIN_ONLY)).when(guard).require(7L);var service=new AdminCustomBundleService(db,guard,s3,"none");assertThrows(BusinessException.class,()->service.sequence(7L,1));verifyNoInteractions(db,s3);}
+ @Test void oldOrMissingSetNeverInventsFrames(){var db=mock(JdbcTemplate.class);var guard=mock(AdminGuard.class);var s3=mock(S3Client.class);var service=new AdminCustomBundleService(db,guard,s3,"none");when(db.queryForList(anyString(),eq(1L))).thenReturn(List.of());assertEquals("UNAVAILABLE",service.sequence(7L,1).status());when(db.queryForList(anyString(),eq(1L))).thenReturn(List.of(Map.of("id",1L,"source_plan_json","{}")));var result=service.sequence(7L,1);assertEquals("CORE_RESULT_PENDING",result.reasonCode());assertTrue(result.frames().isEmpty());verifyNoInteractions(s3);}
+}

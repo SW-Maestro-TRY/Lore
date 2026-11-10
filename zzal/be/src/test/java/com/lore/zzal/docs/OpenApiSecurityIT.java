@@ -228,6 +228,9 @@ class OpenApiSecurityIT {
         if (method.equals("POST") && path.equals("/api/piece-maker/v1/public/feedback")) {
             return false;                                   // 피드백(오류 신고 · 판정 후기) — 로그인 전에도 받는다
         }
+        if (method.equals("POST") && path.equals("/api/piece-maker/v1/ad-landings")) {
+            return false;                                   // 광고 진입만 공개. 계정 연결은 로그인 필요
+        }
         if (path.startsWith("/api/zzal/v1/agent/")) {
             return false;                                   // 전용 열쇠(X-Zzal-Agent-Key)로 지키는 문
         }

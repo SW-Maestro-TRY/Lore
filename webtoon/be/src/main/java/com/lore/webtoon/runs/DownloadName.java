@@ -22,15 +22,35 @@ final class DownloadName {
 
     /** {@code Content-Disposition} 머리 값 전체. {@code page} 가 null 이면 한 편, 아니면 그 장. */
     static String header(String runId, String title, Integer page) {
-        String ascii = page == null ? runId + ".png" : runId + "-" + page + ".png";
-        return "attachment; filename=\"" + ascii + "\"; filename*=UTF-8''" + encode(name(title, page));
+        return header(runId,title,page,1);
+    }
+
+    static String header(String runId, String title, Integer page, int episode) {
+        return header(runId, title, page, episode, false);
+    }
+
+    /** {@code plain} 이면 얹은 것을 뺀 판 — 이름 끝에 {@code _그림만}(옛 브라우저에는 {@code -plain}). */
+    static String header(String runId, String title, Integer page, int episode, boolean plain) {
+        String ascii = (page == null ? runId : runId + "-" + page) + (plain ? "-plain" : "") + ".png";
+        return "attachment; filename=\"" + ascii + "\"; filename*=UTF-8''" + encode(name(title, page, episode, plain));
     }
 
     /** 사람이 보는 이름. 제목이 비면 {@code LORE_1화.png}. */
     static String name(String title, Integer page) {
+        return name(title,page,1);
+    }
+
+    static String name(String title, Integer page, int episode) {
+        return name(title, page, episode, false);
+    }
+
+    static String name(String title, Integer page, int episode, boolean plain) {
         String t = clean(title);
-        String base = t.isEmpty() ? "LORE_1화" : "LORE_" + t + "_1화";
-        return page == null ? base + ".png" : base + "_" + page + ".png";
+        String base = (t.isEmpty() ? "LORE_" : "LORE_" + t + "_") + Math.max(1,episode) + "화";
+        if (page != null) {
+            base += "_" + page;
+        }
+        return base + (plain ? "_그림만" : "") + ".png";
     }
 
     /** 파일 이름에 못 쓰는 글자(경로 구분자 · 따옴표 · 제어 문자 등)는 빼고, 공백은 하나로. */

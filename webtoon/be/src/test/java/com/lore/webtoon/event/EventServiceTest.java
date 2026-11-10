@@ -63,6 +63,36 @@ class EventServiceTest {
     }
 
     @Test
+    @DisplayName("자동 기록의 키(how·via·len·disabled·error·vw·vh·touch)도 남긴다")
+    void keepsAutoTrackKeys() {
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("how", "click");
+        props.put("via", "next");
+        props.put("len", 12);
+        props.put("disabled", true);
+        props.put("error", "cannot_read_properties_of_undefined_reading_length");
+        props.put("vw", 390);
+        props.put("vh", 844);
+        props.put("touch", true);
+
+        assertThat(EventService.cleanProps(props)).isEqualTo("{\"how\":\"click\",\"via\":\"next\",\"len\":12,"
+                + "\"disabled\":true,\"error\":\"cannot_read_properties_of_undefined_reading_length\","
+                + "\"vw\":390,\"vh\":844,\"touch\":true}");
+    }
+
+    @Test
+    @DisplayName("세계관 체험의 세계·사건 id 를 남긴다")
+    void keepsPlayKeys() {
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("where", "char");
+        props.put("world", "arcana");
+        props.put("event", "arcana-ep1");
+
+        assertThat(EventService.cleanProps(props))
+                .isEqualTo("{\"where\":\"char\",\"world\":\"arcana\",\"event\":\"arcana-ep1\"}");
+    }
+
+    @Test
     @DisplayName("남는 값이 없으면 props 는 비운다")
     void emptyPropsBecomeNull() {
         assertThat(EventService.cleanProps(Map.of("email", "a@b.c"))).isNull();

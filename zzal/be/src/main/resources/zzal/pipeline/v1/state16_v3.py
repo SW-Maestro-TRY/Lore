@@ -75,6 +75,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import state8_v3 as S8   # noqa: E402  (읽기만 — drop_intruders/foot_ref/move/save_transparent_gif)
 import state8_v4 as S4   # noqa: E402  (읽기만 — 감싸지기 **전**의 v3 순정 키잉 `_v3_key_green` 만 쓴다)
 import state8_v5 as S5   # noqa: E402  (읽기만 — lattice_points/mark_zone/strip_marks_in_zone)
+# ★2026-10-08 #687 — state8_v5 의 검출·구역이 바뀌어(격자 맞추기·원 구역) 여기는 옛 동작(`*_legacy`)에 묶었다.
+#   선물 움짤 결과를 검수 없이 바꾸지 않기 위해서다(바이트 동일 28/28 확인). 새 방식 적용은 후속 과제.
 
 PAD_CUT_TOP = 60    # 칸 위쪽 절단 여유 — v2 와 같은 값·같은 근거
 PAD_ALIGN = 120     # 정렬 클리핑 방지 여유 — v2 와 같은 값
@@ -104,7 +106,7 @@ def cut_lines(rgb, cols, rows, mode):
     if mode == "even":
         return even, [], "균등분할(--cut even 지정)"
 
-    pts = S5.lattice_points(rgb)
+    pts = S5.lattice_points_legacy(rgb)
     if len(pts) < (cols + 1) * (rows + 1) * 0.6:
         return even, pts, (f"⚠️폴백: 마크 {len(pts)}개로는 격자를 못 세운다 → 균등분할로 자른다")
     cx = _cluster([p[0] for p in pts])
@@ -139,7 +141,7 @@ def cut_one(ext, xs, ys, r, c, W0, medH, PAD_CUT, points, ytop_pad):
 
     # 이 칸 안에서 격자선이 지나는 로컬 y 두 개
     corner_rows = (ytop_line - y0, ybot - y0)
-    zone = S5.mark_zone((cell.height, cell.width), corner_rows,
+    zone = S5.mark_zone_legacy((cell.height, cell.width), corner_rows,
                         (x0, y0 - ytop_pad), points)   # points 는 원본 좌표계
     before = int((np.array(cell.convert("RGBA"))[:, :, 3] > 8).sum())
     cell2 = S5.strip_marks_in_zone(cell, zone)
@@ -224,7 +226,7 @@ def main(grid, cols=4, rows=4, cut="marks", align="posture", lie_from=9, lie_dx=
     if how.startswith("⚠️"):
         print("   ↑ 이 판은 v2 와 같은 균등분할로 잘렸습니다. 앵커 톱니가 남을 수 있습니다.")
     if not points:
-        points = S5.lattice_points(arr)
+        points = S5.lattice_points_legacy(arr)
     print(f"격자점 검출 {len(points)}개")
 
     wid = [xs[i + 1] - xs[i] for i in range(cols)]

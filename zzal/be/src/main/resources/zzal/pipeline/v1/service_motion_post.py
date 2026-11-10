@@ -3,7 +3,7 @@
 서비스용 모션 후처리 — 16프레임 격자 한 장을 움짤 하나(webp)로 만든다.
 
   python3 service_motion_post.py <격자.png> <출력폴더> --profile "script=state16_v3, align=seat, ..."
-  → 출력폴더/motion.webp
+  → 출력폴더/motion.webp (+ motion.gif — 저장·공유용, gif_out.py · #713)
 
   --profile  ★필수. 이 동작의 후처리 프로파일(pipeline/v1/motion_post_profiles.txt 의 한 줄).
              `script=<모듈>` 로 어느 후처리를 탈지 고르고, 나머지는 그 모듈 main() 의 인자다.
@@ -49,6 +49,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from PIL import Image  # noqa: E402
+import gif_out  # noqa: E402
 
 # 프로파일이 고를 수 있는 후처리. **여기 적힌 것만** 부를 수 있다 —
 # 임의의 모듈 이름을 그대로 import 하면 표의 오타가 엉뚱한 파일을 실행시킨다.
@@ -139,6 +140,8 @@ def build(grid_path: str, out_dir: str, profile: str) -> str:
         dst, save_all=True, append_images=frames[1:],
         duration=FRAME_MS, loop=0, format="WEBP",
         lossless=False, quality=WEBP_QUALITY, method=6)
+    # 저장·공유용 GIF(#713) — motion.gif. 자바가 있으면 같이 올린다(화면은 계속 webp).
+    gif_out.webp_to_gif(dst)
 
     shutil.rmtree(work, ignore_errors=True)   # 중간물·검수용 부산물은 남기지 않는다
     return str(dst)

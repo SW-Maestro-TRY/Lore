@@ -56,7 +56,7 @@ class MyWebtoonServiceTest {
         pageStore = mock(PageStore.class);
         /* 카드 만드는 규칙은 여기서 볼 것이 아니다(RunServiceTest 가 본다). */
         runService = mock(RunService.class);
-        when(runService.cardOf(anyString())).thenReturn(null);
+        when(runService.cardOf(anyString(), any())).thenReturn(null);
         when(ledger.runIdsOf(anyLong())).thenReturn(List.of());
         /* 다시 올리기가 실제로 무엇을 하는지는 여기서 볼 것이 아니다
            (AfterRunTest 가 본다). 여기서 보는 것은 **누가 부를 수 있나** 다. */
@@ -68,7 +68,7 @@ class MyWebtoonServiceTest {
     private void 작품이_있다(Long userId, String... runIds) {
         when(ledger.runIdsOf(userId)).thenReturn(List.of(runIds));
         for (String runId : runIds) {
-            when(runService.cardOf(runId)).thenReturn(Map.of("run_id", runId));
+            when(runService.cardOf(eq(runId), any())).thenReturn(Map.of("run_id", runId));
         }
     }
 
@@ -87,8 +87,8 @@ class MyWebtoonServiceTest {
     @DisplayName("같은 작품이 두 번 나와도 한 줄만 남는다")
     void 겹치는_것을_거른다() {
         when(ledger.runIdsOf(7L)).thenReturn(List.of("r1", "r1", "r2"));
-        when(runService.cardOf("r1")).thenReturn(Map.of("run_id", "r1"));
-        when(runService.cardOf("r2")).thenReturn(Map.of("run_id", "r2"));
+        when(runService.cardOf(eq("r1"), any())).thenReturn(Map.of("run_id", "r1"));
+        when(runService.cardOf(eq("r2"), any())).thenReturn(Map.of("run_id", "r2"));
 
         assertThat(service.myRuns(7L)).extracting(m -> m.get("run_id"))
                 .containsExactly("r1", "r2");
@@ -98,9 +98,9 @@ class MyWebtoonServiceTest {
     @DisplayName("한 편을 못 읽어도 나머지는 준다")
     void 하나가_실패해도_나머지는_남는다() {
         when(ledger.runIdsOf(7L)).thenReturn(List.of("r1", "깨진것"));
-        when(runService.cardOf("r1")).thenReturn(Map.of("run_id", "r1"));
+        when(runService.cardOf(eq("r1"), any())).thenReturn(Map.of("run_id", "r1"));
         // 카드를 못 만들면 null 이 온다 — 그 한 편만 빠지고 목록은 살아야 한다.
-        when(runService.cardOf("깨진것")).thenReturn(null);
+        when(runService.cardOf(eq("깨진것"), any())).thenReturn(null);
 
         assertThat(service.myRuns(7L)).extracting(m -> m.get("run_id")).containsExactly("r1");
     }
@@ -147,7 +147,7 @@ class MyWebtoonServiceTest {
 
         assertThat(service.setVisibility(7L, "r1", false)).isFalse();
 
-        verify(ledger).setPublic("r1", false);
+        verify(ledger).setVisibility("r1", WorkVisibility.PRIVATE);
         /* 안 옮기면 비공개로 내려도 CloudFront 가 계속 내준다 — 스위치가
            거짓말을 하는 셈이다. 그래서 이 한 줄이 빠지는 것을 여기서 잡는다. */
         verify(pageStore).moveAll("r1", false);
@@ -162,7 +162,7 @@ class MyWebtoonServiceTest {
         /* 이미 DB 는 바뀌었고 목록에서도 내려가 있다. 남은 것은 "주소를 아는
            사람에게 아직 열린다" 이고, 그건 크게 로그로 남기고 다시 시도할 일이다. */
         assertThat(service.setVisibility(7L, "r1", false)).isFalse();
-        verify(ledger).setPublic("r1", false);
+        verify(ledger).setVisibility("r1", WorkVisibility.PRIVATE);
     }
 
     @Test
@@ -176,9 +176,50 @@ class MyWebtoonServiceTest {
 
         assertThatThrownBy(() -> service.setVisibility(7L, "r1", true))
                 .isInstanceOf(BusinessException.class);
-        verify(ledger, never()).setPublic(anyString(), anyBoolean());
+        verify(ledger, never()).setVisibility(anyString(), anyString());
 
         assertThat(service.setVisibility(7L, "r1", false)).isFalse();
+    }
+
+    @Test
+    @DisplayName("링크 공개(#898) — 표에 link 로 적고, 그림은 비공개 자리로 옮기고, 열쇠를 돌려준다")
+    void 링크_공개는_그림을_비공개_자리로() {
+        when(ledger.mayChange("r1", 7L)).thenReturn(true);
+        WebtoonWork w = WebtoonWork.started("job-r1", 7L, "uid", java.time.Instant.now());
+        w.learnRun("r1");
+        w.setPublic(false);
+        w.setShareKey("열쇠");
+        when(ledger.setVisibility("r1", WorkVisibility.LINK)).thenReturn(java.util.Optional.of(w));
+
+        MyWebtoonService.Visibility out = service.setVisibility(7L, "r1", "link");
+
+        assertThat(out.visibility()).isEqualTo(WorkVisibility.LINK);
+        assertThat(out.shareKey()).isEqualTo("열쇠");
+        assertThat(out.isPublic()).isFalse();
+        /* 공개 자리에 남으면 그림 주소만으로 CloudFront 가 열쇠 없이 내준다. */
+        verify(pageStore).moveAll("r1", false);
+    }
+
+    @Test
+    @DisplayName("관리자가 비공개 처리한 작품은 링크 공개로도 못 연다")
+    void 관리자_비공개는_링크도_못함() {
+        when(ledger.mayChange("r1", 7L)).thenReturn(true);
+        WebtoonWork w = WebtoonWork.started("job-r1", 7L, "uid", java.time.Instant.now());
+        w.learnRun("r1");
+        w.moderate(WorkModeration.HIDDEN, "사유", java.time.Instant.now());
+        when(ledger.find("r1")).thenReturn(java.util.Optional.of(w));
+
+        assertThatThrownBy(() -> service.setVisibility(7L, "r1", "link"))
+                .isInstanceOf(BusinessException.class);
+        verify(ledger, never()).setVisibility(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("모르는 공개 범위 낱말은 받지 않는다")
+    void 모르는_낱말은_거절() {
+        assertThatThrownBy(() -> service.setVisibility(7L, "r1", "friends"))
+                .isInstanceOf(BusinessException.class);
+        verify(ledger, never()).setVisibility(anyString(), anyString());
     }
 
     @Test
@@ -188,7 +229,7 @@ class MyWebtoonServiceTest {
 
         assertThatThrownBy(() -> service.setVisibility(7L, "남의것", true))
                 .isInstanceOf(BusinessException.class);
-        verify(ledger, never()).setPublic(anyString(), anyBoolean());
+        verify(ledger, never()).setVisibility(anyString(), anyString());
         verify(pageStore, never()).moveAll(anyString(), anyBoolean());
     }
 

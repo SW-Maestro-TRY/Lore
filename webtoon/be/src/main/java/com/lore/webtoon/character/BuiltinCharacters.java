@@ -67,6 +67,9 @@ public class BuiltinCharacters implements ApplicationRunner {
     }
 
     private static final List<Seed> SEEDS = List.of(
+            new Seed("ex-chloe-1.jpg", "클로에",
+                    "겨울 무도회에서도 레이스 부채를 놓지 않는다. 숨이 가빠지면 "
+                    + "부채부터 펼친다."),
             new Seed("ex-harin-1.jpg", "하린",
                     "국밥집 창가 자리가 자기 자리인 줄 안다. 누구에게나 잘 웃는데 "
                     + "정작 자기 얘기는 안 한다."),

@@ -9,23 +9,29 @@
 .wt .wt-entry-card {
   position: relative; isolation: isolate; height: 460px; overflow: hidden;
   text-decoration: none; color: var(--ink); display: flex; flex-direction: column;
-  border-radius: 16px; background: #fff; border: 1px solid var(--line);
+  border-radius: 16px; background: var(--card, #fff); border: 1px solid var(--line);
+}
+/* 어두운 테마에서 흰 판에 그림을 55% 로 깔면 밝은 글자가 묻힌다(2026-10-25) — 카드 색을 쓰고,
+   글 자리 뒤에 어둠을 한 겹 깔아 그림 위에서도 읽히게 한다. */
+.wt .wt-entry-card::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(ellipse 75% 50% at 50% 50%, rgba(10, 19, 32, .6), rgba(10, 19, 32, 0) 100%), rgba(10, 19, 32, .42);
 }
 .wt .wt-entry-card:hover { color: var(--ink); border-color: var(--ink); }
 .wt .wt-entry-card.on { border: 2px solid var(--sea); }
 .wt .wt-entry-bg {
   position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%;
-  object-fit: cover; object-position: top; display: block; opacity: .55; transition: transform .4s ease, opacity .3s ease;
+  object-fit: cover; object-position: top; display: block; opacity: .9; transition: transform .4s ease, opacity .3s ease;
 }
 .wt .wt-entry-bg.wt-entry-bg-char { object-position: center 20%; }
-.wt .wt-entry-card:hover .wt-entry-bg { transform: scale(1.03); opacity: .65; }
+.wt .wt-entry-card:hover .wt-entry-bg { transform: scale(1.03); opacity: 1; }
 .wt .wt-entry-free {
   position: absolute; right: 14px; top: 14px; font-size: 12px; padding: 4px 10px; border-radius: 999px;
-  background: var(--ink); color: #fff; font-weight: 600;
+  background: var(--paper); color: var(--ink); border: 1px solid var(--line-strong); font-weight: 600;
 }
 .wt .wt-entry-body { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 28px; margin: auto 0; }
-.wt .wt-entry-desc { font-size: 14px; line-height: 1.5; font-weight: 600; color: var(--ink); }
-.wt .wt-entry-big { color: var(--sea-deep); font-size: 40px; font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; }
+.wt .wt-entry-desc { font-size: 14px; line-height: 1.5; font-weight: 600; color: var(--ink); text-shadow: 0 1px 8px rgba(0, 0, 0, .6); }
+.wt .wt-entry-big { color: var(--sea-deep); text-shadow: 0 2px 14px rgba(0, 0, 0, .55); font-size: 40px; font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; }
 
 @media (max-width: 767px) {
   .wt .wt-entry { padding: 28px 16px 24px; gap: 12px; }

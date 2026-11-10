@@ -32,10 +32,11 @@ export type ModalState =
   | { kind: "help" }
   | { kind: "reset" };
 
-/** 카드 상세. `selected` 는 이 카드를 가설에 담았는가다. */
+/** 카드 상세. 제출 후에는 선택 여부와 무관하게 이 복선으로 새 가설을 시작한다. */
 export function detailModal(
   card: Card,
   selected: boolean,
+  frozen: boolean,
   actions: { onClose: () => void; onToggle: (card: Card) => void; onPerson: (name: string) => void },
 ): ModalContent {
   const resolved = card.status === "resolved";
@@ -44,16 +45,15 @@ export function detailModal(
     body: (
       <>
         <div className="row">
-          <span className="tag amber">추출 기록</span>
+          <span className="tag amber">{resolved ? "회수됨" : "미회수"}</span>
           <span className="chapter-tag">
             {card.chapter}화 · {card.id}
           </span>
-          <span className="record-status">{resolved ? "장부 기록: 회수됨" : "장부 기록: 미회수"}</span>
         </div>
         <div className="fact-box">{card.fact}</div>
         {resolved && card.resolution ? (
           <div className="fact-box">
-            <strong>장부의 회수 기록{card.resolved_chapter ? ` (${card.resolved_chapter}화)` : ""}</strong>
+            <strong>회수 내용{card.resolved_chapter ? ` (${card.resolved_chapter}화)` : ""}</strong>
             <p className="record-text">{card.resolution}</p>
           </div>
         ) : null}
@@ -64,8 +64,7 @@ export function detailModal(
             </button>
           ))}
         </div>
-        <details>
-          <summary>복선의 출처와 원래 기록</summary>
+        <div className="card-source">
           <p className="source-path">복선 원문</p>
           <p className="record-text">{card.excerpt}</p>
           {card.scene_excerpt ? (
@@ -76,7 +75,7 @@ export function detailModal(
               <p className="record-text">{card.scene_excerpt}</p>
             </>
           ) : null}
-        </details>
+        </div>
       </>
     ),
     footer: (
@@ -85,7 +84,7 @@ export function detailModal(
           돌아가기
         </button>
         <button className="btn primary" data-action="add" onClick={() => actions.onToggle(card)}>
-          {selected ? "담기 취소" : "가설에 담기"}
+          {frozen ? "이 복선으로 새 가설 쓰기" : selected ? "담기 취소" : "가설에 담기"}
         </button>
       </>
     ),
@@ -180,7 +179,7 @@ export function savedModal(
               </div>
             ))
           ) : (
-            <p className="small muted">{chapter === null ? "장부를 불러온 뒤에 볼 수 있습니다." : "임시 저장한 가설이 없습니다. \"저장\"을 누르면 여기에 남습니다."}</p>
+            <p className="small muted">{chapter === null ? "장부를 불러온 뒤에 볼 수 있습니다." : "임시 저장한 가설이 없습니다. \"임시 저장\"을 누르면 여기에 남습니다."}</p>
           )}
         </section>
       </>
@@ -220,7 +219,7 @@ export function helpModal(): ModalContent {
             <strong>04 · 결과 확인하고 공유하기</strong>
             <p>
               판정이 끝나면 ‘내 가설’에서 결과를 확인하세요.
-              ‘공유하기’에서 결과 이미지를 저장하고 글을 복사해 SNS에 올릴 수 있어요.
+              ‘공유하기’에서 올릴 글을 확인하고 내 SNS 계정에 직접 게시할 수 있어요.
             </p>
           </div>
         </div>

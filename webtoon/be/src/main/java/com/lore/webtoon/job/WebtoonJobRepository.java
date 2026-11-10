@@ -13,6 +13,20 @@ public interface WebtoonJobRepository extends JpaRepository<WebtoonJob, Long> {
 
     Optional<WebtoonJob> findByPublicId(String publicId);
 
+    /**
+     * 세계관 체험으로 시작한 작업들(PlayRuns#mark 가 사건을 적는다). 둘러보기는 이 작업들의 작품을 빼고 보여 준다 —
+     * 체험 만화는 사건마다 따로 모아 보이고(/play/events/{id}/runs), 웹툰 목록에 섞이면 이상해 보인다(하은, 2026-11-04).
+     */
+    @Query(value = "select public_id from webtoon_job where play_event is not null", nativeQuery = true)
+    List<String> findPlayJobIds();
+
+    /** 이 작품을 만든 가장 최근 작업 — 다 만들어진 뒤 어떤 캐릭터로 만들었는지 볼 때(AfterRun, 2026-10-27). */
+    Optional<WebtoonJob> findFirstByRunIdOrderByIdDesc(String runId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select j from WebtoonJob j where j.publicId = :publicId")
+    Optional<WebtoonJob> lockByPublicId(@Param("publicId") String publicId);
+
     /** 차례를 기다리는 것들. 먼저 온 것부터. */
     List<WebtoonJob> findByStatusOrderByIdAsc(JobStatus status);
 

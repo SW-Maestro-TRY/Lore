@@ -76,4 +76,13 @@ public interface ZzalPetRepository extends JpaRepository<ZzalPet, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from ZzalPet p where p.id = :id")
     Optional<ZzalPet> findByIdForUpdate(@Param("id") Long id);
+
+    /** 2층 상태로 찾는다(#696 — 기동 복구·관리자 목록). */
+    List<ZzalPet> findByPhaseAndLayer2StatusIn(PetPhase phase, Collection<Layer2Status> statuses);
+
+    /** 관리자 목록 — 2층이 READY 가 아닌 살아 있는 펫(#696). */
+    List<ZzalPet> findByPhaseAndLayer2StatusInOrderByIdDesc(PetPhase phase, Collection<Layer2Status> statuses);
+
+    /** 관리자 목록 — 결함 표시된 살아 있는 펫(#702). 2층 상태와 상관없다(표시는 노출 상태를 안 바꾼다). */
+    List<ZzalPet> findByPhaseAndLayer2FlaggedTrueOrderByIdDesc(PetPhase phase);
 }

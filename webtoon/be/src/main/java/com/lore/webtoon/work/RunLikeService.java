@@ -64,9 +64,12 @@ public class RunLikeService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> likedCards(Long userId) {
         List<Map<String, Object>> out = new ArrayList<>();
+        // 연재는 카드 하나 — 여러 화를 찜했어도 한 번만 싣는다(1화 카드는 한 번만 만든다).
+        Map<String, Map<String, Object>> roots = new java.util.HashMap<>();
+        java.util.Set<Object> seen = new java.util.HashSet<>();
         for (String runId : likes.runIdsLikedBy(userId)) {
-            Map<String, Object> card = runs.cardOf(runId);
-            if (card != null) {
+            Map<String, Object> card = runs.cardOf(runId, roots);
+            if (card != null && seen.add(card.get("run_id"))) {
                 card.put("liked", true);
                 out.add(card);
             }

@@ -95,8 +95,28 @@ function patternsOf(): Pattern[] {
   return out;
 }
 
+/* 서버가 정해진 조각을 이어 만든 문구(「…다시 시도해 주세요. 걸린 곳: 「이야기」 칸 「…」 · 이유: …」)는
+ * 자리 맞추기로는 못 옮긴다 — 잡힌 칸 이름·이유도 번역해야 해서다. 그런 문구는 조각을 나눠 옮기는
+ * 함수를 따로 올린다. 정확히 맞는 키도, 자리 맞추기도 안 될 때만 부른다. 못 옮기면 null. */
+export type Composer = (src: string, tr: (s: string) => string, lang: Exclude<Lang, "ko">) => string | null;
+const composers: Composer[] = [];
+
+export function registerComposer(fn: Composer): void {
+  if (!composers.includes(fn)) composers.push(fn);
+}
+
 function lookup(lang: Lang, src: string): string {
   if (lang === "ko") return src;
+  const direct = lookupDict(lang, src);
+  if (direct !== null) return direct;
+  for (const c of composers) {
+    const out = c(src, (s) => lookupDict(lang, s) ?? s, lang);
+    if (out !== null) return out;
+  }
+  return src;
+}
+
+function lookupDict(lang: Exclude<Lang, "ko">, src: string): string | null {
   for (let i = registry.length - 1; i >= 0; i--) {
     const hit = registry[i][src]?.[lang];
     if (hit) return hit;
@@ -110,7 +130,7 @@ function lookup(lang: Lang, src: string): string {
     p.names.forEach((n, i) => { vars[n] = m[i + 1]; });
     return fill(target, vars);
   }
-  return src;
+  return null;
 }
 
 /* 지금 화면 언어. 훅을 못 쓰는 자리(api 의 오류 문구, DOM 을 직접 그리는 코드)가
@@ -120,6 +140,25 @@ let current: Lang = "ko";
 /** 훅 밖에서 쓰는 t(). 서버가 보낸 한국어 문구를 지금 화면 언어로 옮길 때 쓴다. */
 export function translateNow(src: string, vars?: Record<string, string | number>): string {
   return fill(lookup(current, src), vars);
+}
+
+/** 화면에 보이는 글자가 **사전에 있는 화면 문구와 정확히 같을 때만** 그 문구의 영문을 준다.
+ *  행동 기록이 단추·오류 문구에 이름을 붙일 때 쓴다. `{name}` 같은 자리 맞추기는 하지 않는다 —
+ *  잡힌 자리에 사람이 쓴 이름이 들어 있을 수 있어서다. 화면 언어가 영어·일어·중국어여도
+ *  같은 문구로 찾는다. 사전에 없으면 undefined. */
+export function knownEnglishOf(text: string): string | undefined {
+  const src = text.replace(/\s+/g, " ").trim();
+  if (!src) return undefined;
+  for (let i = registry.length - 1; i >= 0; i--) {
+    const dict = registry[i];
+    const hit = dict[src];
+    if (hit) return hit.en || src;
+    for (const [ko, entry] of Object.entries(dict)) {
+      if (/\{\w+\}/.test(ko)) continue;
+      if (entry.en === src || entry.ja === src || entry.zh === src) return entry.en || ko;
+    }
+  }
+  return undefined;
 }
 
 /** 영문 번역. 행동 기록(track)은 한글 값을 버리므로 화면 이름을 기호로 바꿀 때 쓴다. 없으면 원문. */

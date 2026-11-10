@@ -56,12 +56,14 @@ public class LeaveService {
             return 0;
         }
         Instant start = pet.getTripStartedAt();
+        java.time.ZoneId zone = pet.zone();
         long elapsedDays = ChronoUnit.DAYS.between(
-                start.atZone(ZzalRules.ZONE).toLocalDate(), now.atZone(ZzalRules.ZONE).toLocalDate()) + 1;
+                start.atZone(zone).toLocalDate(), now.atZone(zone).toLocalDate()) + 1;
         int target = (int) Math.min(ZzalRules.POSTCARD_MAX, Math.max(0, elapsedDays));
         int made = 0;
         for (int seq = pet.getPostcardCount() + 1; seq <= target; seq++) {
-            Instant at = start.plus(Duration.ofDays(seq - 1L));
+            // ★ 달력 하루씩 민다(24시간 덧셈이 아니다) — 서머타임 날에도 "그날의 같은 시각" 이다.
+            Instant at = start.atZone(zone).plusDays(seq - 1L).toInstant();
             if (at.isAfter(now)) {
                 at = now;                       // 아직 안 온 날짜로는 안 적는다
             }
@@ -112,5 +114,26 @@ public class LeaveService {
             default -> "이제 슬슬 돌아가고 싶어요.";
         };
         return BanFilter.clean(raw);
+    }
+
+    /**
+     * dev(리모컨) — 날짜와 무관하게 엽서 <b>한 장</b>을 지금 쓴다(여행 중·3장 미만일 때만).
+     * ★ 운영은 {@link #fillPostcards} 가 출발일부터 날수로 채운다. 리모컨은 다음 날을 기다리지 않고 한 장씩 보려고 쓴다.
+     *
+     * @return 썼으면 true
+     */
+    public boolean devWriteOne(ZzalPet pet, Instant now) {
+        if (!pet.isAlive() || !pet.isTraveling() || pet.getPostcardCount() >= ZzalRules.POSTCARD_MAX) {
+            return false;
+        }
+        int seq = pet.getPostcardCount() + 1;
+        postcardRepository.save(ZzalPostcard.of(pet.getId(), seq, place(pet, seq), now));
+        pet.wrotePostcard(now);
+        return true;
+    }
+
+    /** dev(리모컨) — 이 펫의 엽서 수(전달 여부 무관). */
+    public int devCount(Long petId) {
+        return postcardRepository.findByPetIdOrderByWrittenAtAscIdAsc(petId).size();
     }
 }

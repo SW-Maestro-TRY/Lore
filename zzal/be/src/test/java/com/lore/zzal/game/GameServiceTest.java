@@ -72,7 +72,7 @@ class GameServiceTest {
         RewardService rewards = new RewardService(mock(ZzalPetRepository.class), RewardKind.NONE, RewardKind.HAPPINESS);
         bakeTrigger = mock(com.lore.zzal.night.BakeTrigger.class);
         service = new GameService(gameRepository, petService, rewards,
-                com.lore.zzal.PieceFixture.inMemory(), bakeTrigger, 3);
+                com.lore.zzal.PieceFixture.inMemory(), bakeTrigger, 3, true);   // 두 번째 선물 스위치 켬 — 조건 자체를 본다
     }
 
     @Test
@@ -104,8 +104,8 @@ class GameServiceTest {
     }
 
     @Test
-    @DisplayName("★★★ 놀라기(15)는 <b>끝까지 친</b> 네 번째 매치에서 열린다 — 그 응답에 폭죽이 실린다")
-    void theFourthFinishedMatchOpensStartle() {
+    @DisplayName("네 번째 완주도 기록하되 중단된 놀라기(15)를 새로 해금하지 않는다")
+    void fourthFinishedMatchCountsWithoutMintingRetiredStartle() {
         pet.settle(T0);
         GameService.GuessResult last = null;
         for (int match = 1; match <= 4; match++) {
@@ -114,8 +114,9 @@ class GameServiceTest {
         }
 
         assertThat(last.justUnlocked())
-                .as("네 판째 완주가 조건이다 — 폭죽은 그 행동의 응답에 실려야 한다")
-                .containsExactly(15);
+                .as("완주 카운터와 폐기된 신규해금은 분리한다")
+                .isEmpty();
+        assertThat(pet.ownsRetiredLayerTwo(15)).isFalse();
     }
 
     @Test
@@ -123,7 +124,7 @@ class GameServiceTest {
     void fourAbandonedMatchesDoNotOpenStartle() {
         service = new GameService(gameRepository, petService,
                 new RewardService(mock(ZzalPetRepository.class), RewardKind.NONE, RewardKind.HAPPINESS),
-                com.lore.zzal.PieceFixture.inMemory(), bakeTrigger, 99);   // 하루 한도를 풀어 네 번을 본다
+                com.lore.zzal.PieceFixture.inMemory(), bakeTrigger, 99, true);   // 하루 한도를 풀어 네 번을 본다
 
         for (long id = 1; id <= 4; id++) {
             ZzalGame game = service.start(USER, PET, GameKind.LEFT_RIGHT, T0).game();
@@ -225,6 +226,17 @@ class GameServiceTest {
         playLeftRight("LLLRR", "RRRRR");        // 5라운드 · 2승 — 못 이겼다
 
         verify(bakeTrigger).onFirstGameLoss(eq(pet), any());
+    }
+
+    @Test
+    @DisplayName("★★ 스위치(app.zzal.gift.second-on-first-loss)가 꺼져 있으면(기본) 져도 안 굽는다 — 2026-10-07 결정")
+    void secondGiftSwitchOffNeverBakes() {
+        service = new GameService(gameRepository, petService,
+                new RewardService(mock(ZzalPetRepository.class), RewardKind.NONE, RewardKind.HAPPINESS),
+                com.lore.zzal.PieceFixture.inMemory(), bakeTrigger, 3, false);
+        playLeftRight("LLLRR", "RRRRR");        // 5라운드 · 2승 — 못 이겼다
+
+        verify(bakeTrigger, never()).onFirstGameLoss(any(), any());
     }
 
     @Test
@@ -470,7 +482,7 @@ class GameServiceTest {
         java.util.Map<Long, com.lore.zzal.piece.ZzalPiece> store = new java.util.HashMap<>();
         service = new GameService(gameRepository, petService,
                 new RewardService(mock(ZzalPetRepository.class), RewardKind.NONE, RewardKind.HAPPINESS),
-                com.lore.zzal.PieceFixture.inMemory(store), bakeTrigger, 3);
+                com.lore.zzal.PieceFixture.inMemory(store), bakeTrigger, 3, true);
         ReflectionTestUtils.setField(pet, "piecesEnabledAt", T0);   // 3층부터만 센다
         return store;
     }

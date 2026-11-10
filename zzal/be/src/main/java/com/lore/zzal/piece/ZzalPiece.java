@@ -304,4 +304,22 @@ public class ZzalPiece {
             case BOND -> bondDone = value;
         }
     }
+
+    /**
+     * dev(리모컨) — 칸 하나를 채우거나 비운다. 채울 때는 도장과 같은 길({@link #stamp}), 비울 때는 그 칸의 두 길 수도 0.
+     * ★ 운영 코드는 부르지 않는다 — 조각은 행동으로만 찬다. 리모컨이 "3칸 찬 판" 을 바로 만들어 보려고 둔다.
+     */
+    public void devSet(PieceKind kind, boolean done) {
+        if (done) {
+            stamp(kind);
+        } else {
+            setDone(kind, false);
+            for (PieceEvent event : PieceEvent.values()) {
+                if (event.kind() == kind) {
+                    setCount(event, 0);
+                }
+            }
+            consumed = false;
+        }
+    }
 }

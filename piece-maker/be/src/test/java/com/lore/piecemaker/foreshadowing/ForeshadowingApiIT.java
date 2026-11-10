@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * 카드 API 셋을 표본 25장으로 두드린다 — 화면 검사 자료와 같은 카드다.
+ * 카드 API 셋을 화면 검사 자료와 같은 카드 표본으로 검사한다.
  *
  * <h3>★ 기대값은 자료를 세어 적었다(NA migration/steps.md 16단계)</h3>
  * 1화 9장(T5 · T7 가림) · 3화 18장(9장 가림) · 100화 22장(T378 가림). 회수 회차가 N 보다 크면 가린다 —
@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * 가릴 것이 없으므로, 400화 응답과 검사 자료가 다르면 SQL → 엔티티 → 응답 어딘가에서 칸이 틀어진 것이다.
  */
 @PieceMakerIntegrationTest
-@DisplayName("카드 API — 표본 25장으로 회차 거르기 · 가리기 · 검색 · 나눠 주기")
+@DisplayName("카드 API — 표본으로 회차 거르기 · 가리기 · 검색 · 나눠 주기")
 class ForeshadowingApiIT extends PieceMakerItSupport {
 
     private static final String CARDS = "/api/piece-maker/v1/public/cards";
@@ -74,6 +74,14 @@ class ForeshadowingApiIT extends PieceMakerItSupport {
 
     private static int threadNo(String id) {
         return Integer.parseInt(id.substring(1));
+    }
+
+    /** 화면 검사 자료의 카드 번호를 숫자 순으로 정렬해 돌려준다. */
+    private List<String> sampleIdsInNumberOrder() throws Exception {
+        List<String> ids = new ArrayList<>();
+        sampleFixtureCards().forEach(card -> ids.add(card.path("id").asText()));
+        ids.sort(Comparator.comparingInt(ForeshadowingApiIT::threadNo));
+        return ids;
     }
 
     private static void assertHidden(JsonNode card) {
@@ -142,12 +150,12 @@ class ForeshadowingApiIT extends PieceMakerItSupport {
         }
 
         @Test
-        @DisplayName("★★ 400화의 카드 25장은 열두 칸이 화면 검사 자료와 글자 하나까지 같다")
+        @DisplayName("★★ 400화의 표본 카드는 열두 칸이 화면 검사 자료와 글자 하나까지 같다")
         void chapter400MatchesTheFixture() throws Exception {
             Map<String, JsonNode> actual = byId(page("chapter=400&size=100"));
             JsonNode fixture = sampleFixtureCards();
-            assertThat(fixture.size()).isEqualTo(25);
-            assertThat(actual).hasSize(25);
+            assertThat(fixture.size()).isPositive();
+            assertThat(actual).hasSize(fixture.size());
 
             for (JsonNode expected : fixture) {
                 String id = expected.path("id").asText();
@@ -190,32 +198,36 @@ class ForeshadowingApiIT extends PieceMakerItSupport {
         void orderedByNumberNotByText() throws Exception {
             List<String> ids = ids(page("chapter=400&size=100"));
 
-            assertThat(ids).hasSize(25);
+            assertThat(ids).containsExactlyElementsOf(sampleIdsInNumberOrder());
             assertThat(ids.indexOf("T2")).isLessThan(ids.indexOf("T10"));
             assertThat(ids).isSortedAccordingTo(Comparator.comparingInt(ForeshadowingApiIT::threadNo));
         }
 
         @Test
-        @DisplayName("★ 10장씩 — 첫 쪽은 hasNext, 셋째 쪽은 5장으로 끝, 넷째 쪽은 빈 목록")
+        @DisplayName("★ 10장씩 — 표본의 숫자 순서를 유지하고 마지막 쪽 다음은 빈 목록이다")
         void pages() throws Exception {
-            JsonNode first = page("chapter=400&size=10&page=0");
-            assertThat(first.path("chapter").asInt()).isEqualTo(400);
-            assertThat(first.path("page").asInt()).isZero();
-            assertThat(first.path("size").asInt()).isEqualTo(10);
-            assertThat(first.path("total").asLong()).isEqualTo(25);
-            assertThat(first.path("chapterTotal").asLong()).isEqualTo(25);
-            assertThat(first.path("hasNext").asBoolean()).isTrue();
-            assertThat(ids(first)).containsExactly("T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10");
+            List<String> expected = sampleIdsInNumberOrder();
+            int pageSize = 10;
+            int pageCount = (expected.size() + pageSize - 1) / pageSize;
+            assertThat(pageCount).as("다음 쪽이 있는 표본").isGreaterThan(1);
+            for (int index = 0; index < pageCount; index++) {
+                JsonNode actual = page("chapter=400&size=" + pageSize + "&page=" + index);
+                int from = index * pageSize;
+                int to = Math.min(from + pageSize, expected.size());
+                assertThat(actual.path("chapter").asInt()).isEqualTo(400);
+                assertThat(actual.path("page").asInt()).isEqualTo(index);
+                assertThat(actual.path("size").asInt()).isEqualTo(pageSize);
+                assertThat(actual.path("total").asLong()).isEqualTo(expected.size());
+                assertThat(actual.path("chapterTotal").asLong()).isEqualTo(expected.size());
+                assertThat(actual.path("hasNext").asBoolean()).isEqualTo(index + 1 < pageCount);
+                assertThat(ids(actual)).containsExactlyElementsOf(expected.subList(from, to));
+            }
 
-            JsonNode third = page("chapter=400&size=10&page=2");
-            assertThat(third.path("page").asInt()).isEqualTo(2);
-            assertThat(third.path("hasNext").asBoolean()).isFalse();
-            assertThat(ids(third)).containsExactly("T374", "T378", "T467", "T1575", "T1648");
-
-            JsonNode fourth = page("chapter=400&size=10&page=3");
-            assertThat(fourth.path("items")).isEmpty();
-            assertThat(fourth.path("hasNext").asBoolean()).isFalse();
-            assertThat(fourth.path("total").asLong()).isEqualTo(25);
+            JsonNode afterLast = page("chapter=400&size=" + pageSize + "&page=" + pageCount);
+            assertThat(afterLast.path("page").asInt()).isEqualTo(pageCount);
+            assertThat(afterLast.path("items")).isEmpty();
+            assertThat(afterLast.path("hasNext").asBoolean()).isFalse();
+            assertThat(afterLast.path("total").asLong()).isEqualTo(expected.size());
         }
 
         @Test
@@ -225,7 +237,7 @@ class ForeshadowingApiIT extends PieceMakerItSupport {
 
             assertThat(page.path("size").asInt()).isEqualTo(50);
             assertThat(page.path("page").asInt()).isZero();
-            assertThat(page.path("items")).hasSize(25);
+            assertThat(page.path("items")).hasSize(Math.min(50, sampleFixtureCards().size()));
         }
     }
 
@@ -267,7 +279,7 @@ class ForeshadowingApiIT extends PieceMakerItSupport {
         }
 
         @Test
-        @DisplayName("★★ % 와 _ 는 글자 그대로 — 와일드카드로 새면 한 글자가 25장을 다 찾는다")
+        @DisplayName("★★ % 와 _ 는 글자 그대로 — 와일드카드로 새면 한 글자가 표본 전체를 찾는다")
         void wildcardsAreLiteral() throws Exception {
             assertThat(page("chapter=400&search=%").path("total").asLong()).isZero();
             assertThat(page("chapter=400&search=_").path("total").asLong()).isZero();
@@ -283,12 +295,12 @@ class ForeshadowingApiIT extends PieceMakerItSupport {
         }
 
         @Test
-        @DisplayName("chapterTotal 은 검색 전의 수 — \"12개 · 400화 장부\" 와 \"복선 25개\" 가 따로 온다")
+        @DisplayName("chapterTotal은 검색 조건과 무관한 표본 수다")
         void chapterTotalIgnoresTheSearch() throws Exception {
             JsonNode page = page("chapter=400&search=koby");
 
             assertThat(page.path("total").asLong()).isEqualTo(4);
-            assertThat(page.path("chapterTotal").asLong()).isEqualTo(25);
+            assertThat(page.path("chapterTotal").asLong()).isEqualTo(sampleFixtureCards().size());
         }
     }
 

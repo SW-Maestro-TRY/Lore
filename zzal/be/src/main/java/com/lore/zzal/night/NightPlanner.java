@@ -117,7 +117,8 @@ public class NightPlanner {
         //   <b>생성이 실패한 것</b>과 <b>사람이 물린 것</b>은 다르다. 앞은 다시 굽고, 뒤는 멈춘다.
         if (occasion == Occasion.NIGHT) {
             for (ZzalMotion m : rows.values()) {
-                if (m.getStatus() != MotionStatus.FAILED || !catalog.isBakeable(m.getName())) {
+                if (com.lore.zzal.motion.RetiredRewardGeneration.isRetiredNewMotion(m.getSeq())
+                        || m.getStatus() != MotionStatus.FAILED || !catalog.isBakeable(m.getName())) {
                     continue;
                 }
                 if (m.queue(nightOf)) {
@@ -175,6 +176,7 @@ public class NightPlanner {
     private ZzalMotion nextAdvanced(Map<Integer, ZzalMotion> rows) {
         return rows.values().stream()
                 .filter(m -> m.getLayer() != MotionLayer.GIFT)
+                .filter(m -> !com.lore.zzal.motion.RetiredRewardGeneration.isRetiredNewMotion(m.getSeq()))
                 .filter(m -> m.getStatus() == MotionStatus.NONE)
                 .filter(m -> catalog.isBakeable(m.getName()))
                 .min(java.util.Comparator.comparingInt(ZzalMotion::getSeq))

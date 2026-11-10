@@ -117,36 +117,27 @@ public class MyWebtoonService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> myRuns(Long userId) {
         Map<String, Map<String, Object>> merged = new LinkedHashMap<>();
+        Map<String, Map<String, Object>> roots = new java.util.HashMap<>();   // 연재 1화 카드는 한 번만 만든다
         for (String runId : ledger.runIdsOf(userId)) {
             if (runId == null || merged.containsKey(runId)) {
                 continue;
             }
-            Map<String, Object> card = cardOf(runId);
+            Map<String, Object> card = runs.cardOf(runId, roots);
             if (card != null) {
                 if (notes != null) {
                     notes.attach(card);      // 내 목록이라 관리자 처리 사유까지 보인다(#638)
                 }
-                merged.put(runId, card);
+                String cardRunId = String.valueOf(card.getOrDefault("run_id", runId));
+                /* 공개 범위(#898). 전에는 이 목록 카드에 공개 여부가 아예 없어서, 비공개로 내린 작품도 다시 들어오면
+                   스위치가 「공개」로 보였다. 카드가 가리키는 작품(연재면 1화) 기준이다. */
+                ledger.find(cardRunId).ifPresent(work -> {
+                    card.put("public", work.isPublic());
+                    card.put("visibility", work.visibility());
+                });
+                merged.putIfAbsent(cardRunId, card);
             }
         }
         return new ArrayList<>(merged.values());
-    }
-
-    /**
-     * 작품 하나의 카드. 내용(제목·표지·장 수)은 여전히 하네스가 안다 — DB 가
-     * 아는 것은 <b>누구 것인가</b> 뿐이다.
-     *
-     * @return 못 읽으면 {@code null}. 그 한 편만 빠지고 나머지는 보여준다
-     */
-    private Map<String, Object> cardOf(String runId) {
-        /* DB 가 아는 것으로만 만든다. 제목·줄거리는 여기 있고, 표지와 장 수는
-           그림 쪽(webtoon_page)이 안다.
-
-           예전에는 DB 에 없으면 하네스에게 물었다(`/api/runs/{id}/result`).
-           2026-09-12에 걷어냈다 — 그 길은 serve.py 가 떠 있어야만 되는데,
-           이제 파이썬은 서버가 아니라 CLI 파이프라인으로만 쓴다. DB 에 없는
-           옛 작품은 목록에 안 뜬다. */
-        return runs.cardOf(runId);
     }
 
     /**
@@ -173,37 +164,56 @@ public class MyWebtoonService {
        성공이었다. */
     @Transactional
     public boolean setVisibility(Long userId, String runId, boolean isPublic) {
-        // 주인 확인을 **DB 로도** 한다. 아래 하네스 쪽 길은 파일 두 개를 이어
-        // 붙인 것이라, 그 파일이 없으면(하네스가 죽었거나 옮겨 간 뒤) 내 작품인데도
-        // 못 바꾼다.
-        /* 주인 확인은 DB 로만 한다. 예전에는 하네스에게도 물어보고 하네스
-           파일에도 공개 여부를 한 번 더 적었는데(2026-09-12 제거), serve.py 를
-           안 띄우는 지금은 적을 곳이 없고 적을 이유도 없다 — 공개 여부와 그림
-           자리는 DB 와 S3 가 정한다. */
+        return WorkVisibility.PUBLIC.equals(
+                setVisibility(userId, runId, isPublic ? WorkVisibility.PUBLIC : WorkVisibility.PRIVATE).visibility());
+    }
+
+    /** 바뀐 뒤의 공개 범위. {@code shareKey} 는 링크 공개일 때만 있다 — 화면이 공유 주소를 만든다. */
+    public record Visibility(String visibility, String shareKey) {
+        public boolean isPublic() {
+            return WorkVisibility.PUBLIC.equals(visibility);
+        }
+    }
+
+    /**
+     * 공개 범위를 세 단계 중 하나로 바꾼다(#898) — public · link · private.
+     *
+     * 링크 공개는 그림 자리로 치면 비공개와 같다 — CloudFront 가 내주는 자리에 있으면 그림 주소를 아는 사람에게
+     * 열쇠 없이 열리므로, 공개에서 링크 공개로 내릴 때도 그림을 비공개 자리로 옮긴다. 열쇠가 맞는 사람은
+     * 결과 화면이 잠깐 열리는 주소로 받아 간다(PageStore.urlOf).
+     */
+    @Transactional
+    public Visibility setVisibility(Long userId, String runId, String mode) {
+        String want = WorkVisibility.parse(mode);
+        if (want == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "공개 범위는 public · link · private 중 하나예요");
+        }
+        // 주인 확인은 DB 로만 한다. 공개 여부와 그림 자리는 DB 와 S3 가 정한다(2026-09-12 하네스 쪽 길 제거).
         if (!ledger.mayChange(runId, userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작품만 바꿀 수 있습니다");
         }
-        /* 관리자가 비공개 처리한 작품은 작가가 다시 공개로 못 바꾼다(#638). 비공개로 두는 것은 막지 않는다. */
-        if (isPublic && ledger.find(runId).map(WebtoonWork::isHiddenByAdmin).orElse(false)) {
+        /* 관리자가 비공개 처리한 작품은 작가가 다시 열지 못한다(#638) — 공개도 링크 공개도. 비공개로 두는 것은 막지 않는다. */
+        if (!WorkVisibility.PRIVATE.equals(want)
+                && ledger.find(runId).map(WebtoonWork::isHiddenByAdmin).orElse(false)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "관리자가 비공개 처리한 작품이라 공개로 바꿀 수 없어요");
         }
 
-        ledger.setPublic(runId, isPublic);
+        WebtoonWork after = ledger.setVisibility(runId, want).orElse(null);
+        boolean toPublic = WorkVisibility.PUBLIC.equals(want);
 
-        /* **그림도 옮긴다.** 공개/비공개를 자리로 가르기 때문에(PrivateArt),
-           안 옮기면 비공개로 내려도 CloudFront 가 계속 내준다 — 스위치가
-           거짓말을 하는 셈이다.
+        /* **그림도 옮긴다.** 공개/비공개를 자리로 가르기 때문에(PrivateArt), 안 옮기면 비공개로 내려도
+           CloudFront 가 계속 내준다 — 스위치가 거짓말을 하는 셈이다.
 
-           옮기다 실패해도 여기서 안 던진다: 이미 DB 와 하네스는 바뀌었고,
-           목록에서는 내려가 있다. 남은 것은 "주소를 아는 사람에게 아직
-           열린다" 이고, 그건 크게 남겨 두고 다시 시도할 일이다. */
+           옮기다 실패해도 여기서 안 던진다: 이미 DB 는 바뀌었고, 목록에서는 내려가 있다. 남은 것은
+           "주소를 아는 사람에게 아직 열린다" 이고, 그건 크게 남겨 두고 다시 시도할 일이다(ClosedArtSweep 이 다음
+           기동 때 한 번 더 훑는다). */
         try {
-            pages.moveAll(runId, isPublic);
+            pages.moveAll(runId, toPublic);
         } catch (RuntimeException e) {
-            log.error("공개 여부는 바꿨는데 그림을 못 옮겼습니다 (run={}, public={})",
-                    runId, isPublic, e);
+            log.error("공개 범위는 바꿨는데 그림을 못 옮겼습니다 (run={}, visibility={})", runId, want, e);
         }
-        return isPublic;
+        String now = after == null ? want : after.visibility();
+        return new Visibility(now, after != null && after.isLinkOnly() ? after.getShareKey() : null);
     }
 
     /**

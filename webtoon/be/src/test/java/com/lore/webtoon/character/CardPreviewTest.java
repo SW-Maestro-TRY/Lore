@@ -3,6 +3,7 @@ package com.lore.webtoon.character;
 import com.lore.common.auth.jwt.JwtProvider;
 import com.lore.common.config.WebSecurityConfig;
 import com.lore.webtoon.Admins;
+import com.lore.webtoon.credit.GuestGate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +41,9 @@ class CardPreviewTest {
     @MockitoBean ShareReward shareReward;
     @MockitoBean Admins admins;
     @MockitoBean JwtProvider jwtProvider;
+    @MockitoBean GuestGate guests;
+    @MockitoBean CharacterTrash characterTrash;
+    @MockitoBean ZzalCharacterImport zzalImport;
 
     private WebtoonCharacter card(String artUrl) {
         WebtoonCharacter one = mock(WebtoonCharacter.class);

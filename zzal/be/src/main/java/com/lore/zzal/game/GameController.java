@@ -29,8 +29,12 @@ public class GameController {
 
     private final GameService gameService;
     private final PetService petService;
+    private final GameGuessRequestService guessRequests;
 
-    public GameController(GameService gameService, PetService petService) {
+    public GameController(GameService gameService, PetService petService) { this(gameService,petService,null); }
+    @org.springframework.beans.factory.annotation.Autowired
+    public GameController(GameService gameService, PetService petService, GameGuessRequestService guessRequests) {
+        this.guessRequests=guessRequests;
         this.gameService = gameService;
         this.petService = petService;
     }
@@ -61,7 +65,7 @@ public class GameController {
     @PostMapping
     public ApiResponse<GameResponses.State> start(@LoginUser Long userId, @PathVariable Long petId,
                                                   @Valid @RequestBody GameRequests.Start request) {
-        GameService.Started s = gameService.start(userId, petId, request.kind(), Instant.now());
+        GameService.Started s = gameService.start(userId, petId, request.kind(), request.firstIntroStep(), Instant.now());
         return ApiResponse.ok(GameResponses.State.of(s, remaining(userId, petId)));
     }
 
@@ -81,6 +85,8 @@ public class GameController {
     public ApiResponse<GameResponses.Guess> guess(@LoginUser Long userId, @PathVariable Long petId,
                                                   @PathVariable Long gameId,
                                                   @Valid @RequestBody GameRequests.Guess request) {
+        if(guessRequests!=null)return ApiResponse.ok(guessRequests.guess(userId,petId,gameId,request,Instant.now()));
+        if(request.requestId()!=null||request.expectedRound()!=null)throw new IllegalStateException("UUID game delivery is not wired");
         GameService.GuessResult r = gameService.guess(userId, petId, gameId, request.pick().code(), Instant.now());
         return ApiResponse.ok(GameResponses.Guess.of(r, remaining(userId, petId)));
     }

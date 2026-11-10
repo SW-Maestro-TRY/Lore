@@ -126,6 +126,22 @@ class RunDeleteServiceTest {
     }
 
     @Test
+    @DisplayName("조연 시트도 그림과 줄을 지운다 — 만들기 기록 번호로 찾으므로 그보다 먼저")
+    void castSheetsToo() {
+        when(works.findFirstByRunId("r1")).thenReturn(Optional.of(작품("uidA")));
+        when(ledger.mayChange("r1", 7L)).thenReturn(true);
+        when(rows.pageKeys("r1")).thenReturn(List.of("k1"));
+        when(rows.castSheetKeys("r1")).thenReturn(List.of("private/webtoon/char/s1.png"));
+
+        service.delete(7L, "r1");
+
+        verify(storage).delete(List.of("k1", "private/webtoon/char/s1.png"));
+        InOrder order = inOrder(rows);
+        order.verify(rows).deleteCastSheets("r1");
+        order.verify(rows).deleteJobs("r1");
+    }
+
+    @Test
     @DisplayName("그림이 하나도 없으면 S3 를 부르지 않는다")
     void noImagesNoS3() {
         when(works.findFirstByRunId("r1")).thenReturn(Optional.of(작품("uidA")));

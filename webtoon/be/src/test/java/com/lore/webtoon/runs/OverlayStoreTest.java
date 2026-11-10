@@ -53,6 +53,25 @@ class OverlayStoreTest {
     }
 
     @Test
+    @DisplayName("말풍선 글꼴은 고를 수 있는 것만 남기고, 기본 글꼴은 값을 두지 않는다")
+    void 글꼴() throws Exception {
+        JsonNode items = clean("""
+                {"scenes":{"1":{"items":[
+                  {"type":"bubble","text":"마루부리","font":"maruburi"},
+                  {"type":"bubble","text":"대문자","font":" Jua "},
+                  {"type":"bubble","text":"모르는 글꼴","font":"gmarket"},
+                  {"type":"bubble","text":"옛 항목"},
+                  {"type":"sfx","text":"쾅","font":"suit"}]}}}""")
+                .path("scenes").path("1").path("items");
+
+        assertThat(items.get(0).path("font").asText()).isEqualTo("maruburi");
+        assertThat(items.get(1).path("font").asText()).isEqualTo("jua");
+        assertThat(items.get(2).has("font")).isFalse();
+        assertThat(items.get(3).has("font")).isFalse();
+        assertThat(items.get(4).has("font")).isFalse();
+    }
+
+    @Test
     @DisplayName("터무니없는 값은 범위 안으로 깎는다")
     void 범위_밖은_깎는다() throws Exception {
         JsonNode item = clean("""
@@ -134,5 +153,27 @@ class OverlayStoreTest {
                             "2":{"items":[{"type":"sticker","text":"💢"}]}}}""");
 
         assertThat(store.count(data)).isEqualTo(3);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("표지 뒤에는 고친 것이 없어도 기본 여백이 있다")
+    void 표지_뒤_기본_여백() {
+        org.assertj.core.api.Assertions.assertThat(store.gapsOf("run-1", 1))
+                .containsEntry(1, OverlayStore.COVER_GAP_STEP);
+    }
+
+    @Test
+    @DisplayName("글자 도구 항목은 색과 글꼴을 남기고, 모르는 색은 먹색으로")
+    void 글자_항목() throws Exception {
+        JsonNode items = clean("""
+                {"scenes":{"1":{"items":[
+                  {"type":"text","text":"빵집","color":"#3E63DD","font":"jua"},
+                  {"type":"text","text":"간판","color":"blue","font":"없는꼴"}]}}}""").path("scenes").path("1").path("items");
+
+        assertThat(items).hasSize(2);
+        assertThat(items.get(0).path("color").asText()).isEqualTo("#3e63dd");
+        assertThat(items.get(0).path("font").asText()).isEqualTo("jua");
+        assertThat(items.get(1).path("color").asText()).isEqualTo("#111111");
+        assertThat(items.get(1).has("font")).isFalse();
     }
 }

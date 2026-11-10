@@ -32,7 +32,8 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from frame_cut import find_marks_by_color, _bands  # noqa: E402
+from frame_cut import find_marks_by_color, _bands, _green_mask  # noqa: E402
+from scipy import ndimage  # noqa: E402
 
 # layout 이름 → (두 색을 합친 열 군집 수, 허용하는 줄 군집 수)
 LAYOUTS = {
@@ -45,6 +46,57 @@ LAYOUTS = {
     "lattice_5x4": (5, (4,)),      # 격자 교차점 20개 (공통에셋 오버레이) — 4열x3행 = 12칸
     "lattice_7x4": (7, (4,)),      # 격자 교차점 28개 (p_s4~) — 6열x3행 = 18칸(9종x2프레임)
 }
+
+
+# ★칸별 검사 (2026-10-07, #687 2-2) — 격자점이 멀쩡해도 칸 안이 깨진 격자가 있다.
+#   운영에서 격자점 판정을 통과한 채 빈 움짤이 사용자에게 나갔다(펫23 grid2 — 칸 15·16이 빔).
+#   2층 격자는 한 칸에 두 자세를 함께 그리는 실패가 잦다(거부 맞음 14장 중 12장).
+#   캐릭터 격자 layout 에만 건다 — 공통에셋(손·커튼 등)은 한 칸에 사물이 둘인 게 정상이다.
+CELL_LAYOUTS = ("lattice_5x5", "lattice_7x4")
+CELL_EMPTY = 0.01    # 칸의 가장 큰 전경 덩어리가 칸 면적의 이 비율 미만 → 빈 칸
+#   ⚠️3%로 잡으면 안 된다. 정상 격자의 눕기 칸이 3.6%까지 내려간다(뒤로넘어지기 motion108 f16).
+#     깨진 격자의 빈 칸은 0~0.4%다.
+CELL_COUNT = 0.03    # 칸 면적의 이 비율 이상 덩어리만 '사람 수'로 센다
+CELL_SECOND = 0.11   # 두 번째 덩어리가 이 비율 미만이면 소품(빗자루·그릇)으로 보고 무시
+#   실측: 정상 격자의 두 번째 덩어리 최대 0.099(7x4 실험 격자 소품) · 운영 5x5 최대 0.037,
+#     한 칸 2명은 0.12~0.24.
+MARK_HALF = 16       # 격자점 자체는 전경에서 뺀다(중심 ±16px)
+
+
+def _lines(vals, gap):
+    """좌표를 gap 보다 먼 곳에서 끊어 군집마다 중앙값 하나 — 격자선 위치."""
+    vals = sorted(vals)
+    if not vals:
+        return []
+    g = [[vals[0]]]
+    for v in vals[1:]:
+        (g.append([v]) if v - g[-1][-1] > gap else g[-1].append(v))
+    return [float(np.median(b)) for b in g if len(b) >= 2]
+
+
+def check_cells(im, pts):
+    """격자점으로 칸을 나눠(등분 아님) 칸마다 (덩어리 수, 전경 비율, 문제)를 돌려준다."""
+    H, W = im.shape[0], im.shape[1]
+    xs = _lines([q[0] for q in pts], W / 4 * 0.15)
+    ys = _lines([q[1] for q in pts], H / 4 * 0.15)
+    fg = ~_green_mask(im)
+    for x, y in pts:
+        fg[max(0, int(y) - MARK_HALF):int(y) + MARK_HALF + 1,
+           max(0, int(x) - MARK_HALF):int(x) + MARK_HALF + 1] = False
+    out = []
+    for j in range(len(ys) - 1):
+        for i in range(len(xs) - 1):
+            sub = fg[int(round(ys[j])):int(round(ys[j + 1])), int(round(xs[i])):int(round(xs[i + 1]))]
+            lab, n = ndimage.label(sub)
+            sizes = sorted((np.bincount(lab.ravel())[1:] / sub.size).tolist(), reverse=True) if n else []
+            big = [v for v in sizes if v >= CELL_COUNT]
+            why = None
+            if not sizes or sizes[0] < CELL_EMPTY:
+                why = "빈 칸"
+            elif len(big) >= 2 and big[1] >= CELL_SECOND:
+                why = "한 칸에 캐릭터 2명"
+            out.append((len(big), float(sub.mean()), why))
+    return out
 
 
 def read_spec(prompt_path):
@@ -76,14 +128,15 @@ def main() -> int:
         print(f"읽기 실패: {e}", file=sys.stderr)
         return 1
 
-    mag, cya, info = find_marks_by_color(im)
+    spec = read_spec(prompt) if prompt else None
+    # ★layout 을 넘겨 격자점 기대 개수를 사양에서 계산하게 한다(2026-10-07, B6).
+    mag, cya, info = find_marks_by_color(im, (spec or {}).get("layout"))
     pts = list(mag) + list(cya)
     H, W = info.get("H", im.shape[0]), info.get("W", im.shape[1])
     cols = _bands(pts, W / 4 * 0.15, axis=0, min_frac=0.08)
     rows = _bands(pts, H / 4 * 0.15, axis=1, min_frac=0.08)
     found = f"마크 {len(mag)}+{len(cya)}={len(pts)}개 · 열 {len(cols)} · 줄 {len(rows)}"
 
-    spec = read_spec(prompt) if prompt else None
     if not spec or spec.get("layout") not in LAYOUTS:
         why = "프롬프트를 안 줌" if not prompt else (
             "GRID_SPEC 줄이 없음" if not spec else f"처음 보는 layout={spec.get('layout')}")
@@ -107,8 +160,23 @@ def main() -> int:
         if len(rows) not in want_rows:
             bad.append(f"줄이 {'·'.join(map(str, want_rows))} 중 하나가 아님 ({len(rows)}개)")
 
+    cells = None
+    if not bad and spec["layout"] in CELL_LAYOUTS and info.get("green_bg"):
+        cells = check_cells(im, pts)
+        hits = [f"{why} f{k:02d}" for k, (_, _, why) in enumerate(cells, 1) if why]
+        if hits:
+            bad.append("칸 검사 — " + ", ".join(hits))
+
     if bad:
         print(f"구조이상 {p.name} [{spec['layout']}]: " + " / ".join(bad), file=sys.stderr)
+        # 후보 상위 20개(크기 순) — 무엇을 격자점으로 봤고 무엇을 뺐는지 사람이 바로 보게.
+        top = info.get("cands", [])[:20]
+        if top:
+            print("  후보 상위 20 (px, x, y, 그린비율, 색): " + " ".join(
+                f"({c[0]},{c[1]:.0f},{c[2]:.0f},{c[3]:.2f},{c[4]})" for c in top), file=sys.stderr)
+        if cells:
+            print("  칸별 (덩어리 수, 전경 비율): " + " ".join(
+                f"f{k:02d}({n},{fr:.2f})" for k, (n, fr, _) in enumerate(cells, 1)), file=sys.stderr)
         return 3
     print(f"구조정상 {p.name} [{spec['layout']}] {found}")
     return 0

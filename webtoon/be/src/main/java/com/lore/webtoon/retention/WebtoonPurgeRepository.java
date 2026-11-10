@@ -49,6 +49,14 @@ public interface WebtoonPurgeRepository extends JpaRepository<WebtoonJob, Long> 
     @Query("select c.artKey from WebtoonCharacter c where c.ownerId = :userId and c.artKey is not null")
     List<String> characterKeys(@Param("userId") Long userId);
 
+    /**
+     * 조연 시트(#548). 만들기 기록 번호로 묶여 있으므로 그 작품들의 만들기 기록으로 찾는다 —
+     * 게스트로 시작해 나중에 계정에 이어진 작품도 작품 번호로는 잡힌다.
+     */
+    @Query("select c.s3Key from WebtoonCastSheet c where c.s3Key is not null"
+            + " and c.jobId in (select j.publicId from WebtoonJob j where j.runId in :runIds)")
+    List<String> castSheetKeys(@Param("runIds") List<String> runIds);
+
     /* ---- 작품에 딸린 것 ---------------------------------------------- */
 
     @Modifying
@@ -58,6 +66,11 @@ public interface WebtoonPurgeRepository extends JpaRepository<WebtoonJob, Long> 
     @Modifying
     @Query("delete from BakedPage b where b.runId in :runIds")
     int deleteBakedPages(@Param("runIds") List<String> runIds);
+
+    /** 조연 시트 행 — 인물 이름이 들어 있다. 만들기 기록보다 먼저 지운다(그 번호로 찾는다). */
+    @Modifying
+    @Query("delete from WebtoonCastSheet c where c.jobId in (select j.publicId from WebtoonJob j where j.runId in :runIds)")
+    int deleteCastSheets(@Param("runIds") List<String> runIds);
 
     @Modifying
     @Query("delete from WebtoonOverlay o where o.runId in :runIds")
@@ -101,6 +114,37 @@ public interface WebtoonPurgeRepository extends JpaRepository<WebtoonJob, Long> 
     @Modifying
     @Query("delete from PushSubscription s where s.userId = :userId")
     int deletePushSubscriptions(@Param("userId") Long userId);
+
+    /** 앱 출시 알림 신청(#981) — 이메일이 들어 있다. */
+    @Modifying
+    @Query("delete from AppWaitlist w where w.userId = :userId")
+    int deleteAppWaitlist(@Param("userId") Long userId);
+
+    /** 「출석으로 모아서 다음 화 만들기」 알림(2026-11-03). */
+    @Modifying
+    @Query("delete from AttendRemind r where r.userId = :userId")
+    int deleteAttendReminds(@Param("userId") Long userId);
+
+    /** 친구 초대 — 내가 초대한 줄과 초대받은 줄 둘 다. 상대 쪽 집계에서도 이 사람이 빠진다. */
+    @Modifying
+    @Query("delete from Invite i where i.inviterId = :userId or i.inviteeId = :userId")
+    int deleteInvites(@Param("userId") Long userId);
+
+    @Modifying
+    @Query("delete from InviteCode c where c.userId = :userId")
+    int deleteInviteCode(@Param("userId") Long userId);
+
+    /** API 호출 기록(2026-11-03) — 요청 본문에 이 사람이 적은 글이 있다. */
+    @Modifying
+    @Query("delete from ApiLog a where a.userId = :userId")
+    int deleteApiLogs(@Param("userId") Long userId);
+
+    @Modifying
+    @Query("delete from SeriesDraft d where d.ownerId = :userId")
+    int deleteSeriesDrafts(@Param("userId") Long userId);
+    @Modifying
+    @Query("delete from SeriesChapter c where c.ownerId = :userId")
+    int deleteSeriesChapters(@Param("userId") Long userId);
 
     /* ---- 기간이 지난 것 ---------------------------------------------- */
 
@@ -148,4 +192,12 @@ public interface WebtoonPurgeRepository extends JpaRepository<WebtoonJob, Long> 
             where j.finishedAt is not null and j.finishedAt < :cut and j.inputJson is not null
             """)
     int clearOldJobInputs(@Param("cut") Instant cut);
+    @Modifying @Query("delete from LoreExtraction e where e.ownerId=:userId")
+    int deleteLoreExtractions(@Param("userId") Long userId);
+    @Modifying @Query(value="delete from webtoon_lore_quota where owner_id=:userId",nativeQuery=true)
+    int deleteLoreQuota(@Param("userId") Long userId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query(value="delete from webtoon_private_lorebook where owner_id=:userId",nativeQuery=true)
+    int deletePrivateLorebooks(@org.springframework.data.repository.query.Param("userId") Long userId);
 }

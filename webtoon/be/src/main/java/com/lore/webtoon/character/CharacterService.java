@@ -8,6 +8,8 @@ import com.lore.webtoon.credit.CreditGate;
 import com.lore.webtoon.credit.GuestGate;
 import com.lore.webtoon.usage.SpendGuard;
 import com.lore.webtoon.usage.UsageService;
+import com.lore.common.s3.S3Service;
+import com.lore.common.s3.S3Storage;
 import com.lore.common.exception.BusinessException;
 import com.lore.common.exception.ErrorCode;
 import com.lore.webtoon.safety.SafetyGuard;
@@ -60,6 +62,9 @@ import java.util.stream.Stream;
  */
 @Service
 public class CharacterService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.webtoon.community.CommunityCleanup communityCleanup;
+
 
     private static final Logger log = LoggerFactory.getLogger(CharacterService.class);
 
@@ -92,6 +97,14 @@ public class CharacterService {
     /** 하루 돈 상한(#444). 테스트용 생성자로 만들면 비어 있고, 그때는 안 막는다. */
     private SpendGuard spend;
     /**
+     * 사진을 presign 키로 받을 때 쓴다(#660). base64 로 그대로 실으면 본문이
+     * 몇 MB 가 되어 CloudFront 앞단 WAF(SizeRestrictions_BODY) 가 통째로
+     * 막는다 — 웹툰 만들기(JobService.pullPhotos)와 같은 길. 테스트용 생성자로
+     * 만들면 비어 있는데, 그때는 photoKeys 를 안 쓰므로 괜찮다.
+     */
+    private S3Service uploads;
+    private S3Storage storage;
+    /**
      * 그린 뒤 작업 폴더를 남기는가.
      *
      * 로컬은 남긴다 — 무엇을 넣고 무엇을 불러 얼마가 나갔는지(input.json · meta.json ·
@@ -115,7 +128,7 @@ public class CharacterService {
                             @Value("${lore.webtoon.character.free-per-day:3}") int freePerDay,
                             @Value("${lore.webtoon.character.credit-cost:2}") int cost,
                             @Value("${lore.webtoon.presign-locally:false}") boolean presignLocally,
-                            UsageService usage, SpendGuard spend,
+                            UsageService usage, SpendGuard spend, S3Service uploads, S3Storage storage,
                             @Value("${app.s3.content-bucket:}") String bucket,
                             @Value("${app.s3.endpoint:}") String endpoint,
                             @Value("${lore.webtoon.character.keep-files:}") String keepFiles) {
@@ -124,6 +137,8 @@ public class CharacterService {
         this.safety = safety;
         this.usage = usage;
         this.spend = spend;
+        this.uploads = uploads;
+        this.storage = storage;
         this.keepFiles = keepsFiles(bucket, endpoint, keepFiles);
         log.info("캐릭터 작업 폴더: {}", this.keepFiles
                 ? "남깁니다(로컬)" : "원가를 DB 에 적은 뒤 치웁니다(배포)");
@@ -189,7 +204,9 @@ public class CharacterService {
     public WebtoonCharacter byPublicId(String publicId, Long userId, Collection<String> uids) {
         WebtoonCharacter one = characters.findByPublicId(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 캐릭터가 없습니다"));
-        if (!one.isBuiltin() && !one.madeBy(userId, uids)) {
+        /* 휴지통에 든 캐릭터는 없는 것으로 본다 — 웹툰 만들기에도 못 고른다. 되살리기는 CharacterTrash 가 따로 찾는다. */
+        if (one.isTrashed() || !one.isBuiltin() && !one.isCommunityPublic() && !one.isPlayPublic()
+                && !one.madeBy(userId, uids)) {
             // 있는 것을 "권한 없음" 으로 알리면 남의 번호를 하나씩 찔러 볼 수 있다.
             throw new BusinessException(ErrorCode.NOT_FOUND, "그런 캐릭터가 없습니다");
         }
@@ -205,7 +222,7 @@ public class CharacterService {
     public WebtoonCharacter sharedCard(String publicId) {
         WebtoonCharacter one = characters.findByPublicId(publicId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "그런 카드가 없습니다"));
-        if (!one.hasCard()) {
+        if (one.isTrashed() || !one.hasCard() || one.isCommunityBlocked() || one.getSource() == CharacterSource.UPLOAD || one.getSource() == CharacterSource.REPLACED_UPLOAD) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "그런 카드가 없습니다");
         }
         return one;
@@ -235,13 +252,246 @@ public class CharacterService {
      *
      * @param photoDataUrls 있으면 읽어서 외모를 적는다(최대 {@value #MAX_PHOTOS}장 —
      *              넘으면 그만큼만 쓰고 나머지는 버린다). 비었으면 이름·설명만으로
+     * @param photoKeys presign 으로 S3 에 먼저 올린 사진의 키. 있으면 이것을 쓰고
+     *              {@code photoDataUrls} 는 무시한다(#660) — 둘 다 없으면 사진 없음
+     * @param guestKey 로그인 안 했을 때 photoKeys 티켓 주인을 확인할 열쇠(IP 해시).
+     *              로그인했으면 안 본다
      * @return 만든 캐릭터
      */
     @Transactional
     public WebtoonCharacter create(Long userId, String browserUid, String name,
-                                   String description, List<String> photoDataUrls, String style,
+                                   String description, List<String> photoDataUrls,
+                                   List<String> photoKeys, String guestKey, String style,
                                    String language) {
-        return start(userId, browserUid, name, description, photoDataUrls, style, null, language);
+        return start(userId, browserUid, name, description, photoDataUrls, photoKeys, guestKey,
+                     style, null, language);
+    }
+
+    /** 원본 등록은 생성과 별개다. 이미지/설정을 재해석하거나 크레딧을 차감하지 않는다. */
+    @Transactional
+    public WebtoonCharacter importOriginal(Long userId, String uid, String name, String description,
+                                            List<String> photos, List<String> keys, String guestKey) {
+        if (userId == null && (uid == null || uid.isBlank() || uid.length() > 64)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "브라우저를 확인할 수 없습니다");
+        }
+        validateOriginal(name, description);
+        Instant now = Instant.now(clock);
+        boolean noPhoto = (photos == null || photos.isEmpty()) && (keys == null || keys.isEmpty());
+        if (noPhoto) {
+            /* 이름·설명만으로 저장한다(2026-10-27) — 광고로 와서 「설정 한 줄」만 있는 사람의 길. 카드 그림은
+               첫 웹툰이 다 만들어질 때 그 작품의 캐릭터 시트로 채운다(AfterRun → adoptSheetArt). 설명이 비면
+               그릴 근거가 없으니 받지 않는다. */
+            if (description == null || description.isBlank()) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "캐릭터 이미지 한 장을 올리거나, 캐릭터 설명을 적어 주세요");
+            }
+            return characters.save(WebtoonCharacter.described(UUID.randomUUID().toString().replace("-", ""),
+                    userId, userId == null ? uid : null, name.trim(), description, now));
+        }
+        String key = storeOriginal(userId, guestKey, photos, keys);
+        WebtoonCharacter one = WebtoonCharacter.drawing(UUID.randomUUID().toString().replace("-", ""),
+                userId, userId == null ? uid : null, name.trim(), description, now);
+        one.drewArt(key, CharacterSource.UPLOAD, now);
+        return characters.save(one);
+    }
+
+    /**
+     * 그림 없이 저장한 캐릭터({@link WebtoonCharacter#described})에 첫 작품의 캐릭터 시트를 카드 그림으로
+     * 넣는다(2026-10-27). 이미 그림이 있으면 아무것도 안 한다. 작품은 이미 다 만들어진 뒤라 여기서 죽지 않는다.
+     */
+    @Transactional
+    public void adoptSheetArt(String characterPublicId, Path sheetPng) {
+        if (characterPublicId == null || characterPublicId.isBlank() || sheetPng == null || !Files.isRegularFile(sheetPng)) {
+            return;
+        }
+        WebtoonCharacter one = characters.findByPublicId(characterPublicId).orElse(null);
+        if (one == null || (one.getArtKey() != null && !one.getArtKey().isBlank())) {
+            return;
+        }
+        try {
+            byte[] bytes = Files.readAllBytes(sheetPng);
+            String key = art.upload(bytes, "image/png", false);
+            if (key == null) {
+                return;
+            }
+            one.drewArt(key, CharacterSource.PROMPT, Instant.now(clock));
+            characters.save(one);
+            log.info("캐릭터 카드 그림을 작품 시트로 채웠습니다 (character={})", characterPublicId);
+        } catch (Exception e) {                     // noqa: 카드 그림을 못 넣어도 작품은 다 됐다
+            log.warn("캐릭터 시트를 카드 그림으로 못 넣었습니다 (character={})", characterPublicId, e);
+        }
+    }
+
+    /** 소유권 확인 뒤 새 이미지를 보관한다. 예전 이미지는 기존 웹툰이 쓰므로 유지한다. */
+    @Transactional
+    public WebtoonCharacter updateOriginal(String id, Long userId, Collection<String> uids,
+                                            String name, String description, List<String> photos,
+                                            List<String> keys, String guestKey) {
+        WebtoonCharacter one = byPublicId(id, userId, uids);
+        if (!one.madeBy(userId, uids)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "내 캐릭터만 수정할 수 있습니다");
+        }
+        if (one.getStatus() == CharacterStatus.DRAWING) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "만드는 중인 캐릭터입니다");
+        }
+        validateOriginal(name, description);
+        String key = storeOriginal(userId, guestKey, photos, keys);
+        one.rename(name.trim(), description, Instant.now(clock));
+        one.drewArt(key, one.getSource() == CharacterSource.UPLOAD ? CharacterSource.UPLOAD : CharacterSource.REPLACED_UPLOAD, Instant.now(clock));
+        // 이미지를 바꾸면 이전 공개 동의/그림과 달라져 다시 비공개로 둔다.
+        one.publishForReuse(false, userId, Instant.now(clock));
+        return characters.save(one);
+    }
+
+    private void validateOriginal(String name, String description) {
+        if (name == null || name.isBlank() || name.trim().length() > 60
+                || description != null && description.length() > 8000) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이름은 1~60자, 캐릭터 설정은 8,000자까지 입력해 주세요");
+        }
+        if (safety != null) safety.checkText("character-import", name, description);
+    }
+
+    /** 헤더만 읽어 크기를 제한한 뒤 JPG·PNG 인지 검사하고 MIME 을 돌려준다. 바이트는 바꾸지 않는다. */
+    private static String imageMime(byte[] bytes) throws IOException {
+        try (var input = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
+            var readers = ImageIO.getImageReaders(input);
+            if (!readers.hasNext()) throw new BusinessException(ErrorCode.INVALID_INPUT, "JPG 또는 PNG 이미지를 선택해 주세요");
+            var reader = readers.next();
+            try {
+                reader.setInput(input);
+                long pixels = (long) reader.getWidth(0) * reader.getHeight(0);
+                String format = reader.getFormatName().toLowerCase();
+                if (pixels <= 0 || pixels > 40_000_000 || !(format.equals("png") || format.equals("jpeg") || format.equals("jpg"))) {
+                    throw new BusinessException(ErrorCode.INVALID_INPUT, "4천만 화소 이하 JPG 또는 PNG 이미지를 선택해 주세요");
+                }
+                reader.read(0); // 제한 확인 후 실제로 열리는지 검사. 저장할 원본 바이트는 변경하지 않는다.
+                return format.equals("png") ? "image/png" : "image/jpeg";
+            } finally { reader.dispose(); }
+        }
+    }
+
+    /**
+     * 세계관 만들기의 그림 한 장(표지 · 등장인물 얼굴 · 사건 그림 · 예시 인물 사진)을 공개 자리에 올리고 키를 돌려준다.
+     * presign 으로 먼저 올린 키(로그인 사용자 공용 presign — dev·운영의 WAF 가 큰 본문을 막으므로 실제 서버는 이 길)나
+     * data URL 둘 중 하나. 둘 다 비면 {@code null}. 인물 사진은 캐릭터 그림처럼 줄여서 올린다.
+     */
+    public String storeWorldImage(Long userId, String dataUrl, String presignKey, boolean face) {
+        boolean byKey = presignKey != null && !presignKey.isBlank();
+        boolean byData = dataUrl != null && dataUrl.startsWith("data:");
+        if (!byKey && !byData) {
+            return null;
+        }
+        Path temp = null;
+        try {
+            byte[] bytes;
+            if (byKey) {
+                Files.createDirectories(workDir);
+                temp = Files.createTempDirectory(workDir, "world-");
+                bytes = Files.readAllBytes(pullPhotos(temp, List.of(presignKey), userId, null).getFirst());
+            } else {
+                if (dataUrl.length() > MAX_PHOTO_BYTES * 4 / 3 + 128) {
+                    throw new BusinessException(ErrorCode.INVALID_INPUT, "그림은 6MB까지 올릴 수 있어요");
+                }
+                try {
+                    bytes = Base64.getDecoder().decode(dataUrl.substring(dataUrl.indexOf(',') + 1));
+                } catch (IllegalArgumentException e) {
+                    throw new BusinessException(ErrorCode.INVALID_INPUT, "그림을 읽지 못했어요");
+                }
+            }
+            String mime = imageMime(bytes);
+            String key = face ? art.upload(shrunk(bytes), "image/jpeg", true) : art.upload(bytes, mime, true);
+            if (key == null) {
+                throw new BusinessException(ErrorCode.INTERNAL_ERROR, "그림을 저장하지 못했어요. 다시 시도해 주세요");
+            }
+            return key;
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "그림을 읽지 못했어요");
+        } finally {
+            if (temp != null) {
+                try (var paths = Files.walk(temp)) {
+                    paths.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+                } catch (IOException ignored) {
+                    // 임시 폴더 — 못 지워도 다음 정리 때 지운다
+                }
+            }
+        }
+    }
+
+    /** 그림 키의 주소 — {@link #artUrl} 과 같은 규칙(공개 자리는 상대경로, 로컬·비공개는 잠깐 열리는 주소). */
+    @Transactional(readOnly = true)
+    public String imageUrl(String key) {
+        if (key == null || key.isBlank()) {
+            return null;
+        }
+        if (!PrivateArt.isPrivate(key) && !presignLocally) {
+            return "/" + key;
+        }
+        return art.ready() ? art.temporaryUrl(key) : null;
+    }
+
+    /**
+     * 사용자가 만든 세계의 예시 인물을 캐릭터로 둔다 — 그 자리에서 넣은 사진 · 이름 · 설정 그대로(생성 호출 없음).
+     * 같은 id 면 이름 · 설정을 맞추고, 새 사진이 왔을 때만 그림을 바꾼다. 사진이 없으면 글만으로 고를 수 있는
+     * 캐릭터가 되고, 시트는 체험할 때 그 글로 그린다.
+     */
+    @Transactional
+    public WebtoonCharacter putPlayPerson(String publicId, Long ownerId, String world, String name, String description,
+                                          String artKey, boolean shown) {
+        Instant now = Instant.now(clock);
+        WebtoonCharacter one = characters.findByPublicId(publicId).orElse(null);
+        if (one != null && !world.equals(one.getPlayWorld())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "예시 인물을 저장하지 못했어요.");
+        }
+        if (one == null) {
+            one = WebtoonCharacter.playExample(publicId, ownerId, world, name, description, shown, now);
+            one.drewArt(artKey, artKey == null ? CharacterSource.PROMPT : CharacterSource.PHOTO, now);
+        } else {
+            if (!name.equals(one.getName()) || !description.equals(one.getDescription())) {
+                one.rename(name, description, now);
+            }
+            if (artKey != null) {
+                one.drewArt(artKey, CharacterSource.PHOTO, now);
+            }
+        }
+        one.showInPlay(shown, now);
+        return characters.save(one);
+    }
+
+    private String storeOriginal(Long userId, String guestKey, List<String> photos, List<String> keys) {
+        List<String> data = photos == null ? List.of() : photos;
+        List<String> refs = keys == null ? List.of() : keys;
+        if ((!refs.isEmpty() ? refs.size() : data.size()) != 1 || refs.stream().anyMatch(k -> k == null || k.isBlank())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "캐릭터 이미지 한 장을 선택해 주세요");
+        }
+        Path temp = null;
+        try {
+            Files.createDirectories(workDir);
+            temp = Files.createTempDirectory(workDir, "original-");
+            byte[] bytes;
+            if (!refs.isEmpty()) {
+                bytes = Files.readAllBytes(pullPhotos(temp, refs, userId, guestKey).getFirst());
+            } else {
+                String encoded = data.getFirst();
+                if (encoded == null || encoded.length() > MAX_PHOTO_BYTES * 4 / 3 + 128) {
+                    throw new BusinessException(ErrorCode.INVALID_INPUT, "이미지는 6MB까지 올릴 수 있습니다");
+                }
+                String raw = encoded.contains(",") ? encoded.substring(encoded.indexOf(',') + 1) : encoded;
+                try { bytes = Base64.getDecoder().decode(raw); }
+                catch (IllegalArgumentException e) { throw new BusinessException(ErrorCode.INVALID_INPUT, "이미지를 읽지 못했습니다"); }
+                if (bytes.length > MAX_PHOTO_BYTES) throw new BusinessException(ErrorCode.INVALID_INPUT, "이미지는 6MB까지 올릴 수 있습니다");
+            }
+            String mime = imageMime(bytes);
+            String key = art.upload(bytes, mime, false);
+            if (key == null) throw new BusinessException(ErrorCode.INTERNAL_ERROR, "이미지를 저장하지 못했습니다. 다시 시도해 주세요");
+            return key;
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이미지를 읽지 못했습니다");
+        } finally {
+            if (temp != null) {
+                try (var paths = Files.walk(temp)) {
+                    paths.sorted(java.util.Comparator.reverseOrder()).forEach(this::dropPhoto);
+                } catch (IOException e) { log.warn("캐릭터 등록 임시파일 정리 실패", e); }
+            }
+        }
     }
 
     /**
@@ -257,15 +507,17 @@ public class CharacterService {
      */
     @Transactional
     public WebtoonCharacter tryOut(Long userId, String browserUid, String name,
-                                   String description, List<String> photoDataUrls, String world,
+                                   String description, List<String> photoDataUrls,
+                                   List<String> photoKeys, String guestKey, String world,
                                    String language) {
-        return start(userId, browserUid, name, description, photoDataUrls, null,
-                     world == null ? "" : world.trim(), language);
+        return start(userId, browserUid, name, description, photoDataUrls, photoKeys, guestKey,
+                     null, world == null ? "" : world.trim(), language);
     }
 
     /** @param world {@code null} 이면 초상 한 장, 아니면 한 컷("" 는 세계관 무작위) */
     private WebtoonCharacter start(Long userId, String browserUid, String name,
-                                   String description, List<String> photoDataUrls, String style,
+                                   String description, List<String> photoDataUrls,
+                                   List<String> photoKeys, String guestKey, String style,
                                    String world, String language) {
         /* **로그인은 안 시킨다.** 이 제품은 회원가입 없이 한번 써 보게 하는
            것이 목적이고, 웹툰 만들기가 이미 그렇다 — 캐릭터만 로그인을
@@ -280,13 +532,20 @@ public class CharacterService {
         }
         // 글은 그리기 전에 거른다(#80). 사진은 아직 안 본다(safety.md).
         if (safety != null) {
-            safety.checkText(world == null ? "character-create" : "character-try", name, description, world);
+            safety.checkFields(world == null ? "character-create" : "character-try",
+                    com.lore.webtoon.safety.SafetyGuard.Field.of("이름", name),
+                    com.lore.webtoon.safety.SafetyGuard.Field.of("캐릭터 설명", description),
+                    com.lore.webtoon.safety.SafetyGuard.Field.of("세계관", world));
         }
         List<String> photos = (photoDataUrls == null ? List.<String>of() : photoDataUrls).stream()
                 .filter(s -> s != null && !s.isBlank())
                 .limit(MAX_PHOTOS)
                 .toList();
-        boolean hasPhoto = !photos.isEmpty();
+        List<String> keys = (photoKeys == null ? List.<String>of() : photoKeys).stream()
+                .filter(s -> s != null && !s.isBlank())
+                .limit(MAX_PHOTOS)
+                .toList();
+        boolean hasPhoto = !photos.isEmpty() || !keys.isEmpty();
         // 한 컷은 빈손도 된다 — 그게 「랜덤으로 만들어보기」다.
         if (world == null && !hasPhoto && (description == null || description.isBlank())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT,
@@ -340,9 +599,13 @@ public class CharacterService {
         List<Path> savedPhotos;
         try {
             Files.createDirectories(dir);
-            savedPhotos = new ArrayList<>();
-            for (int i = 0; i < photos.size(); i++) {
-                savedPhotos.add(savePhoto(dir, photos.get(i), i));
+            if (!keys.isEmpty()) {
+                savedPhotos = pullPhotos(dir, keys, userId, guestKey);
+            } else {
+                savedPhotos = new ArrayList<>();
+                for (int i = 0; i < photos.size(); i++) {
+                    savedPhotos.add(savePhoto(dir, photos.get(i), i));
+                }
             }
         } catch (BusinessException e) {
             throw e;
@@ -387,6 +650,128 @@ public class CharacterService {
                     dir));
         }
         return saved;
+    }
+
+    /**
+     * 세계관 만들기의 예시 주인공을 그린다(2026-11-03). 세계를 지은 글이 이름·설명을 정했고, 그림은 캐릭터
+     * 만들기와 같은 줄·같은 하네스(character.py)로 그린다. 크레딧·하루 무료 몫은 안 쓴다 — 세계 만들기
+     * 횟수가 따로 센다({@code PlayWorldService}). 돈 상한은 세계 만들기가 시작 전에 봤다.
+     *
+     * @param shown 세계가 이미 올라가 있으면 참 — 다 그리는 대로 그 세계에 보인다
+     */
+    @Transactional
+    public WebtoonCharacter drawPlayExample(Long ownerId, String world, String name, String description,
+                                            boolean shown, String language) {
+        if (!maker.ready()) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "지금은 캐릭터를 만들 수 없습니다");
+        }
+        String publicId = UUID.randomUUID().toString().replace("-", "").substring(0, 20);
+        Path dir = workDir.resolve(publicId);
+        try {
+            Files.createDirectories(dir);
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "캐릭터를 만들지 못했습니다");
+        }
+        String called = name == null ? "" : name.trim();
+        WebtoonCharacter saved = characters.save(WebtoonCharacter.playExample(publicId, ownerId, world,
+                called.isEmpty() ? "이름 없는 캐릭터" : called, description, shown, Instant.now(clock)));
+        Long id = saved.getId();
+        Runnable job = () -> draw(id, called, description, List.of(), null, null, language, dir);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    line.submit(job);
+                }
+            });
+        } else {
+            line.submit(job);
+        }
+        return saved;
+    }
+
+    /**
+     * 운영 세계(play/worlds.json)의 사건 예시 인물을 캐릭터로 심는다 — 주인 없이, 그 세계에 넣어 볼 때만 열린다
+     * (play_public). 기본 제공(BUILTIN)과 달리 캐릭터 목록에는 안 나온다. 그림은 받은 사진 한 장이고, 시트는
+     * 체험을 시작하면 다른 캐릭터와 같이 그 사진으로 그린다.
+     *
+     * <p>같은 id 가 이미 있으면 이름·설명만 맞추고, 그림이 비었을 때만 올린다. 서버가 뜰 때마다 불려도 같다.
+     */
+    @Transactional
+    public WebtoonCharacter seedPlayPerson(String publicId, String world, String name, String description, byte[] image) {
+        Instant now = Instant.now(clock);
+        WebtoonCharacter one = characters.findByPublicId(publicId).orElse(null);
+        if (one == null) {
+            one = WebtoonCharacter.playExample(publicId, null, world, name, description, true, now);
+        } else if (!name.equals(one.getName()) || !description.equals(one.getDescription())) {
+            one.rename(name, description, now);
+        }
+        if ((one.getArtKey() == null || one.getArtKey().isBlank()) && image != null && art.ready()) {
+            String key = art.upload(shrunk(image), "image/jpeg", true);
+            if (key != null) {
+                one.drewArt(key, CharacterSource.PHOTO, now);
+            }
+        }
+        one.showInPlay(true, now);
+        return characters.save(one);
+    }
+
+    /** 세계관 만들기가 이 세계에 그려 준 예시 캐릭터 — 만든 순서대로. */
+    @Transactional(readOnly = true)
+    public List<WebtoonCharacter> playDrawn(String world) {
+        return characters.findByPlayWorldOrderByIdAsc(world);
+    }
+
+    /** 이 사람이 만든 캐릭터면 그것, 아니면 {@code null}. 세계의 예시 캐릭터로 고를 수 있는지 볼 때 쓴다. */
+    @Transactional(readOnly = true)
+    public WebtoonCharacter ownedBy(String publicId, Long ownerId) {
+        if (publicId == null || ownerId == null) {
+            return null;
+        }
+        return characters.findByPublicId(publicId)
+                .filter(one -> !one.isTrashed() && ownerId.equals(one.getOwnerId()))
+                .orElse(null);
+    }
+
+    /** 이 세계의 예시로 쓸 수 있는 캐릭터 — 그 사람이 만든 것이거나 그 세계에 딸린 것. 아니면 {@code null}. */
+    @Transactional(readOnly = true)
+    public WebtoonCharacter usableIn(String publicId, Long ownerId, String world) {
+        if (publicId == null) {
+            return null;
+        }
+        return characters.findByPublicId(publicId)
+                .filter(one -> !one.isTrashed())
+                .filter(one -> ownerId != null && ownerId.equals(one.getOwnerId())
+                        || world != null && world.equals(one.getPlayWorld()))
+                .orElse(null);
+    }
+
+    /** 세계를 올리거나 내릴 때 — 그 세계의 예시 캐릭터를 누구나 고를 수 있게 열거나 닫는다. */
+    @Transactional
+    public void showInPlay(Collection<String> publicIds, Collection<String> shown) {
+        Instant now = Instant.now(clock);
+        for (String id : publicIds) {
+            characters.findByPublicId(id).ifPresent(one -> {
+                boolean on = shown.contains(id);
+                if (one.isPlayPublic() != on || on) {
+                    one.showInPlay(on, now);
+                    characters.save(one);
+                }
+            });
+        }
+    }
+
+    /**
+     * 세계관 만들기가 그려 준 예시 캐릭터를 없앤다 — 다시 만들 때 사용자가 안 남긴 것, 세계를 지울 때 전부.
+     * 그 캐릭터로 이미 만든 웹툰은 그림을 S3 에 따로 갖고 있어 그대로 남는다(휴지통 영구 삭제와 같다).
+     *
+     * @param publicId 하나만 지울 때. {@code null} 이면 그 세계가 그려 준 것 전부
+     */
+    @Transactional
+    public void dropPlayExamples(String world, String publicId) {
+        characters.findByPlayWorldOrderByIdAsc(world).stream()
+                .filter(one -> publicId == null || publicId.equals(one.getPublicId()))
+                .forEach(this::purge);
     }
 
     /** 뒤에서 그린다. 여기서 죽어도 줄이 멈추면 안 된다. */
@@ -492,6 +877,61 @@ public class CharacterService {
         return characters.save(one);
     }
 
+    /** 카드의 「자리의 무게」로 받을 수 있는 값 — 하네스가 굴리는 네 가지(화면은 주연·조연·단역·엑스트라로 보인다). */
+    static final java.util.Set<String> ROLE_TIERS = java.util.Set.of("중심", "곁", "스쳐감", "뜬금");
+
+    /**
+     * AI 캐릭터 카드 고치기 — 이름·설정 글과 카드 칸(세계관 · 장르 · 종 · 역할 · 반전 · 운명 · 대사)을 한 번에.
+     *
+     * 사용자가 고친 값이 그대로 저장되고, 이 캐릭터로 웹툰을 만들 때 그 값만 하네스에 간다
+     * ({@code JobService.writeCharacter}). 비운 칸은 비운 채로 둔다 — AI 가 지은 원래 값으로 채우지 않는다.
+     *
+     * @param description null 이면 설정 글을 그대로 둔다
+     */
+    @Transactional
+    public WebtoonCharacter editCard(String publicId, Long userId, Collection<String> uids,
+                                     String name, String description, WebtoonCharacter.CardEdit edit) {
+        WebtoonCharacter one = byPublicId(publicId, userId, uids);
+        if (!one.madeBy(userId, uids)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "내 캐릭터만 수정할 수 있습니다");
+        }
+        if (one.getStatus() == CharacterStatus.DRAWING) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "만드는 중인 캐릭터입니다");
+        }
+        if (!one.hasCard() || one.getSource() == CharacterSource.UPLOAD
+                || one.getSource() == CharacterSource.REPLACED_UPLOAD) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "카드가 있는 AI 캐릭터만 카드를 고칠 수 있습니다");
+        }
+        WebtoonCharacter.CardEdit e = edit == null
+                ? new WebtoonCharacter.CardEdit(null, null, null, null, null, null, null, null, null) : edit;
+        if (name != null && name.trim().length() > 60 || description != null && description.length() > 8000) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "이름은 60자, 캐릭터 설정은 8,000자까지 입력해 주세요");
+        }
+        if (e.roleTier() != null && !e.roleTier().isBlank() && !ROLE_TIERS.contains(e.roleTier().strip())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "비중은 주연·조연·단역·엑스트라 가운데서 골라 주세요");
+        }
+        if (e.world() != null && !e.world().isBlank() && !e.world().strip().equals(one.getWorld())
+                && worlds().stream().noneMatch(w -> w.get("key").equals(e.world().strip()))) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "그런 세계관이 없습니다");
+        }
+        if (safety != null) {
+            List<String> texts = new ArrayList<>(java.util.Arrays.asList(name, description, e.worldLabel(),
+                    e.genre(), e.species(), e.role(), e.twist()));
+            if (e.fate() != null) texts.addAll(e.fate());
+            if (e.dialogue() != null) {
+                e.dialogue().stream().filter(java.util.Objects::nonNull).forEach(d -> {
+                    texts.add(d.who());
+                    texts.add(d.text());
+                });
+            }
+            safety.checkText("character-card-edit", texts.toArray(String[]::new));
+        }
+        Instant now = Instant.now(clock);
+        one.rename(name == null ? null : name.trim(), description == null ? one.getDescription() : description, now);
+        one.editCard(e, now);
+        return characters.save(one);
+    }
+
     /**
      * 지운다.
      *
@@ -505,6 +945,15 @@ public class CharacterService {
         if (!one.madeBy(userId, uids)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "기본 캐릭터는 지울 수 없습니다");
         }
+        /* 바로 없애지 않고 휴지통에 넣는다(2026-10-26) — 15일 뒤 CharacterTrash 가 영구 삭제한다. */
+        one.trash(Instant.now(clock));
+        characters.save(one);
+    }
+
+    /** 휴지통에서 보관 기간이 지난 것을 영구 삭제한다 — 공개 목록 정리까지. 그림은 S3 에 둔다(만든 웹툰이 보고 있다). */
+    @Transactional
+    public void purge(WebtoonCharacter one) {
+        if (communityCleanup != null) communityCleanup.character(one.getPublicId());
         characters.delete(one);
     }
 
@@ -622,6 +1071,38 @@ public class CharacterService {
 
     // ---- 안쪽 -------------------------------------------------------------
 
+    /**
+     * presign 으로 S3 에 먼저 올린 사진을 작업 폴더로 내린다(#660).
+     *
+     * <b>티켓을 먼저 태운다</b>({@code S3Service.consume}) — 웹툰 만들기
+     * (JobService.pullPhotos)와 같은 이유로, 남의 키를 적어 보내거나 같은
+     * 키를 두 번 쓰는 것을 막는다. 로그인했으면 계정으로, 게스트면 guestKey
+     * (IP 해시)로 — 이 티켓이 정말 이 사람이 방금 받은 것인지 확인한다.
+     */
+    private List<Path> pullPhotos(Path dir, List<String> keys, Long userId, String guestKey)
+            throws IOException {
+        List<Path> out = new ArrayList<>();
+        for (int i = 0; i < keys.size(); i++) {
+            String key = keys.get(i);
+            if (key == null || key.isBlank()) {
+                continue;
+            }
+            if (userId != null) {
+                uploads.consume(userId, key, Instant.now(clock));
+            } else {
+                uploads.consumeGuest(guestKey, key, Instant.now(clock));
+            }
+            Path to = dir.resolve("photo" + i + ".png");
+            storage.download(key, to);
+            if (Files.size(to) > MAX_PHOTO_BYTES) {
+                Files.deleteIfExists(to);
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "사진이 너무 큽니다 (6MB 까지)");
+            }
+            out.add(to);
+        }
+        return out;
+    }
+
     /** @param index 여러 장일 때 파일 이름이 안 겹치게 붙이는 번호(0부터). */
     private Path savePhoto(Path dir, String dataUrl, int index) throws IOException {
         String body = dataUrl.contains(",") ? dataUrl.substring(dataUrl.indexOf(',') + 1) : dataUrl;
@@ -635,8 +1116,16 @@ public class CharacterService {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "사진이 너무 큽니다 (6MB 까지)");
         }
         Path out = dir.resolve("photo" + index + ".png");
-        Files.write(out, bytes);
-        return out;
+        if (bytes.length <= com.lore.webtoon.job.PhotoFile.MAX_BYTES) {
+            Files.write(out, bytes);
+            return out;
+        }
+        /* 하네스는 5MB 를 넘는 사진에서 죽는다(#726). 그보다 크면 한 번 열어 줄여 적는다. */
+        BufferedImage image = ImageIO.read(new java.io.ByteArrayInputStream(bytes));
+        if (image == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "사진을 열지 못했습니다");
+        }
+        return com.lore.webtoon.job.PhotoFile.write(image, dir, "photo" + index);
     }
 
     private void dropPhoto(Path photo) {

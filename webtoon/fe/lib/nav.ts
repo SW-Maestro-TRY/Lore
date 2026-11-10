@@ -2,7 +2,7 @@
  *
  *   /webtoon                       첫 화면
  *   /webtoon?view=entry            입구 (내 캐릭터로 웹툰 / 캐릭터 만들어보기)
- *   /webtoon?view=create&step=1    웹툰 만들기 1~5 (&character=<id> 로 캐릭터를 골라 들어옴)
+ *   /webtoon?view=create&step=1    웹툰 만들기 1~2 (&character=<id> 로 캐릭터를 골라 들어옴)
  *   /webtoon?view=running&job=<id> 만드는 중 (시트 확인 · 이야기 고르기 · 그리는 중)
  *   /webtoon?run=<id>              완성본 (공유 링크가 이 길이다)
  *   /webtoon?view=editor&run=<id>  편집실
@@ -12,16 +12,22 @@
  *   /webtoon?view=card&id=<id>     캐릭터 만들어보기 (결과 — 내 것)
  *   /webtoon?card=<id>             공유된 카드 (남이 봄)
  *   /webtoon?view=mypage           마이페이지
+ *   /webtoon?view=event            출석 이벤트 (할로윈 · 가면무도회, #862)
  *   /webtoon?view=feedback         피드백 보내기 (예전 주소 view=mypage&tab=feedback 도 여기로)
+ *   /webtoon?view=play             세계관 체험 — 세계·사건 고르기(&world=<id>), 사건 보기(&ep=<id>), 캐릭터(&stage=char), 만드는 중(&stage=making), 만화(&stage=done)
+ *   /webtoon?view=make             만들기 고르기 (웹툰 만들기 / 세계관 만들기)
+ *   /webtoon?view=world-new        세계관 만들기
+ *   /webtoon?view=admin            관리자 대시보드 — 개요 · 작품(&tab=works) · 캐릭터(&tab=characters) (관리자만, #779)
  *   /webtoon?view=admin-examples   예시 작품 관리 (관리자만, #619)
  *   /webtoon?view=admin-works      작품 관리 — 처리 기록 · 관리자 휴지통 (관리자만, #638)
+ *   /webtoon?view=admin-payments   결제 관리 — 충전 주문 · 환불 (관리자만, #155)
  *
  * 화면을 바꿀 때 주소도 같이 민다 — 뒤로가기·새로고침·공유가 전부 주소에
  * 기댄다. 상태만 바꾸면 뒤로가기가 웹툰 탭을 통째로 빠져나간다. */
 
 export type View =
-  | "landing" | "entry" | "create" | "running" | "result" | "editor" | "works"
-  | "characters" | "try" | "card" | "sharedCard" | "mypage" | "feedback" | "admin-examples" | "admin-works";
+  | "play" | "make" | "world-new" | "landing" | "entry" | "create" | "running" | "result" | "editor" | "next" | "works"
+  | "character-new" | "characters" | "try" | "card" | "sharedCard" | "mypage" | "feedback" | "event" | "admin" | "admin-examples" | "admin-works" | "admin-payments";
 
 export interface GoParams {
   step?: number;
@@ -29,17 +35,27 @@ export interface GoParams {
   job?: string;
   run?: string;
   id?: string;
-  /** 마이페이지에서 처음 열 칸. 진행 화면의 「설정에서 끌 수 있어요」가 설정 칸으로 바로 보낸다. */
-  tab?: "settings";
+  /** 처음 열 칸. 마이페이지는 설정 칸(진행 화면의 「설정에서 끌 수 있어요」), 관리자 대시보드는 작품 · 캐릭터 칸. */
+  tab?: "settings" | "works" | "characters" | "contact";
   /** 만들기 화면이 어느 길인가(#548). own = 「만들고 싶은 내용이 있어요」. 없으면 아이디어부터. */
   mode?: "own";
+  /** 완성본을 열 때 먼저 보일 장 — 장면형 광고가 광고에서 본 장부터 열리게 보낸다(2026-10-27). */
+  page?: number;
+  /** 만들기 1걸음의 빠른 시작(2026-10-27) — 광고로 온 사람은 카드 고르기 대신 이름·설명 두 칸부터. */
+  quick?: boolean;
+  /** 세계관 체험의 세계 · 사건 · 걸음. */
+  world?: string;
+  ep?: string;
+  stage?: "char" | "making" | "done" | "stories";
+  /** 2걸음 그림체 기본값 — 광고 작품의 그림체를 넘긴다(바꿀 수 있다). STYLE_INFO 의 키. */
+  style?: string;
 }
 
 export function hrefOf(view: View, p: GoParams = {}): string {
   const q = new URLSearchParams();
   switch (view) {
     case "landing": return "/webtoon";
-    case "result": if (p.run) q.set("run", p.run); return `/webtoon?${q}`;
+    case "result": if (p.run) q.set("run", p.run); if (p.page) q.set("page", String(p.page)); return `/webtoon?${q}`;
     case "sharedCard": if (p.id) q.set("card", p.id); return `/webtoon?${q}`;
     default: q.set("view", view);
   }
@@ -50,6 +66,11 @@ export function hrefOf(view: View, p: GoParams = {}): string {
   if (p.id) q.set("id", p.id);
   if (p.tab) q.set("tab", p.tab);
   if (p.mode) q.set("mode", p.mode);
+  if (p.quick) q.set("quick", "1");
+  if (p.style) q.set("style", p.style);
+  if (p.world) q.set("world", p.world);
+  if (p.ep) q.set("ep", p.ep);
+  if (p.stage) q.set("stage", p.stage);
   return `/webtoon?${q}`;
 }
 

@@ -9,13 +9,13 @@
 //   ?mock=failed     부화 실패(ALIVE 블록이 전부 null 인 응답 — 화면이 안 죽는지 보는 자리)
 //   ?mock=grown      사흘째 · 2층 4종 열림 · 오늘 밤 첫 선물이 구워지는 자리
 //   ?mock=layer3     닷새째 · 2층 8종 전부 열림 — 다음 기상에 조각 4칸이 등장
-//   &clock=2026-09-05T10:30   시작 시각을 KST 로 못 박음(그 뒤로는 실시간)
+//   &clock=2026-09-05T10:30   시작 시각을 규칙 시간대(기본 KST)로 못 박음(그 뒤로는 실시간)
 //
 // ★ 목은 페이지당 하나(모듈 싱글턴). 훅이 여러 번 만들면 각자 다른 시계를 갖게 된다.
 
 import {
   answerChat, care, draftPet, setCharacter, getHatchProgress, getAlbum, getChat, getPet, listPets, markMotionSeen, setBackground,
-  setPersonality, share, sleep, tutorialDone, graduationSeen, wake,
+  setPersonality, share, sleep, tutorialDone, graduationSeen, wake, callBack,
   type Album, type CareAction, type ChatSlot, type ChatState, type CharacterInput, type Drafted, type HatchProgress,
   type PetCreated, type PetDetail, type Personality, type Shared, type ShareKind,
 } from './pet';
@@ -39,6 +39,8 @@ export interface PetSource {
   care(petId: number, action: CareAction): Promise<PetDetail>;
   sleep(petId: number): Promise<PetDetail>;
   wake(petId: number): Promise<PetDetail>;
+  /** 부르기(재회) — 여행 중이 아니면 409 ZZAL_NOT_TRAVELING. */
+  callBack(petId: number): Promise<PetDetail>;
   /** 튜토리얼 마지막 칸 — 시계가 켜진다. */
   tutorialDone(petId: number): Promise<PetDetail>;
   /** 첫날 축하 판을 봤다고 남긴다(본문 없음 · 204 · 멱등). */
@@ -67,7 +69,7 @@ export interface PetSource {
 /** 실서버. pet.ts·game.ts 의 함수를 그대로 묶은 것이라 여기엔 규칙이 없다. */
 export const httpPetSource: PetSource = {
   kind: 'http',
-  draftPet, setCharacter, getHatchProgress, listPets, getPet, care, sleep, wake, tutorialDone, graduationSeen, setPersonality,
+  draftPet, setCharacter, getHatchProgress, listPets, getPet, care, sleep, wake, callBack, tutorialDone, graduationSeen, setPersonality,
   setBackground, share,
   getChat, answerChat, markMotionSeen, getAlbum,
   startGame, guess, abandonGame, getCurrentGame,

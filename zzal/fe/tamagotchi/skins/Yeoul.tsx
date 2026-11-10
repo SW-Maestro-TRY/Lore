@@ -9,8 +9,7 @@
 // ★ 개발용 이동 띠는 **떠 있는 창**이다. 예전처럼 위에 자리를 차지하면 무대 높이가 줄어
 //   판정한 화면과 실제 화면이 달라진다 — 배경 그림을 무대 크기에 맞춰 만들 예정이라 특히 그렇다.
 //   기본은 닫혀 있고 오른쪽 가장자리의 세로 '이동' 탭을 누르면 열린다.
-//   ★ **로컬에서만** 그려진다(`useDevVisible`). 운영·dev.lorecomic.com 등 실도메인에서는 아예 안 뜨므로
-//   실서비스로 낼 때 이 파일을 지울 필요가 없다.
+//   ★ dev/ping이 성공한 서버에서만 서버 리모컨을 그린다. 도메인이나 화면 목 값으로 판정하지 않는다.
 //
 // 색·여백을 손보실 자리는 `yeoul/ui.ts` 한 곳이다.
 'use client';
@@ -22,18 +21,19 @@ import Egg from '../yeoul/Egg';
 import Onboarding from '../yeoul/Onboarding';
 import AuthSkin from '../yeoul/authSkin';
 import Room from '../yeoul/Room';
+import FocusedRoom from '../focused-room/FocusedRoom';
+import FirstMeetingGate from '../yeoul/FirstMeetingGate';
 import { STEPS, WEB_KEYS } from '../yeoul/constants';
-import { C, C2, KEYFRAMES, MONO, SANS, SHELL_MAX, chipTone, gap, monoSize, radius, fz, ink, pad } from '../yeoul/ui';
+import { C, chipTone, KEYFRAMES, MONO, SANS, SHELL_MAX, gap, monoSize, radius, fz, ink, pad } from '../yeoul/ui';
 import { LiveProvider, useHatchState, type Live } from '../yeoul/useHatch';
 import { useYeoul } from '../yeoul/useYeoul';
-import { useDevVisible } from '../useDevVisible';
+import DevRemote, { useDevPing, type RemoteTab } from '../yeoul/DevRemote';
+import { STAGE, lastStage, once, pickerHolding, reachStage, releasePicker, runLeaveHooks, sinceT0, startClock, ztrack } from '../yeoul/funnel';
 import { POSE_FLOORS, POSE_LABEL } from '../props/anchors-fixed';
 import { GIFT_CYCLES, SITUATION_TABLE, scenePlays } from '../props/situations';
-import { ApiError } from '../../lib/api';
-import { advanceClock, forceOpen, nextLocalAt, nightSweep, setClockAt } from '../../lib/dev';
 import type { SkinProps } from './Scrapbook';
 
-export default function Yeoul(_props: SkinProps) {
+export default function Yeoul(_props: SkinProps & { focusedRoom?: boolean }) {
   // 진짜 부화(그림을 올린 경우)만 여기 붙는다. 안 올렸으면 통째로 잠자고 화면은 목으로 돈다.
   // ★ `useYeoul` 보다 먼저 부른다 — 부화 진행을 목이 아니라 **서버가 말하게** 하려면
   //   목이 만들어질 때 이미 손에 들려 있어야 한다(판정 1).
@@ -42,8 +42,9 @@ export default function Yeoul(_props: SkinProps) {
   const { s, v, actions } = y;
 
   // 이미 로그인한 채로 들어온 사람에게는 문을 열어 둔다 — 첫 화면에서 다시 묻지 않는다.
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const { passAuth, goStep, goEgg, enterRoom } = actions;
+  useFunnel(s, isAuthenticated, isLoading);
   useEffect(() => {
     if (isAuthenticated) passAuth('session');
   }, [isAuthenticated, passAuth]);
@@ -83,7 +84,9 @@ export default function Yeoul(_props: SkinProps) {
    *   (`useHatch.resume` 도 같은 기준으로 제 상태를 안 건드린다 — 두 곳 다 막아야 한다.)
    */
   const era = useRef(0);
-  useEffect(() => { era.current += 1; }, [isAuthenticated]);
+  // A settled auth store can mount this skin after the announcement gate closes.
+  // StrictMode replays effects: invalidate the earlier read and let this generation resume once.
+  useEffect(() => { era.current += 1; asked.current = false; }, [isAuthenticated]);
   useEffect(() => {
     if (!isAuthenticated || asked.current) return;
     asked.current = true;
@@ -127,6 +130,7 @@ export default function Yeoul(_props: SkinProps) {
   return (
     <div
       className="yeoul"
+      onScrollCapture={onLandingScroll}
       style={{
         position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center',
         // ★ 바깥 바탕을 **화면 전체 폭의 방**으로 깐다(2026-09-16 강화). 은은한 그라데이션만으로는
@@ -158,17 +162,23 @@ export default function Yeoul(_props: SkinProps) {
           display: 'flex', flexDirection: 'column',
         }}
       >
-        {v.screen.room && (waitingRoom ? <RoomWait /> : <Room y={y} />)}
+        {v.screen.room && (waitingRoom ? <RoomWait /> : !s.sampleMode && live.petId && live.pet ? (
+          <FirstMeetingGate focusedScene={_props.focusedRoom} key={live.petId} petId={live.petId} characterName={live.pet.name} imageSrc={live.img('base') ?? undefined}>
+            {_props.focusedRoom ? <FocusedRoom live={live} /> : <Room y={y} />}
+          </FirstMeetingGate>
+        ) : <Room y={y} />)}
         {v.screen.egg && <Egg y={y} />}
         {v.screen.onb && <Onboarding y={y} />}
         <AuthModal
+          locale="document"
           open={s.authOpen}
           onClose={actions.closeAuth}
           initialTab={s.authTab}
-          // ★ **로그인일 때만** 문을 연다. develop 의 AuthModal 은 가입에서도 이 손잡이를 부르는데
-          //   (창을 안 닫고 로그인 탭으로 옮기려고), 그걸 그대로 받으면 가입만 한 사람이
-          //   로그인도 안 한 채 올리기 칸으로 넘어간다 — 실측으로 그랬다(2026-09-09).
-          onSuccess={(how) => { if (how === 'login') actions.passAuth(how); }}
+          // ★ 로그인·가입 둘 다 문을 연다(2026-10-27). 서버가 가입 때 로그인과 같은 쿠키를 주고(#690),
+          //   창은 내 정보(/users/me)로 로그인 상태를 확인한 뒤에만 onSuccess("signup") 을 부른다.
+          //   확인에 실패하면 onSuccess 없이 로그인 단계로 남는다. 예전(2026-09-09)에는 가입이
+          //   로그인이 아니어서 가입만 한 사람이 올리기 칸으로 넘어갔기 때문에 'login' 만 받았다.
+          onSuccess={(how) => { if (how === 'login' || how === 'signup') actions.passAuth(how); }}
         />
         {/* ★ 공통 가입 창을 **여울의 결로 감싸는 겉옷**(2026-09-21 A-01~A-04).
             창 자체는 안 고친다 — piece-maker·webtoon 과 같이 쓰는 공통 부품이라 팀원 화면이 같이 바뀐다.
@@ -181,6 +191,98 @@ export default function Yeoul(_props: SkinProps) {
       <DevJump y={y} live={live} missingBasics={live.missingBasics} />
     </div>
   );
+}
+
+/**
+ * 깔때기 계측 — 첫 표시·단계 도달·가입 창 열림·떠남. 무엇을 왜 재는지는 `yeoul/funnel.ts` 머리말에.
+ *
+ * ★ page_view 는 **로그인 여부가 확정된 뒤** 한 번 찍는다. 확정 전에 찍으면 이미 로그인한
+ *   사람도 전부 guest 로 남는다. ms 는 이 탭의 첫 표시면 0, 새로고침이면 t0 이후 경과다.
+ * ★ 가입 창은 공통 부품(AuthModal)이라 안을 건드리지 않고, 여는 값(`s.authOpen`)이 켜지는
+ *   순간을 여기서 본다 — 올리기 칸·헤더 어느 쪽에서 열려도 같은 한 자리로 모인다.
+ * ★ page_leave 는 탭을 숨길 때마다 한 줄이다(돌아오면 다시 셀 수 있게 푼다). 실제 전송은
+ *   공통 기록기가 떠나는 중임을 보고 beacon 으로 바로 내보낸다.
+ */
+function useFunnel(s: ReturnType<typeof useYeoul>['s'], isAuthenticated: boolean, isLoading: boolean) {
+  useEffect(() => {
+    if (isLoading) return;
+    once('page_view', () => {
+      const { fresh } = startClock();
+      ztrack('zzal_page_view', { type: isAuthenticated ? 'member' : 'guest', ms: fresh ? 0 : sinceT0() });
+    });
+  }, [isLoading, isAuthenticated]);
+
+  const authWas = useRef(false);
+  useEffect(() => {
+    if (s.authOpen && !authWas.current) {
+      reachStage(STAGE.auth);
+      ztrack('zzal_auth_open', { tab: s.authTab });
+    }
+    authWas.current = s.authOpen;
+  }, [s.authOpen, s.authTab]);
+
+  useEffect(() => {
+    if (s.screen === 'egg') reachStage(STAGE.baking);
+    else if (s.screen === 'room') { if (!s.sampleMode) reachStage(STAGE.room); }
+    else {
+      const key = STEPS[s.step];
+      if (key === 'upload') reachStage(STAGE.upload);
+      else if (key === 'char') reachStage(STAGE.input);
+      else if (key === 'born') reachStage(STAGE.baking);
+    }
+  }, [s.screen, s.step, s.sampleMode]);
+
+  useEffect(() => {
+    startClock();
+    let sent = false;
+    const leave = () => {
+      if (sent) return;
+      // ★ 사진 고르기 창이 페이지를 덮은 것이다 — 떠남이 아니다. 방·튜토리얼 체류도 끊지 않는다
+      //   (`runLeaveHooks` 를 안 돌리므로 그쪽 시계가 그대로 이어진다). → funnel `holdForPicker`
+      if (pickerHolding()) return;
+      sent = true;
+      runLeaveHooks();
+      ztrack('zzal_page_leave', { ms: sinceT0(), step: lastStage() });
+    };
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') leave();
+      // 다시 보이면 고르기 창은 닫힌 것이다(골랐든 취소했든) — 표시를 푼다.
+      else { sent = false; releasePicker(); }
+    };
+    const onShow = () => { sent = false; };
+    window.addEventListener('pagehide', leave);
+    window.addEventListener('pageshow', onShow);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('pagehide', leave);
+      window.removeEventListener('pageshow', onShow);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
+}
+
+/**
+ * 랜딩 스크롤 깊이 25·50·75·100% — 각 한 번.
+ *
+ * ★ 페이지 자체는 스크롤하지 않는다(셸이 높이를 한 통으로 채운다). 스크롤은 온보딩 안의
+ *   `.onb-scroll` 칸에서 일어나고, scroll 은 거품이 안 올라오므로 **잡는 단계(capture)** 에서 받는다.
+ * ★ 랜딩 칸에서만 센다 — 방의 시트·앨범 스크롤까지 섞이면 "랜딩을 얼마나 읽었나" 가 흐려진다.
+ * ★ 랜딩이 화면 한 장에 다 들어가면(스크롤할 것이 없으면) 이 이벤트는 안 생긴다.
+ */
+function onLandingScroll(e: React.UIEvent<HTMLDivElement>) {
+  try {
+    const el = e.target as HTMLElement;
+    if (!el || !el.classList?.contains('onb-scroll')) return;
+    if (!el.closest('[data-step="landing"]')) return;
+    const room = el.scrollHeight - el.clientHeight;
+    if (room <= 0) return;
+    const pct = (el.scrollTop / room) * 100;
+    for (const th of [25, 50, 75, 100]) {
+      if (pct >= th - 1) once(`scroll_${th}`, () => ztrack('zzal_scroll', { count: th }));
+    }
+  } catch {
+    // 계측이 스크롤을 막으면 안 된다.
+  }
 }
 
 /**
@@ -207,24 +309,15 @@ function RoomWait() {
 }
 
 
-// ── 개발용 이동 창 — 실서비스에서는 이 아래를 통째로 지운다 ──────────────
+// ── 개발 리모컨 — 실서비스에서는 이 아래를 통째로 지운다 ──────────────────
 //
-// ★ 원칙 하나 — **버튼은 그 상황을 강제한다**(상훈님 2026-09-13).
-//   *"잠자기 누르면 7든 1시든 12시든 간에 잠 자기 모션만 볼 수 있으면 돼."*
-//   시각·서버 값·튜토리얼 단계와 무관하게, 누르면 그 상태가 화면에 즉시 나온다.
-//
-// ★ 예전 판이 헷갈렸던 까닭 셋과, 각각을 어디서 없앴는지.
-//   1) 「튜토리얼 끝」이 연습방까지 껐다 → `useYeoul.endTutor` 가 `sampleMode` 를 안 건드린다.
-//   2) 버튼이 화면 값(`s`)만 바꿔서 **진짜 아이가 있으면 서버 값에 덮였다**
-//      → 모든 개발 버튼이 `s.dev`(덮어쓰기 한 겹)에만 쓰고, 그 겹을 `es` 만드는 자리에서 얹는다.
-//   3) 켜짐 표시가 `&& !s.sampleMode` 로 **거꾸로** 붙어 있었다
-//      → 불은 이제 `v.now`(지금 화면이 실제로 쓰는 값) 하나만 본다.
-//
-// ★ 그래서 **연습방/진짜 방을 가르지 않는다.** 회색으로 죽는 칸도 없다.
-//   서버가 쥔 것(시계·선물 도착·밤 큐)만 따로 한 줄로 모아 두고, 나머지는 "화면에만" 이라고 적는다.
-
-// 이 창을 그려도 되는가 — **로컬에서만** 뜬다. 판정은 `useDevVisible`(../useDevVisible) 한 곳으로
-// 모았다(운영·dev.lorecomic.com·미리보기 도메인 모두 차단, 첫 렌더 false 로 하이드레이션 안전).
+// ★ 2026-10-12 리모컨 서버화(remote-control-spec-1011) — 상태·이벤트·시계·굽기 네 탭은 **서버를 진짜로 바꾼다**
+//   (`yeoul/DevRemote.tsx`). 예전 덮어쓰기 줄(상황·배부름·행복·똥·친밀도·조각·2층 해금·떠남)은 없앴다 —
+//   새로고침하면 사라지고 연쇄(미스→병→예고)가 안 일어나 "그 상황" 이 아니었다.
+// ★ 남은 「화면」 탭은 **그림을 보려는 것**(화면 이동·연출·자세 고정·하루 소품·판 띄우기·재회 하트)이다.
+//   규칙과 무관하고 서버도 안 바꾼다 — 탭 이름과 줄 메모가 그 사실을 말한다.
+// ★ 노출은 서버 ping(`GET /api/zzal/v1/dev/ping` 200) 하나다(결정 3). 도메인으로 가르지 않는다 —
+//   dev.lorecomic.com 에서도 서버 스위치가 켜져 있으면 뜨고, 운영은 서버가 404 라 자동으로 숨는다.
 
 /** 칩 하나. `on` 은 **지금 화면이 그렇다**는 뜻이다(누르면 그렇게 된다는 뜻이 아니다). */
 interface Chip { label: string; on: boolean; pick: () => void; id?: string; dim?: boolean; title?: string }
@@ -236,16 +329,28 @@ const DAILY: ReadonlyArray<readonly [string, string]> = [
   ['prop_ball', '공'], ['prop_book', '책'], ['prop_cup', '컵'], ['prop_plant', '화분'],
 ];
 
+type JumpTab = RemoteTab | 'screen';
+const TABS: ReadonlyArray<readonly [JumpTab, string]> = [
+  ['state', '상태'], ['events', '이벤트'], ['clock', '시계'], ['bake', '굽기'], ['screen', '화면'],
+];
+
 function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeoul>; live: Live; missingBasics?: string[] }) {
   const [open, setOpen] = useState(false);
-  const visible = useDevVisible();
+  const [tab, setTab] = useState<JumpTab>('state');
+  const [previewFor,setPreviewFor]=useState<number|null>(null);
+  useEffect(()=>{
+    if(previewFor==null)return;
+    if(previewFor!==live.petId){setPreviewFor(null);return;}
+    if(live.pet?.firstIntro?.key==='FINISH_NOTICE'){setPreviewFor(null);y.actions.onFinishTutorial();setOpen(false);}
+  },[previewFor,live.petId,live.pet,y.actions.onFinishTutorial]);
+  const { isAuthenticated } = useAuth();
+  // 로그인·아이가 바뀌면 다시 묻는다(로그인 전 401 → 안 그림).
+  const ping = useDevPing(`${isAuthenticated}:${live.petId ?? ''}`);
   const { s, v, actions } = y;
   const d = v.dev;
-  const now = v.now;
 
   const onb = s.screen === 'onb';
   const room = s.screen === 'room';
-  const unlocked = (k: string) => d.floor2 || !!d.unlocked[k];
 
   const poseChips = (keys: readonly string[]): Chip[] => keys.map((k) => ({
     label: POSE_LABEL[k] ?? k, id: `pose:${k}`,
@@ -286,7 +391,8 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       ],
     },
     {
-      n: '2', label: '튜토리얼',
+      // 연습방 튜토리얼 판(목). 진짜 아이의 튜토리얼 칸은 「상태」 탭에서 서버로 바꾼다.
+      n: '2', label: '튜토리얼 판', note: '연습방',
       items: [
         { label: s.tutorOn ? `부름 ${s.tutor + 1}/8` : '시작', on: s.tutorOn, pick: actions.startTutor },
         { label: '다음 칸', on: false, pick: actions.skipTutorStep },
@@ -295,67 +401,22 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       ],
     },
     {
-      n: '3', label: '상황', note: '화면에만',
-      items: [
-        { label: '낮', on: v.mode === 'day', pick: actions.setMode('day') },
-        { label: '밤 창', on: v.mode === 'night', pick: actions.setMode('night') },
-        { label: '자는 중', on: v.mode === 'sleep', pick: actions.setMode('sleep') },
-        { label: '아픔', on: v.mode === 'sick' && !d.sickLong, pick: actions.setMode('sick') },
-        {
-          label: '24시간+ 방치', on: !!now.sick && d.sickLong,
-          title: '땀 대신 해골(표 sick_long)',
-          pick: () => actions.devSet({ sick: true, sleeping: false, sickLong: true }),
-        },
-        { label: '여행 중', on: d.trip, pick: () => actions.devSet({ trip: !d.trip }) },
-        { label: '되돌리기', on: false, title: '덮어쓰기를 통째로 걷어낸다', pick: actions.devReset },
-      ],
-    },
-    {
-      n: '4', label: '배부름', note: '화면에만',
-      items: [0, 1, 2, 3, 4].map((i): Chip => ({
-        label: String(i), id: `full:${i}`, on: now.full === i, pick: () => actions.devSet({ full: i }),
-      })),
-    },
-    {
-      n: '5', label: '행복', note: '화면에만',
-      items: [0, 1, 2, 3, 4].map((i): Chip => ({
-        label: String(i), id: `happy:${i}`, on: now.happy === i, pick: () => actions.devSet({ happy: i }),
-      })),
-    },
-    {
-      n: '6', label: '똥', note: '화면에만',
-      items: [0, 1, 2, 3, 4].map((i): Chip => ({
-        label: String(i), id: `trash:${i}`, on: now.trash === i, pick: () => actions.devSet({ trash: i }),
-      })),
-    },
-    {
-      n: '7', label: '친밀도 · 조각', note: '화면에만',
-      items: [
-        ...[0, 40, 80, 100].map((i): Chip => ({
-          label: `${i}%`, id: `bond:${i}`, on: now.bond === i, pick: () => actions.devSet({ bond: i }),
-        })),
-        ...[0, 2, 4].map((i): Chip => ({
-          label: `조각 ${i}`, id: `shard:${i}`, on: now.shards === i, pick: actions.setShards(i),
-        })),
-      ],
-    },
-    {
       // ★ **연출 줄** — 누르면 방의 행동과 똑같은 한 판이 돈다(소품·박자·돌아갈 자세까지).
       //   다만 규칙(재고·흔적·시각)도 서버도 안 탄다. 목록은 상황표를 읽어 만든다.
-      n: '8', label: '연출 1층', note: `${play1.length}판`,
+      n: '3', label: '연출 1층', note: `${play1.length}판`,
       items: play1.map(sceneChip),
     },
-    { n: '9', label: '연출 2층', note: `${play2.length}판`, items: play2.map(sceneChip) },
+    { n: '4', label: '연출 2층', note: `${play2.length}판`, items: play2.map(sceneChip) },
     {
       // 선물 2종은 **박자 밖**이다(16프레임 한 판 = 7.2초). 표에 줄이 없어 여기서만 든다.
-      n: '10', label: '연출 선물', note: `${GIFT_CYCLES * 4}프레임 한 판`,
+      n: '5', label: '연출 선물', note: `${GIFT_CYCLES * 4}프레임 한 판`,
       items: ([['roll', '구르기'], ['fall_back', '뒤로 넘어지기']] as const).map(([k, label]): Chip => ({
         label, id: `gift:${k}`, on: v.spriteKey === k, pick: () => actions.playGift(k),
       })),
     },
     {
       // 그림 자체를 오래 두고 보고 싶을 때. **연출이 아니라 고정**이라 이름으로 구분해 둔다.
-      n: '11', label: '자세 고정', note: '그림만',
+      n: '6', label: '자세 고정', note: '그림만',
       items: [
         { label: '풀기', id: 'pose:auto', on: !v.posePick && !v.sitPick, pick: actions.pickScene(null, null) },
         ...poseChips(POSE_FLOORS[0][1]),
@@ -363,18 +424,7 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       ],
     },
     {
-      // ★ 해금은 **행동이 어느 줄을 쓰나**를 바꾼다 — 밥 주기가 `eat`(밥그릇)에서
-      //   `eat_rice`(고기가 그림 안 · 소품 없음)로 넘어간다. 자세만 바꾸는 8·9번 줄과 하는 일이 다르다.
-      n: '12', label: '2층 해금', note: '화면에만',
-      items: [
-        { label: '전부', id: 'unlock:all', on: d.floor2, pick: actions.toggleFloor2 },
-        ...POSE_FLOORS[1][1].map((k): Chip => ({
-          label: POSE_LABEL[k] ?? k, id: `unlock:${k}`, on: unlocked(k), pick: actions.devUnlock(k),
-        })),
-      ],
-    },
-    {
-      n: '13', label: '하루 소품', note: '화면에만',
+      n: '7', label: '하루 소품', note: '서버 신호 없음',
       items: [
         { label: '없음', id: 'daily:none', on: !d.daily, pick: () => actions.devSet({ daily: null }) },
         ...DAILY.map(([k, label]): Chip => ({
@@ -385,15 +435,14 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
       ],
     },
     {
-      n: '14', label: '떠남', note: '화면에만',
+      // 떠남 예고(가방)는 서버 신호(`leaving`)로 뜬다 — 「상태」·「이벤트」에서 켠다. 재회 하트만 서버 신호가 없다.
+      n: '8', label: '재회 하트', note: '서버 신호 없음',
       items: [
-        { label: '평소', id: 'leave:none', on: d.extra.length === 0 && !d.trip, pick: () => actions.devSet({ extra: [], trip: false }) },
-        { label: '예고(가방)', id: 'leave:soon', on: d.extra.includes('leaving_soon'), pick: actions.devExtra('leaving_soon') },
         { label: '재회(하트)', id: 'leave:reunion', on: d.extra.includes('reunion'), pick: actions.devExtra('reunion') },
       ],
     },
     {
-      n: '15', label: '화면 판',
+      n: '9', label: '화면 판',
       items: [
         { label: '앨범 벽', on: s.wallOpen, pick: actions.openWall },
         { label: '알림', on: s.sheet === 'notify', pick: actions.openNotify },
@@ -408,20 +457,17 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
           title: '2층 기본 행동이 그 자리에서 열린 판 (motions[].basicImageKey)' },
         { label: '해금 판(아침)', id: 'fire-unlock-slept', on: false, pick: actions.showUnlock('slept'),
           title: '자는 동안 배워 아침에 도착한 판 (learnedToday[].imageKey)' },
-        // ★ 엽서는 **앨범 벽에서 내렸다**(2026-09-21 상훈님 — 실물이 붙기 전까지). 그래도 문구가
-        //   어떻게 보이는지는 눈으로 봐야 하므로 여기 하나만 남긴다. 「다음 날」이 몰래 띄우던
-        //   길은 없앴다 — 날짜를 넘기려고 누른 사람에게 판이 튀어나오던 자리였다.
         { label: '엽서 판', id: 'fire-postcard', on: false, pick: actions.popPostcard,
           title: '아침 엽서 판 (앨범 벽에서는 내려간 판)' },
         { label: '가입 모달', on: s.authOpen, pick: actions.openAuth('signup') },
-        { label: '로드맵 완료', on: s.cChat >= 4 && s.cBath >= 3 && s.cSleep >= 3 && s.cGame >= 3, pick: actions.finishRoadmap },
-        { label: '다음 날', on: false, pick: actions.nextDay },
+        { label: '로드맵 완료(연습방)', on: s.cChat >= 4 && s.cBath >= 3 && s.cSleep >= 3 && s.cGame >= 3, pick: actions.finishRoadmap },
+        { label: '다음 날(연습방)', on: false, pick: actions.nextDay },
         { label: '처음부터', on: false, pick: actions.restart },
       ],
     },
   ];
 
-  if (!visible) return null;
+  if (!ping) return null;
 
   if (!open) {
     return (
@@ -430,177 +476,101 @@ function DevJump({ y, live, missingBasics = [] }: { y: ReturnType<typeof useYeou
         style={{
           // 오른쪽 가장자리 가운데 — 타일도 헤더도 안 가리는 유일한 빈자리다.
           position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', zIndex: 30,
-          padding: '9px 4px', borderRadius: '8px 0 0 8px', border: `1px solid ${C.line}`, borderRight: 'none',
-          background: 'rgba(255,251,244,.86)', font: `${monoSize.xs}px ${MONO}`, color: C.sub,
+          minWidth: 28, minHeight: 64, padding: '9px 6px', borderRadius: '8px 0 0 8px', border: `1px solid ${C.line}`, borderRight: 'none',
+          background: 'rgba(255,251,244,.9)', font: `${monoSize.xs}px ${MONO}`, color: C.sub,
           writingMode: 'vertical-rl', letterSpacing: '.08em',
         }}
-      >이동</button>
+      >리모컨</button>
     );
   }
+
+  const petId = live.petId;
+  const serverTab = tab !== 'screen';
 
   return (
     <div
       data-part="dev"
       style={{
         position: 'absolute', right: 10, bottom: 10, zIndex: 30, width: 'min(414px,calc(100% - 20px))',
-        maxHeight: '70%', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: gap.md,
-        padding: pad.card, borderRadius: radius.lg,
-        background: 'rgba(255,251,244,.96)', border: `1px solid ${C.line}`, boxShadow: `0 8px 24px ${ink(.18)}`,
+        maxHeight: 'min(78%, 680px)', display: 'flex', flexDirection: 'column',
+        borderRadius: radius.lg, overflow: 'hidden',
+        background: 'rgba(255,251,244,.97)', border: `1px solid ${C.line}`, boxShadow: `0 8px 24px ${ink(.18)}`,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm }}>
-        <span style={{ font: `${monoSize.sm}px ${MONO}`, color: C.sub, lineHeight: 1.35 }}>
-          여기 버튼은 <b>화면만</b> 바꿉니다 · 규칙(재고·흔적·시각)에 안 막힙니다
-          <br />실제로 돌보는 것은 아래 방 버튼입니다
-        </span>
-        <span style={{ flex: 1 }} />
-        <button onClick={() => setOpen(false)} style={{ width: 24, height: 24, borderRadius: radius.pill, border: `1px solid ${C.lineHard}`, background: C.slot, fontSize: fz.xs, color: C.sub2, lineHeight: 1 }} aria-label="닫기">✕</button>
+      {/* 머리 — 탭과 닫기. 탭은 늘 보이게 스크롤 밖에 둔다. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '6px 6px 0', borderBottom: `1px solid ${C.line}` }}>
+        <div role="tablist" style={{ display: 'flex', flex: 1, minWidth: 0, overflowX: 'auto' }}>
+          {TABS.map(([k, label]) => (
+            <button key={k} role="tab" aria-selected={tab === k} data-remote-tab={k} onClick={() => setTab(k)}
+              style={{
+                flex: '1 0 auto', minHeight: 44, minWidth: 44, padding: '0 9px', border: 'none', background: 'none',
+                borderBottom: `2px solid ${tab === k ? C.ink : 'transparent'}`,
+                fontSize: fz.sm, fontWeight: tab === k ? 700 : 400, color: tab === k ? C.ink : C.sub,
+              }}>{label}</button>
+          ))}
+        </div>
+        <button onClick={() => setOpen(false)} aria-label="닫기"
+          style={{ width: 44, height: 44, flex: 'none', border: 'none', background: 'none', fontSize: fz.md, color: C.sub2 }}>✕</button>
       </div>
 
-      {rows.map((g) => (
-        <div key={g.n} style={{ display: 'flex', alignItems: 'flex-start', gap: gap.md }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: gap.sm, width: 86, flex: 'none', paddingTop: 3 }}>
-            <span style={{
-              width: 18, height: 18, flex: 'none', borderRadius: '50%',
-              background: g.items.some((i) => i.on) ? C.accent : '#E3DBCD',
-              color: g.items.some((i) => i.on) ? C.accentInk : C.sub,
-              font: `${monoSize.xs}px ${MONO}`, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>{g.n}</span>
-            <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+      <div style={{ overflowY: 'auto', overscrollBehavior: 'contain', padding: pad.card, display: 'flex', flexDirection: 'column', gap: gap.md }}>
+        <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint, lineHeight: 1.4 }}>
+          {serverTab
+            ? `서버를 바꿉니다 · 펫 #${petId ?? '—'} · 생성 스위치 ${ping.generationReal ? '진짜(과금)' : '가짜'}`
+            : '화면에만 — 그림을 보려는 손잡이입니다(서버·규칙 안 바뀜)'}
+        </span>
+
+        {serverTab && petId == null && (
+          <p style={{ margin: 0, fontSize: fz.sm, color: C.sub }}>아이가 아직 없어요 — 부화한 뒤에 서버를 조작할 수 있습니다.</p>
+        )}
+        {serverTab && petId != null && (
+          <DevRemote tab={tab as RemoteTab} petId={petId} pet={live.pet} ping={ping}
+            onDetail={live.putDetail} onReload={live.resume} onIntroPreview={()=>setPreviewFor(live.petId)} />
+        )}
+
+        {!serverTab && rows.map((g) => (
+          <div key={g.n} style={{ display: 'flex', flexDirection: 'column', gap: gap.xs }}>
+            <span style={{ display: 'flex', alignItems: 'baseline', gap: gap.sm }}>
               <span style={{ fontSize: fz.sm, color: C.sub }}>{g.label}</span>
               {g.note && <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.faint }}>{g.note}</span>}
             </span>
-          </span>
-          <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: gap.xs }}>
-            {g.items.map((i) => {
-              const t = chipTone(i.on);
-              return (
-                <button key={i.id ?? i.label} data-jump={i.id ?? i.label} data-on={i.on ? '1' : '0'} onClick={i.pick}
-                  // 확정이 아닌 상황은 눌러도 소품이 안 뜬다 — 고장이 아니라 결정 대기라는 뜻으로 흐리게 둔다.
-                  title={i.title ?? (i.dim ? '아직 확정 전(decide·pending) — 눌러도 소품은 안 뜹니다' : undefined)}
-                  style={{
-                    border: `1px solid ${t.bd}`, borderRadius: radius.pill, padding: pad.tiny, fontSize: fz.xs,
-                    background: t.bg, color: t.fg, opacity: i.dim && !i.on ? 0.5 : 1,
-                  }}
-                >{i.label}</button>
-              );
-            })}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.xs }}>
+              {g.items.map((i) => {
+                const t = chipTone(i.on);
+                return (
+                  <button key={i.id ?? i.label} data-jump={i.id ?? i.label} data-on={i.on ? '1' : '0'} onClick={i.pick}
+                    // 확정이 아닌 상황은 눌러도 소품이 안 뜬다 — 고장이 아니라 결정 대기라는 뜻으로 흐리게 둔다.
+                    title={i.title ?? (i.dim ? '아직 확정 전(decide·pending) — 눌러도 소품은 안 뜹니다' : undefined)}
+                    style={{
+                      minHeight: 44, border: `1px solid ${t.bd}`, borderRadius: radius.pill, padding: '0 12px', fontSize: fz.xs,
+                      background: t.bg, color: t.fg, opacity: i.dim && !i.on ? 0.5 : 1,
+                    }}
+                  >{i.label}</button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
-
-      <DevServerRow live={live} />
-
-      {/* ★ 기본 8종 중 서버가 그림을 안 준 것. **방에 들어온 시점에 비어 있어야 한다.**
-          지금 가짜 생성은 6종만 만들어서 sick·call 이 늘 뜬다 — 정상적인 경고다. */}
-      {missingBasics.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm, padding: pad.tiny, borderRadius: radius.sm, background: C.accentSoft }}>
-          <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>기본 8종 중 그림 없음</span>
-          <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>{missingBasics.join(' · ')}</span>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: gap.sm, paddingTop: 2 }}>
-        {WEB_KEYS.map(([k, text]) => (
-          <span key={k} style={{ display: 'flex', alignItems: 'center', gap: gap.sm, fontSize: fz.sm, color: C.sub }}>
-            <span style={{ padding: '3px 7px', borderRadius: radius.xs, border: `1px solid ${ink(.18)}`, background: C.paper, font: `${monoSize.sm}px ${MONO}`, color: C.ink }}>{k}</span>
-            {text}
-          </span>
         ))}
+
+        {/* ★ 기본 8종 중 서버가 그림을 안 준 것. **방에 들어온 시점에 비어 있어야 한다.** */}
+        {!serverTab && missingBasics.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: gap.sm, padding: pad.tiny, borderRadius: radius.sm, background: C.accentSoft }}>
+            <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>기본 8종 중 그림 없음</span>
+            <span style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>{missingBasics.join(' · ')}</span>
+          </div>
+        )}
+
+        {!serverTab && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: gap.sm, paddingTop: 2 }}>
+            {WEB_KEYS.map(([k, text]) => (
+              <span key={k} style={{ display: 'flex', alignItems: 'center', gap: gap.sm, fontSize: fz.sm, color: C.sub }}>
+                <span style={{ padding: '3px 7px', borderRadius: radius.xs, border: `1px solid ${ink(.18)}`, background: C.paper, font: `${monoSize.sm}px ${MONO}`, color: C.ink }}>{k}</span>
+                {text}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-/**
- * **서버(dev) 줄 — 위의 칩들과 완전히 갈라 둔 자리.**
- *
- * ★ 왜 가르나 — 이동 창의 나머지는 전부 **화면만** 바꾼다(상훈님 2026-09-13 "이동으로 만지는 건
- *   프론트만 하자"). 여기만 진짜 서버를 부르므로, 섞여 있으면 어느 버튼이 실제 상태를 건드리는지
- *   알 수 없다. 기본으로 **접혀 있고**, 아이가 없으면 아예 안 그린다.
- * ★ 쓸 수 있는 주소는 **넷뿐**이다(백엔드 `com.lore.zzal.dev.DevClockController` 전수 확인) —
- *   `advance-clock` · `set-clock` · `force-open/{seq}` · `night-sweep`.
- *   ⚠️ **해금 카운터를 올리는 주소는 없다.** 그래서 그 줄은 비워 두고 무엇이 필요한지만 적어 둔다.
- * ★ 누른 뒤에는 `resume()` 으로 서버 상태를 다시 읽는다 — dev 호출의 응답을 화면에 꽂을 손잡이가
- *   `Live` 에 없어서다. 한 번 더 읽는 편이 정직하다.
- * ★ `?mock=` 은 **이 시안에 안 붙어 있다**(목은 `useZzalSession` → 스크랩북 전용이고, 여울은
- *   `useHatch` 가 서버를 직접 부른다). 그래서 목 갈래를 두지 않는다.
- */
-function DevServerRow({ live }: { live: Live }) {
-  const [note, setNote] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState(false);
-  const petId = live.petId;
-  if (petId == null) return null;
-
-  const run = async (j: { label: string; minutes?: number; at?: string; act?: 'force-open' | 'night-sweep' }) => {
-    if (busy) return;
-    setBusy(true); setNote(null);
-    try {
-      // 시각 이동은 **서버 시각 기준 다음 도래 시각**을 절대 시각으로 보낸다(lib/dev 머리말).
-      const base = live.pet?.serverNow ? new Date(live.pet.serverNow).getTime() : Date.now();
-      if (j.act === 'force-open') await forceOpen(petId, GIFT_SEQ);
-      else if (j.act === 'night-sweep') await nightSweep(petId);
-      else if (j.minutes != null) await advanceClock(petId, j.minutes);
-      else await setClockAt(petId, new Date(nextLocalAt(base, j.at as string)).toISOString());
-      await live.resume();
-    } catch (e) {
-      // dev 도구가 꺼진 서버에는 그 주소가 아예 없다(404) 또는 막힌다(403). 고장이 아니라 그렇게 만든 것이다.
-      const status = e instanceof ApiError ? e.status : 0;
-      if (status === 404 || status === 403) setNote('이 서버는 개발 도구가 꺼져 있어요');
-      else setNote(e instanceof ApiError && e.message ? e.message : '시계를 옮기지 못했어요');
-    } finally { setBusy(false); }
-  };
-
-  return (
-    <div data-part="dev-server" style={{ display: 'flex', flexDirection: 'column', gap: gap.sm, paddingTop: 4, borderTop: `1px dashed ${C.lineHard}` }}>
-      <button
-        data-jump="server:toggle" onClick={() => setOpen((x) => !x)}
-        style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: gap.sm, border: 'none', background: 'none', padding: 0 }}
-      >
-        <span style={{ font: `${monoSize.sm}px ${MONO}`, color: C.sub }}>{open ? '▾' : '▸'} 서버(dev) — 여기만 진짜 서버를 부릅니다</span>
-      </button>
-      {open && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: gap.md }}>
-            <span style={{ width: 86, flex: 'none', fontSize: fz.sm, color: C.sub, paddingTop: 4 }}>시계</span>
-            <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: gap.xs }}>
-              {CLOCK_JUMPS.map((j) => (
-                <button key={j.label} data-jump={`clock:${j.label}`} disabled={busy} onClick={() => void run(j)}
-                  style={{
-                    border: `1px solid ${C.lineHard}`, borderRadius: radius.pill, padding: pad.tiny, fontSize: fz.xs,
-                    background: C.slot, color: C.ink, opacity: busy ? 0.5 : 1,
-                  }}
-                >{j.label}</button>
-              ))}
-            </div>
-          </div>
-          {/* ⚠️ 아직 못 하는 것 — 지어내지 않고 무엇이 없는지 적어 둔다. */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: gap.md }}>
-            <span style={{ width: 86, flex: 'none', fontSize: fz.sm, color: C.sub, paddingTop: 2 }}>해금 카운터</span>
-            <span style={{ flex: 1, font: `${monoSize.xs}px ${MONO}`, color: C.faint, lineHeight: 1.5 }}>
-              서버 주소 없음 — 밥·간식·청소·목욕·채팅답·쓰다듬·게임시작·깨우기 횟수를 올릴 dev 주소가
-              아직 없습니다. 2층 해금은 위 <b>2층 해금</b> 줄로 화면에서만 열어 보세요.
-            </span>
-          </div>
-          {note && <span data-dev-note style={{ font: `${monoSize.xs}px ${MONO}`, color: C.accent }}>{note}</span>}
-        </>
-      )}
-    </div>
-  );
-}
-
-/** 첫 선물(구르기)의 seq. dev 서버는 밤 굽기가 꺼져 있어 아침 도착 화면을 볼 유일한 길이다. */
-const GIFT_SEQ = 101;
-
-/** 하루를 건너뛸 자리들. 시각 이동은 **앞으로만** 간다(서버가 뒤로는 거절한다). */
-const CLOCK_JUMPS: ReadonlyArray<{ label: string; minutes?: number; at?: string; act?: 'force-open' | 'night-sweep' }> = [
-  { label: '+10분', minutes: 10 },
-  { label: '+1시간', minutes: 60 },
-  { label: '19:00', at: '19:00' },
-  { label: '23:30', at: '23:30' },
-  { label: '07:00', at: '07:00' },
-  { label: '+1일', minutes: 24 * 60 },
-  { label: '선물 강제 도착', act: 'force-open' },
-  { label: '밤 큐 돌리기', act: 'night-sweep' },
-];

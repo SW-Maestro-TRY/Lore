@@ -1,0 +1,11 @@
+.zzal-language-selector{position:relative;display:inline-flex;flex:none;min-width:88px;min-height:44px;align-items:center;color:#5D493A}
+.zzal-language-selector select{appearance:none;-webkit-appearance:none;width:100%;min-height:44px;border:1px solid #D8CBBE;border-radius:11px;background:#FFFDF8;color:inherit;padding:9px 24px 9px 10px;font:13px/1.4 var(--font-gowun),'Gowun Dodum',sans-serif;cursor:pointer}
+.zzal-language-selector select:focus-visible{outline:2px solid #9C4232;outline-offset:2px}
+.zzal-language-caption{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.zzal-language-chevron{position:absolute;right:9px;pointer-events:none;font-size:12px}
+.entry-brand .zzal-language-selector{margin-left:auto}
+.pe-language-head{flex-wrap:wrap}.pe-language-head>span{min-width:0}.pe-language-head .pe-skip-rest{white-space:nowrap}
+.focused-room .fr-menu-panel .fr-languages{justify-content:flex-end}.fr-languages .zzal-language-selector{width:100%}
+
+.pe-language-head .pe-step-progress{position:relative;min-width:32px;white-space:nowrap}
+@media(max-width:360px){.pe-language-head{gap:4px!important}.pe-step-progress .pe-step-category{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}}

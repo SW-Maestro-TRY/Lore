@@ -3,13 +3,21 @@ package com.lore.zzal.night;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
 
+import java.io.Serializable;
 import java.time.Instant;
 import java.time.LocalDate;
 
 /**
- * 밤 스위프 한 번의 기록 — <b>{@code night_of} 가 PK</b>라 같은 밤은 한 번만 돈다(플랜 T1 핵심 판단 2).
+ * 밤 스위프 한 번의 기록 — <b>{@code (night_of, time_zone)} 이 PK</b>라 한 시간대의 같은 밤은 한 번만 돈다(플랜 T1 핵심 판단 2).
+ *
+ * <h3>★ 2026-10-26 시간대 2단계 — 왜 시간대가 키에 들어갔나</h3>
+ * 펫마다 시간대가 생겨 "23:00" 이 시간대마다 다른 순간이다. 15분마다 도는 스위프가 그 시간대의 23:00 을 지난
+ * 펫들을 한 판으로 묶어 돌리고, 이 행이 그 판의 기록이다. 옛 행은 전부 {@code Asia/Seoul} 로 채워졌다.
+ * ★ 펫 단위의 "그 밤을 이미 돌았나" 는 이 행이 아니라 {@code zzal_pet.last_swept_night_of} 가 막는다 —
+ *   시간대를 처음 관측한 펫이 KST 밤을 돈 뒤 같은 날짜의 현지 밤을 또 도는 것을 막는 것은 펫 단위여야 한다.
  *
  * <h3>★ 왜 PK 로 막나</h3>
  * 서버가 두 대이거나, 23:00 스위프 도중 재기동돼 기동 복구가 또 돌면 같은 밤을 두 번 굽는다(돈이 두 배).
@@ -29,12 +37,34 @@ import java.time.LocalDate;
  */
 @Entity
 @Table(name = "zzal_night_run")
+@IdClass(ZzalNightRun.Key.class)
 public class ZzalNightRun {
 
-    /** 그 밤의 KST 날짜(23:00 이 속한 날). */
+    /** 복합 키 — 밤 날짜(그 시간대의 날짜) + 시간대 이름. */
+    public record Key(LocalDate nightOf, String timeZone) implements Serializable {
+        public Key {
+            if (timeZone == null) timeZone = com.lore.zzal.pet.ZzalRules.ZONE.getId();
+        }
+
+        /** JPA 가 부르는 빈 생성자. */
+        public Key() {
+            this(null, null);
+        }
+
+        public static Key seoul(LocalDate nightOf) {
+            return new Key(nightOf, com.lore.zzal.pet.ZzalRules.ZONE.getId());
+        }
+    }
+
+    /** 그 밤의 날짜(그 시간대에서 23:00 이 속한 날). */
     @Id
     @Column(name = "night_of", nullable = false)
     private LocalDate nightOf;
+
+    /** 그 판의 시간대(IANA 이름). 옛 행은 전부 Asia/Seoul. */
+    @Id
+    @Column(name = "time_zone", nullable = false, length = 64)
+    private String timeZone;
 
     @Column(nullable = false)
     private Instant startedAt;
@@ -62,8 +92,13 @@ public class ZzalNightRun {
     }
 
     public static ZzalNightRun start(LocalDate nightOf, Instant now, String server) {
+        return start(nightOf, com.lore.zzal.pet.ZzalRules.ZONE.getId(), now, server);
+    }
+
+    public static ZzalNightRun start(LocalDate nightOf, String timeZone, Instant now, String server) {
         ZzalNightRun r = new ZzalNightRun();
         r.nightOf = nightOf;
+        r.timeZone = timeZone;
         r.startedAt = now;
         r.server = server;
         return r;
@@ -87,6 +122,14 @@ public class ZzalNightRun {
 
     public LocalDate getNightOf() {
         return nightOf;
+    }
+
+    public String getTimeZone() {
+        return timeZone;
+    }
+
+    public Key key() {
+        return new Key(nightOf, timeZone);
     }
 
     public Instant getStartedAt() {

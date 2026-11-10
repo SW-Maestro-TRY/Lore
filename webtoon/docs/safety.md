@@ -159,7 +159,7 @@ moderation 의 「걸림(flagged)」 판정은 한국어 성인물 요청을 대
 ## 신고와 처리
 
 - 접수: 1:1 문의 채널(카카오톡, `common/fe/links.ts` 의 `CONTACT_CHANNEL`)과
-  lightbluue6@gmail.com. 약관 제19조에 절차가 있습니다.
+  lore@lorecomic.com. 약관 제19조에 절차가 있습니다.
 - 처리(#638): 관리자 계정으로 그 작품의 결과 화면(`/webtoon?run=<작품 번호>`)을 열면 「관리자」 칸이 있습니다.
   신고로 받은 링크나 번호는 마이페이지 설정 → 「작품 관리」 → 「작품 열기」에 붙여 넣어도 됩니다.
 

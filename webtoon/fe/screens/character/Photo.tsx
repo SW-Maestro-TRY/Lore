@@ -93,7 +93,7 @@ export default function Photo({ go, authenticated = false }: { go: Go; authentic
       preset: !!worldKey, random: usedRandom.current, logged_in: authenticated,
     });
     try {
-      const c = await runTry(draft, lang);
+      const c = await runTry(draft, lang, authenticated);
       go("card", { id: c.id }, { replace: false });
     } catch (e) {
       if (isLimitError(e)) {
@@ -119,7 +119,7 @@ export default function Photo({ go, authenticated = false }: { go: Go; authentic
         {/* 제목은 두 칸 위에 걸친다 — 왼쪽 칸 안에 두면 오른쪽 첫 칸(이름)이
             제목과 같은 줄에 서서 제목 옆에 딸린 것처럼 보였다. */}
         <div className="wt-ch-photo-lead">
-          <h2 style={{ fontSize: 32 }}>{t("어떤 캐릭터를 만들어볼까요?")}</h2>
+          <h2>{t("어떤 캐릭터를 만들어볼까요?")}</h2>
           <span className="muted wt-ch-photo-sub">{t("내 사진도, 최애도, 강아지도, 아무것도 없어도 돼요.")}</span>
         </div>
         <div className="wt-ch-photo-body">

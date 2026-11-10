@@ -44,13 +44,21 @@ public final class GameRequests {
     public record Guess(
 
             @Schema(description = "LEFT(왼쪽) · RIGHT(오른쪽)", example = "LEFT")
-            @NotNull Side pick) {
+            @NotNull Side pick,
+            @Schema(description="동일 회차 재전송 identity. expectedRound와 함께 전달") java.util.UUID requestId,
+            @jakarta.validation.constraints.Min(0) @jakarta.validation.constraints.Max(4)
+            @Schema(description="선택한 회차(0부터). requestId와 함께 전달") Integer expectedRound) {
+        public Guess(Side pick) { this(pick,null,null); }
+        @jakarta.validation.constraints.AssertTrue(message="requestId and expectedRound must be supplied together")
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public boolean isIdentityPairValid(){return (requestId==null)==(expectedRound==null);}
     }
 
     @Schema(description = "매치 시작 요청")
     public record Start(
             @Schema(description = "LEFT_RIGHT(좌우 맞히기) · RUN(달리기, 좌우 5승 이후 해금)", example = "LEFT_RIGHT")
-            @NotNull GameKind kind) {
+            @NotNull GameKind kind, com.lore.zzal.pet.FirstIntro.Step firstIntroStep) {
+        public Start(GameKind kind) { this(kind,null); }
     }
 
     @Schema(description = "달리기 종료 요청. 생존 시간 30,000ms 이상이면 승리하며 서버는 상한 60,000ms 만 검증한다")

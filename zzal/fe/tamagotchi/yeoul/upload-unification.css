@@ -1,0 +1,37 @@
+/* Upload only; existing cream/rust/Gaegu/Gowun. No header policy change. */
+.onb-upload{font-family:var(--font-gowun),'Gowun Dodum',sans-serif;color:#4a4038}
+.onb-upload>.onb-scroll,.onb-one.onb-upload>.onb-scroll{padding:14px 20px 22px!important;gap:20px!important;scrollbar-color:#c7b8a6 transparent;scrollbar-width:thin}
+.onb-upload .onb-head{gap:8px!important}
+.onb-upload .onb-title,.onb-one.onb-upload .onb-title{font-size:28px!important;line-height:1.25!important;letter-spacing:-.3px;text-wrap:balance;word-break:keep-all}
+.onb-upload .onb-sub,.onb-one.onb-upload .onb-sub{font-size:14px!important;line-height:1.6!important;color:#6c6157!important;word-break:keep-all;overflow-wrap:anywhere}
+.onb-upload .onb-body,.onb-one.onb-upload .onb-body{gap:18px!important}
+.onb-upload .onb-drop,.onb-one.onb-upload .onb-drop{min-height:132px;padding:18px!important;border-width:1.5px!important;border-color:#b9a38f!important;border-radius:22px!important;background:#fffdf8!important;gap:8px!important;box-shadow:none;transition:background-color .15s ease,border-color .15s ease}
+.onb-upload .onb-drop:hover:not(:disabled){background:#f8f2e7!important;border-color:#9c4232!important}
+.onb-upload .onb-drop:focus-visible,.onb-upload button:focus-visible{outline:2px solid #9c4232;outline-offset:3px}
+.onb-upload .onb-drop:disabled{cursor:wait;opacity:.7}
+.onb-upload .onb-upload-icon{display:block;width:30px;height:30px;fill:none;stroke:#9c4232;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.onb-upload .onb-drop img,.onb-one.onb-upload .onb-drop img{width:108px!important;height:108px!important;border-radius:10px}
+.onb-upload .onb-drop>span:first-of-type{font-size:24px!important;line-height:1.3}
+.onb-upload .onb-drop>span:last-of-type{font-size:13px!important;line-height:1.5;color:#6c6157!important}
+.onb-upload .onb-privacy,.onb-one.onb-upload .onb-privacy{font-size:13px!important;line-height:1.65!important;color:#6c6157!important;word-break:keep-all;margin:0 2px}
+.onb-upload .onb-example-group{display:flex;flex-direction:column;gap:9px;margin:0}
+.onb-upload .onb-example-heading{font-family:var(--font-gaegu),Gaegu,cursive;font-weight:700;font-size:19px!important;line-height:1.3;color:#4a4038!important}
+.onb-upload .onb-exgrid,.onb-one.onb-upload .onb-exgrid{width:100%!important;margin:0!important;gap:8px!important;align-items:start}
+.onb-upload .onb-excell,.onb-one.onb-upload .onb-excell{min-width:0;gap:6px!important}
+.onb-upload .onb-example-image{box-sizing:border-box;aspect-ratio:3/4!important;padding:0!important;background:#fff9eb!important;border:1px solid #d6c9b8!important;border-radius:12px!important;color:#6c6157!important}
+.onb-example-crop{position:absolute;overflow:hidden;display:block;pointer-events:none}
+.onb-upload .onb-example-image img{pointer-events:none;user-select:none}
+.onb-upload .onb-example-badge>span{width:19px!important;height:19px!important;font-size:13px!important;box-sizing:border-box;z-index:1;background:#fffdf8!important}
+.onb-upload .onb-example-unavailable{display:flex;align-items:center;justify-content:center;width:100%;height:100%;font:12px/1.4 var(--font-gowun),'Gowun Dodum',sans-serif}
+.onb-upload .onb-excell>span,.onb-one.onb-upload .onb-excell>span{font-size:12px!important;line-height:1.4!important;color:#6c6157!important;word-break:keep-all;overflow-wrap:anywhere}
+.onb-upload>.onb-upload-footer{padding:12px 20px max(16px,env(safe-area-inset-bottom))!important;background:#f7efe2;border-top:1px solid #e5d9c9}
+.onb-upload [data-action=onb-next]{min-height:54px;padding:12px 16px!important;border-radius:18px!important;box-shadow:none!important;font-family:var(--font-gaegu),Gaegu,cursive!important;font-weight:700;font-size:20px!important;line-height:1.3;word-break:keep-all}
+.onb-upload [data-part=upload-error]{border:1px solid #d2a69b;border-radius:14px!important}
+@media(max-width:350px){.onb-upload>.onb-scroll,.onb-one.onb-upload>.onb-scroll{padding-inline:16px!important}.onb-upload .onb-exgrid,.onb-one.onb-upload .onb-exgrid{gap:6px!important}.onb-upload .onb-title,.onb-one.onb-upload .onb-title{font-size:26px!important}.onb-upload>.onb-upload-footer{padding-inline:16px!important}}
+@media(prefers-reduced-motion:reduce){.onb-upload .onb-drop{transition:none}}
+
+/* Only the approved full-body example: preserve every other atlas region. */
+.onb-upload .onb-example-image .onb-example-full-body{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+
+/* Original three advertisement characters; CSS layout only, original image bytes untouched. */
+.onb-example-multiple{position:absolute;inset:8px 2px;display:flex;align-items:flex-end;overflow:hidden;pointer-events:none}.onb-example-multiple>span{position:relative;flex:1;min-width:0;height:100%;overflow:hidden}.onb-upload .onb-example-multiple img{position:absolute;width:160%;height:100%;max-width:none;left:-30%;bottom:0;object-fit:contain;object-position:center bottom;display:block}

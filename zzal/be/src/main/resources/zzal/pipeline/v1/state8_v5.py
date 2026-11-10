@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """1층 8종 후처리 v5 — 2026-09-12 신설. v3/v4 파일은 한 글자도 고치지 않는다.
+⚠️2026-10-08 #687 — "실험본과 바이트 동일" 원칙을 여기서 깬다: 격자점 검출·지우기 범위를 바꿨다(9번 참고).
+   이유 = 시안·마젠타 캐릭터(로미·민트·아이루·린델·히나)에 사각형 구멍(잔존 0.47~0.90). 정상 격자 103장은 바이트 동일.
 
 v3 대비 바뀐 것 다섯
 --------------------
@@ -102,6 +104,22 @@ v3 대비 바뀐 것 다섯
    · 매핑이 그림과 어긋나면 `posture_sanity` 가 경고한다 — 가로세로비로 **눕기만** 가른다
      (앉음·서있음은 실측상 겹쳐서 못 가른다. 못 가르는 것을 가른다고 하지 않는다).
    · 이 개편은 **구조만** 바꿨다 — 7번까지 적용한 결과와 80프레임 md5 가 전부 같다.
+
+9. **색을 믿는 범위를 줄인다** (2026-10-08, #687).
+   증상 = 시안·마젠타 계열 캐릭터의 머리·얼굴·몸이 사각형으로 투명하게 뚫림(잔존 0.47~0.58).
+   원인 = 옛 `lattice_points` 가 hue·크기만 보고 격자점을 40~55개로 잡았고(정상 25), 그 둘레
+     ±36px 사각형 안의 마크색을 지웠다. 게다가 균등분할 네 모서리(반경 49px)와 v3 키잉 안의
+     순색 지우기(번지기 범위 제한 없음)도 위치를 안 보고 지웠다.
+   처방 세 겹 —
+   (1) 검출기 하나 = `frame_cut.find_marks_by_color(fit=True)`: 색 후보 → 그린 띠(#687) →
+       격자 맞추기(열 x 5·줄 y 5, ±15px 밖은 버림 → 최대 25개). 열·줄이 5개로 안 맞으면
+       GRID_STRUCTURE_INVALID(exit 3).
+   (2) 지우기는 확정된 격자점 둘레 반경 `MARK_R`(26px) 원 안의 마크색(+4px 테)만.
+       균등분할 모서리 구역은 뺐고, v3 키잉이 지운 것도 원 밖이면 되돌린다.
+       + (#701) 원에 걸친 마크색 덩어리가 통째로 `MARK_R_MAX`(40px) 안이면 그 덩어리(+4px 테)까지
+       (`mark_blob_zone`) — 검출 중심이 교차점에서 비켜 십자 팔 끝이 원 밖에 남던 것(아이루 모서리 점).
+   (3) 안전망 — 지우기가 캐릭터(원 밖까지 이어진 덩어리)를 칸마다 몇 % 깎았는지 재서
+       `HOLE_MAX` 넘으면 `GRID_STRUCTURE_INVALID — POSTPROCESS_HOLE fNN` exit 3.
 
 사용:
     state8_v5.py <격자.png> [출력폴더] [--no-center-lying] [--postures <매핑>]
@@ -210,8 +228,32 @@ WEBP_Q = 80
 CENTER_LYING = True
 VERIFY_TOP_PAD = True       # 위 PAD 가 이웃 조각을 끌고 들어오지 않았는지 칸마다 대조해 보고한다
 
-MARK_R_CORNER = 0.16   # 균등분할 네 모서리 반경(칸 너비 대비) — v4 와 같은 값
-MARK_R_POINT = 36      # 실제 검출된 마크 둘레 반경(px). 실측 마크는 22~31px 폭이라 충분하다
+# ★2026-10-08 — 마크 지우기 반경(px, 원). 확정된 격자점 중심에서 이 거리 밖은 색이 같아도 안 지운다.
+#   실측(실사용자 격자 중 옛 검출이 정확히 25개였던 103장): 옛 코드가 지운 픽셀(v3 순색 지우기 +
+#   구역 지우기, 4px 번지기 포함)의 가장 가까운 격자점까지 거리 = 99퍼센타일 16~23px · **최대 25.5px**.
+#   → 26px 면 그 103장은 지우는 픽셀이 한 개도 안 바뀐다(바이트 동일). 마크 몸통(십자 반폭 11~15px)
+#   + 흐린 테 + 4px 번지기가 여기까지 온다. 지시서의 '약 18px'은 십자 몸통 기준이라 테·번지기를
+#   못 덮는다(18px 이면 103장 중 다수에서 마크 테가 수십~수백 px 남는다 — 실측 d>18 최대 607px).
+MARK_R = 26
+
+# ★2026-10-08(#701) — 원 밖으로 삐져나온 **같은 격자점 덩어리**까지 지우는 상한(px).
+#   증상 = 아이루(pet19) kept81 1층 4프레임 오른쪽 위 모서리에 보라 점 5~10px.
+#   실측 — 이 격자의 십자는 팔 ±20px 인데, 검출 중심(덩어리 경계 상자 중심)이 십자 교차점에서 7~9px
+#     비켜 있어 반대쪽 팔 끝이 중심에서 26.5~27px → 26px 원 밖에 한두 줄 남았다(13칸 103px).
+#   처방 = 확정 25점 각각에 대해, 원(MARK_R)에 걸친 마크색 연결 덩어리가 **통째로 MARK_R_MAX 안에
+#     들어오면** 그 덩어리(+4px 테, MARK_R_MAX 안)를 지우기 구역에 더한다. 덩어리 단위라 십자 팔 끝은
+#     따라가고, 마크에 닿은 캐릭터의 시안·마젠타(머리카락 등)는 덩어리가 40px 를 넘으므로 아예
+#     더하지 않는다(그 경우는 종전처럼 원 안만).
+MARK_R_MAX = 40
+
+# ★2026-10-08 — 구멍 안전망 임계(칸마다 캐릭터 감소율). 근거 표는 HOLE_MAX 를 정한 커밋 메시지·보고서.
+#   감소율 = (지우기 전 전경 중 '원 안에만 있는 마크 덩어리'를 뺀 것) 가운데 지워진 비율.
+HOLE_MAX = 0.03
+
+# ★2026-10-08 — 마지막 잘라내기에서 칸마다 변별로 잘려 나간 본체 픽셀 수(main 이 채운다).
+#   service_post 의 끝 닿음 검사가 '후처리가 잘랐나(POSTPROCESS_CLIP) / 격자 칸에서 이미 잘렸나'를
+#   가르는 근거. 칸 순서 = f01~f16, 값 = {"L","R","T","B": px}.
+LAST_CROP_LOSS: list = []
 
 # ★2026-09-12 — 눕기·웅크림 층1 탐색의 미세조정 반경(시드 둘레 ±px).
 #   시드 = 본체 bbox 중심차. 팔·소품이 만드는 오차는 수 px 규모라 ±12 면 겹침이 되돌린다.
@@ -303,58 +345,259 @@ def foot_ref_clean(im, frac=0.04, tag=""):
 
 
 
-def _cut_by_drop(blobs, lo=8, hi=40, thr=0.6):
-    """크기 급락 지점에서 자른다 — `frame_cut.find_marks_by_color` 와 같은 방식.
-    ★임계를 박지 않는다. 마크 크기는 판마다 다르고(여울 90 / 흑연 276 / 이두나 80),
-      하한을 박았다가 두 번 틀렸다(12px→의상 오검출 / 40px→진짜 마크 탈락)."""
-    s = sorted(blobs, reverse=True)
-    sizes = [b[0] for b in s]
-    cut = min(len(sizes), hi)
-    for i in range(lo, min(len(sizes), hi)):
-        if sizes[i] / sizes[i - 1] < thr:
-            cut = i
-            break
-    return s[:cut]
+# ★2026-10-08(#701) — **발 기준점을 캐릭터 본체 아래로 한정한다** (`foot_ref_body`)
+#   무슨 일이 있었나 — 2층 `sweep`(청소)에서 빗자루 머리가 발보다 **아래**까지 내려온 판은
+#     아래 4% 띠에 빗자루만 들어온다(펭놈·쿠리만쥬·우사기). 띠 덩어리가 1개라 `foot_ref_clean`
+#     (3개 이상일 때만 색으로 거름)이 손을 못 대고, 빗자루 머리가 '발'이 됐다.
+#     빗자루는 두 칸에서 좌우가 바뀌므로 층1 dx 가 -140·-142·-79px(겹침 0.05~0.10)로 몸을 밀었고,
+#     빗자루가 고정된 채 몸이 좌우로 튀어 캔버스 끝에 잘렸다(펭놈·쿠리만쥬 POSTPROCESS_CLIP).
+#   어떻게 가르나 = **발 기준점이 몸통 아래에 있나.** 몸통 = 본체(가장 큰 덩어리) 무게중심 x,
+#     몸통 폭 = 높이 30~70% 줄들의 가로폭 중앙값. 발 기준점이 무게중심에서 몸통 폭의 몇 배 떨어졌나:
+#     실사용자 1·2층 서 있는 칸 2,140개 실측 — 정상 최대 0.291(펫71 eat_rice) ·
+#     빗자루 오염 0.388~0.574(우사기 0.388·0.420 · 쿠리만쥬 0.496·0.574 · 펭놈 0.522·0.549).
+#     → 0.34 를 넘을 때만 작동한다. 그 밖의 칸은 `foot_ref_clean` 값을 **그대로** 돌려준다(바이트 동일).
+#   작동하면 — 맨 아래 줄에서 몸통 밖(무게중심 ±0.34배 폭 밖)에 중심이 있는 구간을 소품으로 보고
+#     **한 줄씩 위로 따라간다**: 아래 줄 소품 열에 걸친 부분은 소품(빗자루 솔·자루), 안 걸친 구간이
+#     나오면 그것이 발이다(발은 몸통 폭보다 벌어질 수 있어 위치로 거르지 않는다). 발이 솔에 닿아 한
+#     구간이 돼도 솔 열만 떼어 낸다(펭놈 f06). 발 y 도 발이 처음 나온 줄이다(솔 끝이 아니라 발 밑창).
+#     몸 높이 절반까지 올라가도 발을 못 찾으면 종전 값 그대로 쓰고 경고한다(지어내지 않는다).
+#   ⚠️덩어리 단위로 하면 안 된다 — 맨 아래 4% 띠에 발 밑창 한 줄과 솔이 닿아 한 덩어리로 들어오면
+#     발까지 소품으로 지워진다(합성 시험에서 한쪽 발만 남아 33px 어긋남).
+#   ⚠️서 있는 칸(`standing`)에만 쓴다. 웅크림·눕기는 띠가 애초에 발이 아니고(눕기 정상값 0.61),
+#     층2 발 중앙값에 들어가는 그 칸들의 값이 바뀌면 다른 펫 결과까지 흔들린다.
+#   ⚠️소품을 지우는 것이 아니다 — 그림은 그대로이고 '어디를 발로 볼까'만 바꾼다.
+FOOT_OFF_MAX = 0.34     # 발 기준점 ~ 몸통 무게중심 거리 / 몸통 폭 상한(정상 ≤0.291 · 오염 ≥0.388)
+FOOT_SCAN = 0.5         # 소품을 따라 올라가는 한계(몸 높이 대비) — 이 안에서 발이 안 나오면 종전 값
+FOOT_GROW = 2           # 소품이 한 줄 위로 갈 때 넓어질 여유(px, 양쪽)
+FOOT_MIN_W = 0.1        # 소품에 걸친 구간을 떼어 낸 나머지가 발이려면 최소 폭(몸통 폭 대비)
 
 
-def lattice_points(rgb: np.ndarray):
-    """격자 전체에서 마크(마젠타·시안) 중심 좌표를 찾는다. 반환 = [(x, y), ...]"""
-    h, s, v = S4._hsv(rgb)
-    strong = (s > 0.45) & (v > 0.55)
-    pts = []
-    for lo, hi in (S4.MAG, S4.CYA):
-        msk = strong & (h >= lo) & (h <= hi)
-        lab, _ = ndimage.label(msk)
-        blobs = []
-        for i, sl in enumerate(ndimage.find_objects(lab), 1):
-            px = int((lab[sl] == i).sum())
-            if px < 6 or px > 900:            # 명백한 먼지·거대 영역만 뺀다
+def _torso(m):
+    """본체 마스크의 (무게중심 x, 몸통 폭). 몸통 폭 = 높이 30~70% 줄 가로폭의 중앙값."""
+    ys, xs = np.nonzero(m)
+    if not len(xs):
+        return None, None
+    y0, y1 = int(ys.min()), int(ys.max())
+    h = y1 - y0
+    spans = []
+    for y in range(int(y0 + 0.3 * h), int(y0 + 0.7 * h) + 1):
+        r = np.nonzero(m[y])[0]
+        if len(r):
+            spans.append(int(r.max() - r.min() + 1))
+    return float(xs.mean()), (float(np.median(spans)) if spans else float(xs.max() - xs.min() + 1))
+
+
+def _runs(row):
+    """한 줄의 연속 구간 [(x0, x1), ...] (양끝 포함)."""
+    x = np.nonzero(row)[0]
+    if not len(x):
+        return []
+    cut = np.nonzero(np.diff(x) > 1)[0]
+    starts = np.r_[x[0], x[cut + 1]]
+    ends = np.r_[x[cut], x[-1]]
+    return list(zip(starts.tolist(), ends.tolist()))
+
+
+def foot_ref_body(im, frac=0.04, tag=""):
+    """서 있는 칸의 발 기준점 — `foot_ref_clean` 이 몸통 아래를 벗어났을 때만 고쳐 쓴다(#701).
+
+    고칠 때는 **아래에서 위로 한 줄씩** 올라가며 소품을 따라간다.
+      · 씨앗: 맨 아래 4% 띠 덩어리 중 중심이 몸통(무게중심 ± FOOT_OFF_MAX·몸통폭) 밖인 것 = 소품.
+      · 그 위 줄: 바로 아래 줄 소품 열(±FOOT_GROW px)에 걸친 부분 = 소품. 걸친 구간에서 떼어 낸
+        나머지는 폭이 몸통폭의 FOOT_MIN_W 배 이상일 때만 발(솔 가장자리가 넓어진 가는 조각은 소품).
+        아래 소품에 안 걸친 구간 = 발.
+      · 발이 처음 나온 줄이 발 밑창(바닥선 y)이고, 거기서 위로 `frac`(4%) 높이의 발 픽셀로
+        `foot_ref` 와 같은 25% 규칙·좌우 끝 중점을 낸다.
+    """
+    fx, fy = foot_ref_clean(im, frac, tag)
+    m = S8.mk_char(im)
+    cx, tw = _torso(m)
+    if cx is None or not tw or abs(fx - cx) <= FOOT_OFF_MAX * tw:
+        return fx, fy
+    lim = FOOT_OFF_MAX * tw
+    ys_all = np.nonzero(m)[0]
+    top, bot = int(ys_all.min()), int(ys_all.max())
+    h = bot - top
+    W = m.shape[1]
+    # 씨앗 = 맨 아래 4% 띠의 덩어리 중 중심이 몸통 밖인 것(빗자루 솔 끝). 솔 끝 털이 줄마다 따로
+    #   떨어진 구간으로 나와도 덩어리로 보면 한 묶음이다(줄 단위로 위치를 보면 털 한 가닥이 몸통 안에 든다).
+    band0 = m.copy()
+    band0[:int(bot - h * frac), :] = False
+    lab0, n0 = ndimage.label(band0)
+    seed = np.zeros_like(m)
+    for i in range(n0):
+        bm = lab0 == i + 1
+        bx = np.nonzero(bm.any(axis=0))[0]
+        if abs((bx.min() + bx.max()) / 2 - cx) > lim:
+            seed |= bm
+    feet = np.zeros_like(m)
+    prev = None                                      # 바로 아래 줄의 소품 열(bool, 폭 W)
+    sole = None                                      # 발이 처음 나온 줄
+    for y in range(bot, int(bot - h * FOOT_SCAN), -1):
+        cur = np.zeros(W, bool)
+        for x0, x1 in _runs(m[y]):
+            seg = np.zeros(W, bool)
+            seg[x0:x1 + 1] = True
+            hit = seg & prev if prev is not None else np.zeros(W, bool)
+            if not hit.any():
+                if seed[y, x0:x1 + 1].any():
+                    cur |= seg                           # 씨앗(솔 끝) 구간
+                else:
+                    feet[y] |= seg
                 continue
-            blobs.append((px, (sl[1].start + sl[1].stop) / 2,
-                          (sl[0].start + sl[0].stop) / 2))
-        pts += [(x, y) for _, x, y in _cut_by_drop(blobs)]
+            cur |= hit
+            rest = seg & ~prev
+            for r0, r1 in _runs(rest):
+                if r1 - r0 + 1 >= FOOT_MIN_W * tw:
+                    feet[y, r0:r1 + 1] = True
+                else:
+                    cur[r0:r1 + 1] = True               # 솔이 넓어진 가장자리 — 소품
+        if sole is None and feet[y].any():
+            sole = y
+        if sole is not None and y < sole - h * frac:
+            break
+        g = np.zeros(W, bool)                        # 다음 줄에서 소품이 넓어질 여유
+        for x in np.nonzero(cur)[0]:
+            g[max(0, x - FOOT_GROW):x + FOOT_GROW + 1] = True
+        prev = g
+    if sole is None:
+        print(f"    ⚠️ 발 기준 몸통 한정{tag} — 띠 중심 {fx:.1f} 이 몸통 밖인데 몸통 아래 발을 못 찾음 "
+              f"→ 띠 중심을 그대로 씀")
+        return fx, fy
+    band = feet.copy()
+    band[:int(sole - h * frac), :] = False
+    lab, n = ndimage.label(band)
+    sizes = ndimage.sum(band, lab, range(1, n + 1))
+    keep = [i + 1 for i in range(n) if sizes[i] >= sizes.max() * 0.25]     # v3 의 25% 규칙 그대로
+    kx = np.nonzero(np.isin(lab, keep).any(axis=0))[0]
+    nx = (kx.min() + kx.max()) / 2
+    print(f"    발 기준 몸통 한정{tag} — 띠 중심 {fx:.1f} 이 몸통(무게중심 {cx:.1f} ± {lim:.0f})을 "
+          f"벗어나 소품으로 봄 · 발 {nx:.1f} (y {fy:.0f}→{sole})")
+    return float(nx), float(sole)
+
+
+class LatticeFitError(ValueError):
+    """격자점이 cols+1 x rows+1 격자로 안 맞는다 — 격자 구조 결함(재생성 대상)."""
+
+
+def lattice_points(rgb: np.ndarray, cols=4, rows=4, strict=False):
+    """격자 전체에서 마크(마젠타·시안) 중심 좌표를 찾는다. 반환 = [(x, y), ...] (최대 (cols+1)*(rows+1)개)
+
+    ★2026-10-08 — 자체 검출을 버리고 `frame_cut.find_marks_by_color(fit=True)` 하나만 쓴다.
+      옛 검출(hue+크기 급락)은 캐릭터의 시안·마젠타 조각을 격자점으로 40~55개 잡아 그 둘레를 지웠다.
+      좌표 계산(덩어리 경계 상자 중심)은 옛 것과 같아서, 옛 검출이 맞았던 격자는 점이 그대로다.
+    strict=True(state8_v5 main) — 격자가 안 맞으면 `LatticeFitError`.
+    strict=False(state16 등 옛 호출) — 안 맞으면 경고하고 맞추기 전 후보(그린 띠까지 거른 것)를 준다.
+    """
+    import frame_cut as FC                        # 지연 import — 이 파일만 읽는 도구를 무겁게 하지 않는다
+    layout = f"lattice_{cols + 1}x{rows + 1}"
+    mag, cya, info = FC.find_marks_by_color(rgb, layout, fit=True)
+    fit = info.get("fit", {})
+    raw = info.get("raw", (0, 0))
+    filt = info.get("filtered", (0, 0))
+    if not fit.get("ok"):
+        msg = (f"격자 맞추기 실패({layout}) — {fit.get('reason')} · 후보 {sum(raw)} → 그린 띠 {sum(filt)}")
+        if strict:
+            raise LatticeFitError(msg)
+        print(f"  ⚠️ {msg} → 맞추기 전 후보 {len(mag) + len(cya)}개를 그대로 씀")
+        return mag + cya
+    pts = mag + cya
+    drop = fit.get("dropped", [])
+    print(f"  격자점 — 색 후보 {sum(raw)} → 그린 띠 {sum(filt)} → 격자 맞추기 {len(pts)}"
+          + (f" (버림 {len(drop)}: " + "; ".join(f"({p[0]:.0f},{p[1]:.0f}) {why}" for p, why in drop[:6])
+             + (" …" if len(drop) > 6 else "") + ")" if drop else ""))
     return pts
 
 
-def mark_zone(shape, corner_rows, box, points):
-    """이 칸에서 '격자점을 지워도 되는 구역' 마스크.
-    = 균등분할 네 모서리(v4 와 동일) ∪ 실제 검출된 마크 둘레.
-    ★corner_rows 는 **이 칸 안에서 균등분할 격자선이 지나는 로컬 y** 두 개다.
-      위 PAD 를 붙이면서 0 이 아니게 됐으므로 밖에서 받는다."""
+def mark_zone(shape, corner_rows, box, points, r=None):
+    """이 칸에서 '격자점을 지워도 되는 구역' 마스크 = 확정된 격자점 중심에서 반경 r 안(원).
+
+    ★2026-10-08 — 균등분할 네 모서리(반경 49px 사각형)와 점 둘레 ±36px 사각형을 버렸다.
+      모서리 구역은 '격자점이 거기 있을 것'이라는 추측이라 그 자리의 캐릭터 머리·옷을 지웠고,
+      사각형은 원보다 모서리만큼 넓어 구멍이 사각형으로 났다.
+    corner_rows 는 더 안 쓴다(state16_v2·v3 가 같은 모양으로 부르므로 인자만 남겨 둔다).
+    box = 이 칸 (0,0) 의 격자 원본 좌표 (x0, y0)."""
     H, W = shape
+    R = MARK_R if r is None else r
     m = np.zeros((H, W), bool)
-    R = int(W * MARK_R_CORNER)
-    for cy in corner_rows:
-        cy = int(cy)
-        for cx in (0, W - 1):
-            m[max(0, cy - R):min(H, cy + R + 1), max(0, cx - R):min(W, cx + R + 1)] = True
     x0, y0 = box[0], box[1]
-    P = MARK_R_POINT
+    yy, xx = np.ogrid[:H, :W]
     for px, py in points:
-        lx, ly = int(round(px - x0)), int(round(py - y0))
-        if -P <= lx <= W - 1 + P and -P <= ly <= H - 1 + P:
-            m[max(0, ly - P):min(H, ly + P + 1), max(0, lx - P):min(W, lx + P + 1)] = True
+        lx, ly = px - x0, py - y0
+        if -R <= lx <= W - 1 + R and -R <= ly <= H - 1 + R:
+            m |= (xx - lx) ** 2 + (yy - ly) ** 2 <= R * R
     return m
+
+
+def mark_blob_zone(rgb: np.ndarray, points, r=None, r_max=None, grow_px=4):
+    """격자 원본 좌표계의 '원 밖 격자점 조각' 구역 마스크(#701). `mark_zone` 에 OR 로 더한다.
+
+    마크색(느슨 — `strip_marks_in_zone` 의 loose 와 같은 기준) 연결 덩어리 중
+    격자점 둘레 원(r)에 걸치고 **모든 픽셀이 r_max 안**인 것만, +grow_px 테(역시 r_max 안)."""
+    R = MARK_R if r is None else r
+    RM = MARK_R_MAX if r_max is None else r_max
+    H, W = rgb.shape[:2]
+    out = np.zeros((H, W), bool)
+    h, s, v = S4._hsv(rgb)
+    loose = (s > 0.22) & (v > 0.30) & (S4._in(h, S4.MAG, 12) | S4._in(h, S4.CYA, 12))
+    for px, py in points:
+        x0, x1 = max(0, int(px - RM) - 1), min(W, int(px + RM) + 2)
+        y0, y1 = max(0, int(py - RM) - 1), min(H, int(py + RM) + 2)
+        sub = loose[y0:y1, x0:x1]
+        if not sub.any():
+            continue
+        yy, xx = np.ogrid[y0:y1, x0:x1]
+        d2 = (xx - px) ** 2 + (yy - py) ** 2
+        # 창 가장자리에 닿은 덩어리는 창 밖으로 이어질 수 있다 → 창을 r_max 보다 1px 넓게 잡고,
+        #   r_max 밖 픽셀이 하나라도 있으면 버린다(창 테두리는 r_max 밖이다).
+        lab, n = ndimage.label(sub)
+        if not n:
+            continue
+        in_circle = np.unique(lab[(d2 <= R * R) & (lab > 0)])
+        add = np.zeros_like(sub)
+        for i in in_circle[in_circle > 0]:
+            bm = lab == i
+            if (d2[bm] <= RM * RM).all() and (d2[bm] > R * R).any():
+                add |= bm
+        if not add.any():
+            continue
+        for _ in range(grow_px):
+            g = add.copy()
+            g[1:, :] |= add[:-1, :]; g[:-1, :] |= add[1:, :]
+            g[:, 1:] |= add[:, :-1]; g[:, :-1] |= add[:, 1:]
+            add = g
+        out[y0:y1, x0:x1] |= add & (d2 <= RM * RM)
+    return out
+
+
+def _key_green_nostrip(cell):
+    """v3 키잉에서 **마크 지우기만 뺀** 결과 — 지우기 전 알파를 얻는 데 쓴다(2026-10-08).
+
+    v3 `key_green` 은 키잉 끝에 칸 네 모서리의 순색 마크를 '번지기 범위 제한 없이' 지운다.
+    v3 파일은 고치지 않으므로, 칸을 왼·오·위로 순수 그린 띠(칸 너비 25%+4)로 둘러 v3 의 모서리
+    구역이 전부 그 띠 안에 떨어지게 해서 부른다(cell_h=0 → 모서리 줄이 맨 위 띠 안).
+    순수 그린은 알파 0 이고 가장자리와 이어져 있으므로 '가장자리에서 이어진 배경' 판정·despill 이
+    원래 칸과 똑같다 → 잘라낸 결과 = 원래 키잉에서 마크 지우기만 안 한 것. (테스트로 RGB 동일 확인)"""
+    W, H = cell.size
+    p = int(W * 0.25) + 4                       # v3 모서리 반경(너비 16%)보다 넓다: 0.16*(W+2p) < p
+    big = Image.new("RGB", (W + 2 * p, H + p), (0, 255, 0))
+    big.paste(cell.convert("RGB"), (p, p))
+    k = S4._v3_key_green(big, 0)
+    return k.crop((p, p, p + W, p + H))
+
+
+def hole_loss(before: np.ndarray, after: np.ndarray, zone: np.ndarray):
+    """지우기가 캐릭터를 얼마나 깎았나 — (깎인 px, 캐릭터 px). 안전망(HOLE_MAX)의 재료.
+
+    before·after = 알파>8 마스크(지우기 전·후). 지우기 전 덩어리 중 **원(zone) 안에만 있는 것**은
+    격자점 자체이므로 셈에서 뺀다. 원 밖까지 이어진 덩어리 = 캐릭터(또는 캐릭터에 붙은 마크)."""
+    lab, n = ndimage.label(before)
+    if not n:
+        return 0, 0
+    out_any = ndimage.maximum(~zone, lab, range(1, n + 1))     # 덩어리가 원 밖에 한 픽셀이라도 있나
+    char_ids = np.nonzero(np.asarray(out_any) > 0)[0] + 1
+    char = np.isin(lab, char_ids)
+    return int((char & ~after).sum()), int(char.sum())
 
 
 def strip_marks_in_zone(cell: Image.Image, zone: np.ndarray, grow_px=4, alpha_min=8):
@@ -385,6 +628,63 @@ def strip_marks_in_zone(cell: Image.Image, zone: np.ndarray, grow_px=4, alpha_mi
     out[:, :, 3] = np.where(grow, 0, out[:, :, 3])
     return Image.fromarray(out)
 
+
+
+# ── 옛 검출·구역(2026-09-12 ~ 10-07) — **state16_v2·v3(선물 움짤) 전용으로만 남긴다** (2026-10-08).
+#   선물 움짤은 이번 수정(#687 구멍) 범위 밖이다. 새 검출·원 구역으로 바꾸면 28장 중 11장의 결과가
+#   바뀌는데(뒤로넘어짐 전부 — 칸 크기까지 달라짐), 그 그림은 검수하지 않았다. 검수 전까지 바이트를
+#   지키려고 옛 동작을 그대로 둔다. ⚠️같은 구멍 결함이 선물 움짤에도 있을 수 있다(후속 과제).
+#   state8_v5 main 은 이 두 함수를 쓰지 않는다.
+_LEGACY_R_CORNER = 0.16
+_LEGACY_R_POINT = 36
+
+
+def _legacy_cut_by_drop(blobs, lo=8, hi=40, thr=0.6):
+    s = sorted(blobs, reverse=True)
+    sizes = [b[0] for b in s]
+    cut = min(len(sizes), hi)
+    for i in range(lo, min(len(sizes), hi)):
+        if sizes[i] / sizes[i - 1] < thr:
+            cut = i
+            break
+    return s[:cut]
+
+
+def lattice_points_legacy(rgb: np.ndarray):
+    """옛 검출(hue+크기 급락, 위치·그린 띠 안 봄). state16 전용 — 위 주석 참고."""
+    h, s, v = S4._hsv(rgb)
+    strong = (s > 0.45) & (v > 0.55)
+    pts = []
+    for lo, hi in (S4.MAG, S4.CYA):
+        msk = strong & (h >= lo) & (h <= hi)
+        lab, _ = ndimage.label(msk)
+        blobs = []
+        for i, sl in enumerate(ndimage.find_objects(lab), 1):
+            px = int((lab[sl] == i).sum())
+            if px < 6 or px > 900:
+                continue
+            blobs.append((px, (sl[1].start + sl[1].stop) / 2,
+                          (sl[0].start + sl[0].stop) / 2))
+        pts += [(x, y) for _, x, y in _legacy_cut_by_drop(blobs)]
+    return pts
+
+
+def mark_zone_legacy(shape, corner_rows, box, points):
+    """옛 구역 = 균등분할 네 모서리 ∪ 점 둘레 ±36 사각형. state16 전용 — 위 주석 참고."""
+    H, W = shape
+    m = np.zeros((H, W), bool)
+    R = int(W * _LEGACY_R_CORNER)
+    for cy in corner_rows:
+        cy = int(cy)
+        for cx in (0, W - 1):
+            m[max(0, cy - R):min(H, cy + R + 1), max(0, cx - R):min(W, cx + R + 1)] = True
+    x0, y0 = box[0], box[1]
+    P = _LEGACY_R_POINT
+    for px, py in points:
+        lx, ly = int(round(px - x0)), int(round(py - y0))
+        if -P <= lx <= W - 1 + P and -P <= ly <= H - 1 + P:
+            m[max(0, ly - P):min(H, ly + P + 1), max(0, lx - P):min(W, lx + P + 1)] = True
+    return m
 
 def bbox_center_x(im):
     """본체(가장 큰 덩어리) bbox 의 가로 중심 — 눕기 칸의 진단용 값."""
@@ -524,7 +824,7 @@ def expand(im, pad=PAD_ALIGN):
     return out
 
 
-def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=None):
+def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=None, crop_box=None, cell_filter=None):
     grid = Path(grid)
     out = Path(outdir) if outdir else grid.parent
     out.mkdir(parents=True, exist_ok=True)
@@ -557,25 +857,52 @@ def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=
     ext.paste(im, (0, PAD_CUT_TOP))
 
     # ★격자 전체에서 마크를 먼저 찾는다 — 제거 허용 구역의 근거. **격자 원본 좌표계**로 잰다.
-    points = lattice_points(np.array(im))
+    #   2026-10-08: 검출기는 frame_cut.find_marks_by_color(fit=True) 하나. 격자가 안 맞으면 거부.
+    try:
+        points = lattice_points(np.array(im), cols, rows, strict=True)
+    except LatticeFitError as e:
+        print(f"GRID_STRUCTURE_INVALID — {e} — 격자 생성 결함", file=sys.stderr)
+        raise SystemExit(3)
     print(f"격자점 검출 {len(points)}개")
+    # ★원 밖으로 삐져나온 같은 격자점 조각(#701) — 격자 원본 좌표계. 칸마다 잘라 zone 에 더한다.
+    blobz = mark_blob_zone(np.array(im), points)
+    if blobz.any():
+        print(f"  격자점 조각 — 원({MARK_R}px) 밖까지 이어진 마크 덩어리 구역 {int(blobz.sum())}px 추가"
+              f"(상한 {MARK_R_MAX}px)")
 
-    def cut_one(r, c, up):
-        """칸 하나를 떠서 키잉 + 격자점 제거까지. up = 위로 더 뜨는 양(0 이면 v3 와 같은 절단)."""
+    def cut_one(r, c, up, stats=None):
+        """칸 하나를 떠서 키잉 + 격자점 제거까지. up = 위로 더 뜨는 양(0 이면 v3 와 같은 절단).
+        stats 리스트를 주면 (깎인 캐릭터 px, 캐릭터 px) 를 덧붙인다(안전망 재료)."""
         x0 = int(round(c * cw))
         gy = int(round(r * ch))                  # 격자 원본 좌표계에서의 칸 위 경계
         box = (x0, gy + PAD_CUT_TOP - up, x0 + W0, gy + PAD_CUT_TOP + H0)
-        cell = S4._v3_key_green(ext.crop(box), up + int(ch))   # v3 키잉 원본 그대로
-        # 균등분할 격자선이 이 칸 안에서 지나는 로컬 y 두 개
+        raw = ext.crop(box)
+        cell = S4._v3_key_green(raw, up + int(ch))   # v3 키잉 원본 그대로(마크 지우기 포함)
         corner_rows = (up, up + int(ch))
         zone = mark_zone((cell.height, cell.width), corner_rows, (x0, gy - up), points)
-        return strip_marks_in_zone(cell, zone)
+        if blobz.any():                          # 칸 (0,0) = 격자 (x0, gy-up). 격자 밖(위 PAD)은 False
+            gy0 = gy - up
+            ys0, ys1 = max(0, gy0), min(blobz.shape[0], gy0 + cell.height)
+            xs1 = min(blobz.shape[1], x0 + cell.width)
+            if ys1 > ys0 and xs1 > x0:
+                zone[ys0 - gy0:ys1 - gy0, 0:xs1 - x0] |= blobz[ys0:ys1, x0:xs1]
+        # ★v3 키잉의 마크 지우기는 원(zone) 안에서만 인정한다 — 원 밖에서 지운 것은 되돌린다.
+        ns = np.array(_key_green_nostrip(raw))
+        k3 = np.array(cell)
+        k3[:, :, 3] = np.where(zone, k3[:, :, 3], ns[:, :, 3])
+        cell = strip_marks_in_zone(Image.fromarray(k3), zone)
+        if stats is not None:
+            stats.append(hole_loss(ns[:, :, 3] > 8, np.array(cell)[:, :, 3] > 8, zone))
+        return cell
 
     cells = []
     pad_check = []                               # (칸번호, 위PAD 없을 때 본체, 있을 때 본체)
+    loss = []                                    # 칸마다 (깎인 캐릭터 px, 캐릭터 px)
     for r in range(rows):
         for c in range(cols):
-            cell = cut_one(r, c, PAD_CUT_TOP)
+            cell = cut_one(r, c, PAD_CUT_TOP, loss)
+            if cell_filter is not None:
+                cell = cell_filter(cell, (0, PAD_CUT_TOP, W0, PAD_CUT_TOP + int(ch)), r * cols + c + 1)
             cells.append(cell)
             if VERIFY_TOP_PAD:
                 # ★"지워진 것이 남의 조각인지 내 머리카락인지"를 가른다.
@@ -585,6 +912,15 @@ def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=
                 a = int(S8.mk_char(cut_one(r, c, 0)).sum())
                 b = int(S8.mk_char(cell).sum())
                 pad_check.append((r * cols + c, a, b))
+
+    # ── 안전망: 격자점 지우기가 캐릭터를 HOLE_MAX 넘게 깎은 칸이 있으면 멈춘다(2026-10-08).
+    rate = [(a / b if b else 0.0) for a, b in loss]
+    print("  지우기 감소율(칸별 %) — " + " ".join(f"{v * 100:.2f}" for v in rate))
+    holes = [f"f{i:02d}" for i, v in enumerate(rate, 1) if v > HOLE_MAX]
+    if holes:
+        print(f"GRID_STRUCTURE_INVALID — POSTPROCESS_HOLE {','.join(holes)} — 격자점 지우기가 캐릭터를 "
+              f"{HOLE_MAX * 100:.0f}% 넘게 깎음(최대 {max(rate) * 100:.1f}%) — 다시 굽기 대상", file=sys.stderr)
+        raise SystemExit(3)
 
     # 침범 제거는 **칸 크기 그대로** 한다 — '칸 가장자리에 닿았나'가 판정 기준이라
     # 캔버스를 먼저 넓히면 아무것도 가장자리에 닿지 않아 이 판정이 통째로 죽는다.
@@ -630,8 +966,8 @@ def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=
                 print(f"    ⚠️ 층1 탐색 한계 — 시드 둘레 ±{rng}px 의 **끝값**이 최적이다. "
                       f"정답이 구간 밖일 수 있으니 시드(본체 bbox 중심)를 의심할 것")
         elif P["l1"] == "foot":
-            ax, _ = foot_ref_clean(cells[k*2], tag=f" f{k*2+1:02d}")
-            bx, _ = foot_ref_clean(cells[k*2+1], tag=f" f{k*2+2:02d}")
+            ax, _ = foot_ref_body(cells[k*2], tag=f" f{k*2+1:02d}")
+            bx, _ = foot_ref_body(cells[k*2+1], tag=f" f{k*2+2:02d}")
             dx = int(round(ax - bx))
             tmp = S8.move(cells[k*2+1], dx, 0)
             v, _, dy = S8.best(S8.mk_char(cells[k*2]), S8.mk_char(tmp), rng)
@@ -648,7 +984,9 @@ def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=
     # ── 층2: 쌍 사이 — 발 좌표 중앙값에 맞춘다(v3 그대로).
     #   foot_ref 의 y 는 실루엣 최하단 y 이므로, 눕기 칸은 세로만 맞춰도
     #   "몸 최하단선 = 바닥선"이 그대로 성립한다.
-    refs = [foot_ref_clean(c) for c in cells]
+    # 서 있는 칸만 몸통 한정(#701) — 웅크림·눕기 칸은 종전 값 그대로(중앙값이 흔들리지 않게).
+    refs = [(foot_ref_body(c) if prof[i // 2] == "standing" else foot_ref_clean(c))
+            for i, c in enumerate(cells)]
     rx = float(np.median([r[0] for r in refs]))
     ry = float(np.median([r[1] for r in refs]))
     for k in range(npairs):
@@ -701,9 +1039,30 @@ def main(grid, outdir=None, cols=4, rows=4, center_lying=CENTER_LYING, postures=
     # ── 마지막 잘라내기 (--frame 방식)
     #   아래·좌·우는 원본 칸 경계에 고정, 위만 필요한 만큼 넓힌다.
     base_top = PAD_ALIGN + PAD_CUT_TOP           # 넓힌 캔버스 안에서 **원본 칸의 위 경계**
+    # ★빈 칸이면 여기서 멈춘다 (2026-10-07, #687 2-3). 그 전엔 아래 min() 이 빈 배열에서
+    #   ValueError traceback 으로 죽어 원인이 안 보였다(펫4 grid — 칸 15·16이 빔).
+    #   격자 게이트(check_grid 칸 검사)가 먼저 잡지만, 침범 제거 뒤에 비는 경우를 대비한다.
+    #   종료 코드 3 + GRID_STRUCTURE_INVALID 표식 = 게이트 거부와 같은 취급(재생성 대상).
+    empty = [f"f{i:02d}" for i, c in enumerate(cells, 1) if not (np.array(c)[:, :, 3] > 8).any()]
+    if empty:
+        print(f"GRID_STRUCTURE_INVALID — 빈 칸 {','.join(empty)} — 격자 생성 결함", file=sys.stderr)
+        raise SystemExit(3)
     uy0 = min(int(np.nonzero(np.array(c)[:, :, 3] > 8)[0].min()) for c in cells)
     top = max(0, min(uy0 - TOP_MARGIN, base_top))
     box = (PAD_ALIGN, top, PAD_ALIGN + W0, base_top + H0)
+    if crop_box is not None:
+        box = crop_box(cells, box)  # Custom-only common canvas; default crop stays byte-identical.
+    # ★잘라내기로 버려지는 본체 픽셀을 변별로 센다(2026-10-08) — 끝 닿음 안전망의 판별 근거.
+    LAST_CROP_LOSS.clear()
+    for c in cells:
+        m = np.array(c)[:, :, 3] > 8
+        LAST_CROP_LOSS.append({"L": int(m[:, :box[0]].sum()), "R": int(m[:, box[2]:].sum()),
+                               "T": int(m[:box[1], box[0]:box[2]].sum()),
+                               "B": int(m[box[3]:, box[0]:box[2]].sum())})
+    lost = [f"f{i:02d}(" + ",".join(f"{k}{v}" for k, v in d.items() if v) + ")"
+            for i, d in enumerate(LAST_CROP_LOSS, 1) if any(d.values())]
+    if lost:
+        print(f"    ⚠️ 잘라내기 손실 — 칸 경계 밖으로 나간 본체 px: {' '.join(lost)}")
     cells = [c.crop(box) for c in cells]
     print(f"캔버스 {W0}x{H0} → {cells[0].size} (위로 +{base_top - top} · 아래·좌·우는 원본 고정)")
 

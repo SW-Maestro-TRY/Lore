@@ -43,6 +43,9 @@ public class HatchService {
     private final HatchBlockLog blockLog;
     private final ZzalAlerts alerts;
     private final int maxAttempts;
+    private final boolean discardOnlyFailedGrid;
+    private final boolean discardOnPostprocessCrash;
+    private final RejectedGridArchive archive;
 
     public HatchService(GenerationRunner runner, GenerationRecorder recorder,
                         GenJobRepository jobRepository, PipelineRegistry registry,
@@ -50,8 +53,24 @@ public class HatchService {
                         QuotaBreaker quotaBreaker,
                         HatchBlockLog blockLog,
                         ZzalAlerts alerts,
-                        @Value("${app.zzal.max-hatch-attempts:2}") int maxAttempts,
+                        int maxAttempts,
                         MotionSeeder motionSeeder) {
+        this(runner, recorder, jobRepository, registry, petRepository, quotaBreaker, blockLog, alerts,
+                maxAttempts, motionSeeder, true, true, RejectedGridArchive.none());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public HatchService(GenerationRunner runner, GenerationRecorder recorder,
+                        GenJobRepository jobRepository, PipelineRegistry registry,
+                        ZzalPetRepository petRepository,
+                        QuotaBreaker quotaBreaker,
+                        HatchBlockLog blockLog,
+                        ZzalAlerts alerts,
+                        @Value("${app.zzal.max-hatch-attempts:3}") int maxAttempts,
+                        MotionSeeder motionSeeder,
+                        @Value("${app.zzal.hatch-retry.discard-only-failed-grid:true}") boolean discardOnlyFailedGrid,
+                        @Value("${app.zzal.hatch-retry.discard-on-postprocess-crash:true}") boolean discardOnPostprocessCrash,
+                        RejectedGridArchive archive) {
         this.runner = runner;
         this.recorder = recorder;
         this.jobRepository = jobRepository;
@@ -62,12 +81,57 @@ public class HatchService {
         this.alerts = alerts;
         this.maxAttempts = maxAttempts;
         this.motionSeeder = motionSeeder;
+        this.discardOnlyFailedGrid = discardOnlyFailedGrid;
+        this.discardOnPostprocessCrash = discardOnPostprocessCrash;
+        this.archive = archive;
     }
+
+    /**
+     * 2층 배경 굽기(#696). 생성자를 늘리지 않고 따로 받는다 — 시험과 옛 생성자가 그대로 돈다.
+     * 없으면(시험) 부화 완료 뒤 2층을 안 넘긴다.
+     */
+    private Layer2Service layer2Service;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setLayer2Service(Layer2Service layer2Service) {
+        this.layer2Service = layer2Service;
+    }
+
+    /**
+     * 그림 단계(시트·격자 호출, 격자 검사 탈락) 실패를 한 펫에서 몇 번까지 받나(작업 1.10, 2026-11-01 상훈님 "켜자").
+     * 이 수에 닿으면 전체 상한({@code max-hatch-attempts})이 남아 있어도 <b>그림 API 를 다시 부르지 않고</b> 실패로
+     * 닫는다 — 실패 기록 뒤 관리자 자동 CLI(작업 1.9, 켜져 있으면)가 이어 받는다. 0 = 끔(옛 동작).
+     *
+     * ★ 생성자를 늘리지 않고 따로 받는다 — 시험이 직접 만든 서비스는 0(옛 동작), 스프링 빈은 설정값(기본 2).
+     */
+    private int imageMaxAttempts;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setImageMaxAttempts(@Value("${app.zzal.hatch.image-max-attempts:2}") int imageMaxAttempts) {
+        this.imageMaxAttempts = Math.max(0, imageMaxAttempts);
+    }
+
+    /**
+     * 관리자 자동 CLI 가 켜져 있나. ★ 그림 상한은 <b>이어 받는 쪽이 있을 때만</b> 건다 — 꺼진 채 상한만 걸리면
+     * 손님의 세 번째 기회만 없어지고 아무도 살리지 않는다. 꺼져 있으면 상한 판정을 건너뛴다(기존 3회).
+     */
+    private boolean autoCliEnabled;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAutoCliEnabled(@Value("${app.zzal.admin.auto-cli.enabled:false}") boolean autoCliEnabled) {
+        this.autoCliEnabled = autoCliEnabled;
+    }
+
+    /** 그림 단계로 치는 단계 이름 — 이 단계가 FAILED 면 다시 하려면 그림 API 를 또 부른다. */
+    private static final List<String> IMAGE_STEPS = List.of(
+            com.lore.zzal.generation.steps.SheetStep.NAME, GridStep.NAME, PostProcessStep.GRID2);
 
     @Async("hatchExecutor")
     public void hatch(Long jobId, Long petId, String version) {
-        RunResult first = runAttempt(jobId, petId, version);
-        if (first != null && first.success()) {
+        // 시도 차수를 단계에 넘긴다 — 정체성 단계가 차수별로 reasoning_effort 를 고른다(2026-10-27).
+        int firstAttempt = jobRepository.findById(jobId).map(j -> Math.max(1, j.getAttempt())).orElse(1);
+        RunResult result = runAttempt(jobId, petId, version, firstAttempt);
+        if (result != null && result.success()) {
             return;
         }
 
@@ -76,55 +140,154 @@ public class HatchService {
             return;
         }
 
-        // ★★ 바깥이 한도(429)로 막았으면 <b>다시 굽지 않는다</b>.
-        //   같은 키로 곧바로 다시 보내면 같은 자리에서 또 막히고, 그 전에 200 을 받은 단계의 값은
-        //   이미 나간 뒤다 — 한 번 막힌 것이 그대로 두 배가 된다. 타임아웃·격자 구조 이상은
-        //   다시 하면 되는 실패라 아래에서 지금까지 하던 대로 재시도한다.
-        if (first != null && first.quotaBlocked()) {
-            Instant now = Instant.now();
-            quotaBreaker.trip(now);
-            blockLog.record(HatchBlock.QUOTA, null, ownerOf(petId), null, now);
-            log.warn("바깥 한도(429) — 재시도하지 않는다 (petId={})", petId);
-            recorder.markPetFailed(petId);
-            alerts.hatchFinallyFailed(petId, now);
+        // ★ 몇 번째 시도인가는 <b>지금 job 의 attempt</b> 에서 센다(2026-10-07).
+        //   전에는 이 펫의 HATCH job 전체 수를 셌는데, 그러면 관리자 재굽기(attempt 를 1 부터 다시 매긴다)가
+        //   옛 실패분에 걸려 한 번도 다시 못 굽는다. 기동 복구는 attempt = 지금까지 수 + 1 로 만들므로 상한이 그대로 지켜진다.
+        //   관리자 재굽기 job 은 attempt=0(GenJob.ADMIN_REHATCH_ATTEMPT — 사람 상한 셈에서 빠지는 표식)이라 1 로 읽는다.
+        int attempt = Math.max(1, job.getAttempt());
+        // ★ 그림 단계 실패를 셀 범위(작업 1.10). 첫 시도·관리자 재굽기(attempt<=1)면 이 job 부터,
+        //   기동 복구(attempt>1 — 지금까지 전체 job 수 + 1)면 이 펫의 부화 job 전체부터(복구가 세는 방식 그대로).
+        long imageFromJobId = job.getAttempt() > 1 ? 0L : jobId;
+        int gridDiscards = 0;
+        while (true) {
+            if (result != null && badGrid(result)) {
+                gridDiscards += 1;
+            }
+            // ★★ 바깥이 한도(429)로 막았으면 <b>다시 굽지 않는다</b>.
+            //   같은 키로 곧바로 다시 보내면 같은 자리에서 또 막히고, 그 전에 200 을 받은 단계의 값은
+            //   이미 나간 뒤다 — 한 번 막힌 것이 그대로 두 배가 된다. 타임아웃·격자 구조 이상은
+            //   다시 하면 되는 실패라 아래에서 재시도한다.
+            if (result != null && result.quotaBlocked()) {
+                Instant now = Instant.now();
+                quotaBreaker.trip(now);
+                blockLog.record(HatchBlock.QUOTA, null, ownerOf(petId), null, now);
+                log.warn("바깥 한도(429) — 재시도하지 않는다 (petId={})", petId);
+                recorder.markPetFailed(petId);
+                alerts.hatchFinallyFailed(petId, now);
+                return;
+            }
+
+            if (attempt >= maxAttempts) {
+                // ★ 실패가 확정되는 마지막 시도의 거부 격자도 보존한다(2026-10-08). 전에는 보존이
+                //   아래 재시도 준비(discardBadGrids) 안에만 있어 5번째 격자만 rejected/ 에 안 남았다
+                //   (운영 job 119·130). 폐기는 하지 않는다 — 다시 구울 일이 없고, 관리자 재굽기가 제 길에서 폐기한다.
+                if (result != null) {
+                    preserveBadGrids(petId, result);
+                }
+                log.warn("부화 실패 확정 — petId={} 시도={}회", petId, attempt);
+                recorder.markPetFailed(petId);
+                // ★★ 알리는 것은 <b>표에 FAILED 가 적힌 뒤</b>다. 먼저 부르면 연속 실패를 세는 질의가
+                //   방금 그 알을 못 봐서 한 번씩 늦게 알린다(경보는 표를 다시 읽어서 센다).
+                alerts.hatchFinallyFailed(petId, Instant.now());
+                return;
+            }
+
+            // ★ 그림 단계가 상한만큼 실패했으면 그림 API 를 다시 부르지 않는다(작업 1.10).
+            //   손님 화면은 기존 실패와 같다(FAILED). 자동 CLI 는 markPetFailed 뒤 듣는 쪽이 만든다.
+            if (imageMaxAttempts > 0 && autoCliEnabled && result != null) {
+                long imageFailures = gridDiscards
+                        + recorder.countFailedSteps(petId, GenKind.HATCH, imageFromJobId, IMAGE_STEPS);
+                if (imageFailures >= imageMaxAttempts) {
+                    preserveBadGrids(petId, result);
+                    log.warn("그림 단계 실패 {}회(상한 {}) — 그림을 다시 굽지 않고 실패로 닫는다 petId={} 시도={}회",
+                            imageFailures, imageMaxAttempts, petId, attempt);
+                    recorder.markPetFailed(petId);
+                    alerts.hatchFinallyFailed(petId, Instant.now());
+                    return;
+                }
+            }
+
+            // ★ 거부(MODERATION_BLOCKED)면 문단부터 다시 만든다.
+            //   거부는 입력이 막힌 것이라 같은 문단을 또 보내면 또 막힌다. 성공 기록을 지워야
+            //   재시도가 그 단계를 건너뛰지 않는다.
+            if (result != null && result.errorCode() == GenErrorCode.MODERATION_BLOCKED) {
+                discardModerationInputs(petId, version);
+            }
+
+            // ★ 격자가 못 쓸 물건이면 격자부터 다시 굽는다 — 재시도는 성공한 단계를 건너뛰므로,
+            //   폐기하지 않으면 <b>바로 그 깨진 격자</b>를 다시 자르게 되고 같은 자리에서 또 실패한다.
+            if (result != null) {
+                discardBadGrids(petId, result);
+            }
+
+            // 다시 한 번. 나머지 성공한 단계는 그대로 이어받으므로 실패한 지점부터 시작된다.
+            attempt += 1;
+            GenJob retry = jobRepository.save(
+                    GenJob.start(petId, GenKind.HATCH, attempt, version, Instant.now()));
+            log.info("재시도 — petId={} attempt={}/{}", petId, attempt, maxAttempts);
+            result = runAttempt(retry.getId(), petId, version, attempt);
+            if (result == null) {
+                recorder.markPetFailed(petId);
+                alerts.hatchFinallyFailed(petId, Instant.now());
+                return;
+            }
+            if (result.success()) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * 실패 원인이 <b>격자</b>에 있으면 그 격자만 버린다.
+     *
+     * <h3>★ 무엇을 버리나 (2026-10-07)</h3>
+     * <ul>
+     *   <li>게이트 거부(구조 이상) · 후처리 스크립트 비정상 종료(빈 칸·파이썬 예외) → 그 격자를 버린다.</li>
+     *   <li>어느 격자인지 알면({@code [격자=grid2]} 표식) <b>그 한 장만</b>. 모르면 둘 다.</li>
+     *   <li>시간 초과·평범한 실패 → 아무것도 버리지 않는다(같은 입력으로 다시 하면 대개 된다).</li>
+     * </ul>
+     * 운영 10/6 실측: 거부 15건 중 다수가 한 장만 깨졌는데 둘 다 버려 멀쩡한 격자를 다시 구웠고,
+     * 빈 칸으로 후처리가 죽은 펫4는 같은 격자를 다시 잘라 똑같이 죽었다.
+     * 스위치: {@code app.zzal.hatch-retry.discard-only-failed-grid} · {@code ...discard-on-postprocess-crash}.
+     */
+    private void discardBadGrids(Long petId, RunResult result) {
+        // ★ 버리기 전에 그림을 보존한다 — 재시도가 같은 키에 덮어써 거부된 격자가 사라진다(2026-10-07).
+        //   ⚠️ 단계 기록은 지운다. status 칸에 값 목록 CHECK 가 걸려 있어 DISCARDED 를 남기려면
+        //     마이그레이션이 필요하다 — 대신 보존 키를 로그에 남긴다(RejectedGridArchive).
+        List<String> targets = preserveBadGrids(petId, result);
+        if (targets.isEmpty()) {
             return;
         }
-
-        long attempts = jobRepository.countByPetIdAndKind(petId, GenKind.HATCH);
-        if (attempts >= maxAttempts) {
-            log.warn("부화 실패 확정 — petId={} 시도={}회", petId, attempts);
-            recorder.markPetFailed(petId);
-            alerts.hatchFinallyFailed(petId, Instant.now());
-            return;
+        int discarded = 0;
+        for (String step : targets) {
+            discarded += recorder.discardSucceeded(petId, GenKind.HATCH, step);
         }
+        log.info("격자 {} — {} {}건을 폐기하고 다시 굽는다 (petId={} 격자표식={})",
+                result.gridRejected() ? "구조 이상" : "후처리 실패", targets, discarded, petId, result.failedGrid());
+    }
 
-        // ★ 거부(MODERATION_BLOCKED)면 문단부터 다시 만든다.
-        //   거부는 입력이 막힌 것이라 같은 문단을 또 보내면 또 막힌다. 성공 기록을 지워야
-        //   재시도가 그 단계를 건너뛰지 않는다.
-        if (job.getErrorCode() == GenErrorCode.MODERATION_BLOCKED) {
-            discardModerationInputs(petId, version);
+    /**
+     * 실패 원인이 격자에 있으면 그 격자를 {@code rejected/} 로 <b>보존만</b> 한다(폐기는 하지 않는다).
+     *
+     * ★ 재시도 여부와 무관하게 불린다 — 재시도 전({@link #discardBadGrids})과 실패 확정 직전 둘 다(2026-10-08).
+     *
+     * @return 못 쓸 격자로 판정된 단계 이름들. 격자 탓이 아니면 빈 목록
+     */
+    private List<String> preserveBadGrids(Long petId, RunResult result) {
+        if (!badGrid(result)) {
+            return List.of();
         }
+        List<String> targets;
+        String which = result.failedGrid();
+        if (discardOnlyFailedGrid && (GridStep.NAME.equals(which) || PostProcessStep.GRID2.equals(which))) {
+            targets = List.of(which);
+        } else {
+            targets = List.of(GridStep.NAME, PostProcessStep.GRID2);
+        }
+        List<GenStepRecord> succeeded = recorder.loadSucceeded(petId, GenKind.HATCH);
+        for (String step : targets) {
+            for (GenStepRecord rec : succeeded == null ? List.<GenStepRecord>of() : succeeded) {
+                if (step.equals(rec.getName())) {
+                    archive.preserve(petId, rec);
+                }
+            }
+        }
+        return targets;
+    }
 
-        // ★ 격자 구조 게이트가 막은 것이면 격자부터 다시 굽는다 — 거부와 같은 종류의 병이다.
-        //   재시도는 성공한 단계를 건너뛰므로, 격자를 폐기하지 않으면 **바로 그 깨진 격자**를
-        //   다시 자르게 되고 두 번째도 같은 자리에서 실패한다(시간만 쓰고 결과는 같다).
-        if (first != null && first.gridRejected()) {
-            int discarded = recorder.discardSucceeded(petId, GenKind.HATCH, GridStep.NAME)
-                    + recorder.discardSucceeded(petId, GenKind.HATCH, PostProcessStep.GRID2);
-            log.info("격자 구조 이상 — 격자 {}건을 폐기하고 다시 굽는다 (petId={})", discarded, petId);
-        }
-
-        // 다시 한 번. 나머지 성공한 단계는 그대로 이어받으므로 실패한 지점부터 시작된다.
-        GenJob retry = jobRepository.save(
-                GenJob.start(petId, GenKind.HATCH, (int) attempts + 1, version, Instant.now()));
-        log.info("재시도 — petId={} attempt={}", petId, attempts + 1);
-        RunResult second = runAttempt(retry.getId(), petId, version);
-        if (second == null || !second.success()) {
-            recorder.markPetFailed(petId);
-            // ★★ 알리는 것은 <b>표에 FAILED 가 적힌 뒤</b>다. 먼저 부르면 연속 실패를 세는 질의가
-            //   방금 그 알을 못 봐서 한 번씩 늦게 알린다(경보는 표를 다시 읽어서 센다).
-            alerts.hatchFinallyFailed(petId, Instant.now());
-        }
+    /** 격자가 못 쓸 물건이라 다시 하려면 격자를 새로 구워야 하는가(검사 탈락 · 후처리 예외). */
+    private boolean badGrid(RunResult result) {
+        return result.gridRejected() || (discardOnPostprocessCrash && result.postprocessCrashed());
     }
 
     /** 이 알의 주인. 막힘 기록에 누구였는지를 남기려고 본다(없으면 null — 기록은 그래도 남는다). */
@@ -142,14 +305,14 @@ public class HatchService {
      *         성공 여부만이 아니라 <b>왜 실패했는가</b>(격자 자체가 못 쓸 물건인가)를
      *         부르는 쪽이 알아야 재시도 전에 무엇을 폐기할지 정할 수 있다.
      */
-    private RunResult runAttempt(Long jobId, Long petId, String version) {
+    private RunResult runAttempt(Long jobId, Long petId, String version, int attempt) {
         ZzalPet pet = petRepository.findById(petId).orElse(null);
         if (pet == null) {
             log.warn("펫이 없습니다 — petId={}", petId);
             return null;
         }
 
-        StepContext ctx = new StepContext(petId, pet.getName(), pet.getNote(), version);
+        StepContext ctx = new StepContext(petId, pet.getName(), pet.getNote(), version).attempt(attempt);
         ctx.putImage("source", pet.getSourceImageKey());
 
         RunResult r = runner.run(jobId, ctx,
@@ -200,7 +363,12 @@ public class HatchService {
         // ★ 부화 완료 = 동작 18행(정본 13장). 1층 8종은 이 순간이 열린 시각. 심화 행동은 아직(NONE).
         //   두 번 불려도 이미 있는 seq 는 건너뛴다(MotionSeeder).
         motionSeeder.seed(petId, now);
-        log.info("부화 완료 — petId={} version={}", petId, version);
+        log.info("부화 완료(1층) — petId={} version={}", petId, version);
+        // ★ #696 — 2층은 여기서부터 뒤에서 굽는다. 두 길(굽기 끝·이름 들어옴)이 겹쳐 두 번 불려도
+        //   2층 집기(Layer2Recorder.claim)가 한쪽만 통과시킨다.
+        if (layer2Service != null) {
+            layer2Service.schedule(petId);
+        }
         return true;
     }
 

@@ -67,7 +67,7 @@ class AfterRunTest {
         when(harness.runsDir()).thenReturn(runs);
         files = mock(RunFiles.class);
         after = new AfterRun(usage, uploader, pages, jobs, mock(WorkLedger.class),
-                harness, files);
+                harness, files, mock(com.lore.webtoon.character.CharacterService.class));
     }
 
     /** 하네스가 적는 모양 그대로. 값은 {@code cost.total_krw} 에 있다. */

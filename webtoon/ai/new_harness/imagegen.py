@@ -49,7 +49,8 @@ PAGE_KIND = "page"          # 세로로 읽는 웹툰 페이지 — 여기서 �
 #     PAGE_CANVAS_GEMINI=9:16           Gemini 는 비율
 #
 # 세로/가로는 이 값에서 뽑는다. 따로 적어 두면 두 곳이 갈라진다.
-PAGE_CANVAS = {"openai": "1024x1536", "gemini": "9:16"}
+# OpenRouter 는 같은 gpt-image-2 를 비율로 받는다. 1024x1536 과 같은 2:3 이다.
+PAGE_CANVAS = {"openai": "1024x1536", "gemini": "9:16", "openrouter": "2:3"}
 DEFAULT_ASPECT = 16 / 9
 
 
@@ -132,6 +133,9 @@ def paint(stage: str, prompt: str, out_path: Path, refs=None,
         data, meta = painter(prompt, kind)
         seconds = round(time.monotonic() - started, 2)
         cost_info = cost.cost_fields(provider, model, quality, (meta or {}).get("usage_dict"))
+        if llm.CODEX_PROXY_ENABLED:
+            cost_info = {**cost_info, "total": 0.0, "total_krw": 0,
+                         "cost_basis": "codex_subscription"}
         if span is not None:
             span.set_attribute("seconds", seconds)
             span.set_attribute("bytes", len(data))

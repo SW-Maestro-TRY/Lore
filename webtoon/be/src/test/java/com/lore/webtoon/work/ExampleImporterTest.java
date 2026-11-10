@@ -99,6 +99,20 @@ class ExampleImporterTest {
     }
 
     @Test
+    @DisplayName("비공개로 심으면 그림을 안 열리는 자리에 올리고 작품도 비공개로 적는다(예시 표시는 그대로)")
+    void 비공개로_심는다() throws Exception {
+        ExampleImporter.Result got = importer.importBundle(bundle(Map.of(), null), false, false);
+
+        assertThat(got.status()).isEqualTo(ExampleImporter.Status.PLANTED);
+        verify(art, org.mockito.Mockito.atLeast(2)).upload(any(), eq("image/jpeg"), eq(false));
+        verify(art, org.mockito.Mockito.never()).upload(any(), eq("image/jpeg"), eq(true));
+        verify(ledger).setPublic(ExampleBundlesTest.RUN, false);
+        verify(ledger, org.mockito.Mockito.never()).setPublic(ExampleBundlesTest.RUN, true);
+        verify(ledger).markExample(ExampleBundlesTest.RUN, true, null);
+        verify(pages).record(eq(ExampleBundlesTest.RUN), anyList(), eq(false));
+    }
+
+    @Test
     @DisplayName("만든 과정이 없으면 후보 하나만 심고 고른 것으로 둔다")
     void 후보_하나만() throws Exception {
         importer.importBundle(bundle(Map.of(), null), false);

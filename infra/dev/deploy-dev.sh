@@ -12,9 +12,11 @@
 #   1. 배포 버킷에서 소스 tar 내려받기(인스턴스 역할 자격으로, 키 안 심음)
 #   2. 새 디렉터리에 풀고 → 다 풀린 뒤에야 /opt/lore-dev/src 를 한 번에 갈아끼움
 #      (중간에 실패해도 돌아가던 소스가 반쪽으로 망가지지 않는다)
-#   3. compose up -d --build
-#   4. 헬스 통과까지 대기 → 실패하면 로그 찍고 exit 1
-#   5. 성공해야 VERSION 기록 + 옛 src.* 정리(최근 2개만 보존)
+#   3. .env 필수 키 검사 → 이미지 빌드(돌던 컨테이너는 아직 안 건드림)
+#      → 재생성 순서 고정: app(헬스 대기) → web(응답 대기) → 나머지 → nginx 강제 재생성 → nginx 경유 확인
+#   4. 성공해야 VERSION 기록 + 옛 src.* 정리(최근 2개만 보존)
+#
+# 사고 → 이 스크립트(와 nginx.conf·docker-compose.yml)의 처방은 infra/dev/README.md 「도커 꼬임 처방」 표.
 #
 # ★ /opt/lore-dev/.env 는 박스에만 있는 비밀이다. 이 스크립트는 읽기만 하고 절대 안 덮는다.
 set -euo pipefail
@@ -83,16 +85,37 @@ log "src → $NEW_DIR"
 # ── 3. 스택 올리기 ───────────────────────────────────────────────
 # 경로는 심볼릭 링크(고정 경로)로 들어간다 — 컨테이너의 bind mount 가 src.<sha> 에 묶이지 않게.
 cd "$SRC_LINK"
-COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.dev-ec2.yml --env-file "$ENV_FILE")
+# ★ project 이름을 -p 로 못박는다. compose 파일의 name: lore-dev 는 셸에 COMPOSE_PROJECT_NAME 이 있으면
+#   그쪽이 이긴다 → 손으로 친 명령과 배포가 다른 project 로 갈라져 컨테이너가 두 벌 생길 수 있다.
+COMPOSE=(docker compose -p lore-dev -f docker-compose.yml -f docker-compose.dev-ec2.yml --env-file "$ENV_FILE")
 
-log "compose up -d --build (빌드 때문에 몇 분 걸립니다)"
-"${COMPOSE[@]}" up -d --build
+# ── 3-1. .env 필수 키 검사 ────────────────────────────────────────
+# 빈 값으로 뜨면 조용히 망가진다(DB 접속 실패·presign 서명 불일치 등). 이름을 말하고 멈춘다.
+REQUIRED_ENV=(DB_USERNAME DB_PASSWORD S3_ACCESS_KEY S3_SECRET_KEY CONTENT_BUCKET S3_PUBLIC_URL)
+missing=()
+for k in "${REQUIRED_ENV[@]}"; do
+  v="$(grep -E "^${k}=" "$ENV_FILE" | tail -1 | cut -d= -f2- || true)"   # pipefail: 없는 키에 grep 이 1 을 내도 멈추지 않게
+  [ -n "$v" ] || missing+=("$k")
+done
+if [ ${#missing[@]} -gt 0 ]; then
+  echo ".env 필수 값이 비었습니다: ${missing[*]} — $ENV_FILE 에 채운 뒤 다시 배포하세요(기존 스택 그대로 둡니다)."
+  exit 1
+fi
+# 통로 없는 키 — .env 에 값이 있어도 compose 의 environment: 가 넘기지 않으면 앱은 못 본다
+# (ZZAL_DEV_TOOLS·ZZAL_ADMIN 이 그랬다). 배포를 막지는 않고 이름만 알린다.
+referenced="$(cat docker-compose.yml docker-compose.dev-ec2.yml | grep -oE '\$\{[A-Z0-9_]+' | tr -d '${' | sort -u || true)"
+unused="$(grep -oE '^[A-Z0-9_]+=' "$ENV_FILE" | tr -d '=' | sort -u | comm -23 - <(printf '%s\n' "$referenced") | tr '\n' ' ' || true)"
+[ -z "$unused" ] || log "경고: .env 에 있지만 compose 가 넘기지 않는 키(앱이 못 봄): $unused"
 
-# nginx 는 설정 파일을 bind mount 로 읽는데, 경로가 고정 링크(src)라 compose 눈에는 "바뀐 게 없는" 서비스다.
-# 그래서 nginx.conf 가 바뀌어도 컨테이너가 재생성되지 않고, app·web 이 새 IP 로 뜨면 옛 IP 를 물고 502 를 낸다
-# (2026-09-20 #337 배포에서 실제로 발생). 매 배포마다 nginx 만 강제로 다시 띄운다(1초, 무해).
-log "nginx 재생성(설정·업스트림 IP 반영)"
-"${COMPOSE[@]}" up -d --force-recreate --no-deps nginx
+# ── 3-2. 이미지 빌드 ──────────────────────────────────────────────
+# 빌드를 먼저 끝낸다 — 빌드가 실패하면 돌던 컨테이너를 하나도 안 건드린 채 멈춘다.
+log "이미지 빌드 (몇 분 걸립니다)"
+"${COMPOSE[@]}" build
+
+# ── 3-3. 재생성 순서 고정: app → web → 나머지 → nginx ──────────────
+# 한 번에 `up -d --build` 하면 app·web·nginx 가 동시에 바뀌어, 어느 쪽 때문에 502 인지 가릴 수 없었다.
+log "app 올리기(postgres·minio·버킷 준비가 먼저 뜬다)"
+"${COMPOSE[@]}" up -d app
 
 # ── 4. 헬스 대기 ─────────────────────────────────────────────────
 # nginx(443)로 재는 대신 compose 가 호스트로 내보낸 app:8080 을 직접 두드린다
@@ -117,15 +140,8 @@ if [ "$healthy" -ne 1 ]; then
 fi
 log "앱 헬스 OK"
 
-# nginx 를 거친 응답도 본다 — 앱·프론트가 멀쩡해도 nginx 가 옛 업스트림을 물면 사용자는 502 를 본다.
-log "nginx 경유 확인: https://localhost/ (Host: dev.lorecomic.com)"
-edge_code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 -H 'Host: dev.lorecomic.com' https://localhost/ 2>/dev/null || echo 000)
-if [ "$edge_code" = "502" ] || [ "$edge_code" = "000" ]; then
-  echo "nginx 경유 응답 $edge_code — 업스트림 연결 실패. 아래 로그 확인"
-  "${COMPOSE[@]}" logs --tail=30 nginx || true
-  exit 1
-fi
-log "nginx 경유 응답 코드 $edge_code"
+log "web 올리기"
+"${COMPOSE[@]}" up -d web
 
 # 프론트는 상태코드를 가리지 않는다(라우팅에 따라 404 일 수 있음). 응답 자체가 없으면 기동 실패로 본다.
 log "프론트 응답 확인: http://localhost:3000/"
@@ -147,6 +163,27 @@ if [ "$web_ok" -ne 1 ]; then
   "${COMPOSE[@]}" logs --tail=80 web || true
   exit 1
 fi
+
+# 나머지(씨뿌리기 같은 한 번짜리 서비스·nginx)를 맞춘다.
+log "나머지 서비스 맞추기"
+"${COMPOSE[@]}" up -d
+
+# nginx 는 설정 파일을 bind mount 로 읽는데, 경로가 고정 링크(src)라 compose 눈에는 "바뀐 게 없는" 서비스다.
+# 그래서 nginx.conf 가 바뀌어도 컨테이너가 재생성되지 않는다 → app·web 이 다 뜬 "뒤에" nginx 를 강제로 다시 띄운다(1초, 무해).
+# (업스트림 IP 문제 자체는 nginx.conf 의 resolver+변수가 막는다. 이 줄은 설정 변경 반영용이다.)
+log "nginx 재생성(설정 반영)"
+"${COMPOSE[@]}" up -d --force-recreate --no-deps nginx
+
+# nginx 를 거친 응답도 본다 — 앱·프론트가 멀쩡해도 nginx 가 옛 업스트림을 물면 사용자는 502 를 본다.
+log "nginx 경유 확인: https://localhost/ (Host: dev.lorecomic.com)"
+edge_code=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 -H 'Host: dev.lorecomic.com' https://localhost/ 2>/dev/null || echo 000)
+if [ "$edge_code" = "502" ] || [ "$edge_code" = "000" ]; then
+  echo "nginx 경유 응답 $edge_code — 업스트림 연결 실패. 아래 로그 확인"
+  "${COMPOSE[@]}" logs --tail=30 nginx || true
+  exit 1
+fi
+log "nginx 경유 응답 코드 $edge_code"
+
 
 # ── 5. 성공 표식 + 청소 ──────────────────────────────────────────
 # 박스에 "지금 뜬 게 어느 커밋인지"가 없어서 매번 사람이 추측했다. 그 표식을 여기서 남긴다.

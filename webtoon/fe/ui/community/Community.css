@@ -1,0 +1,276 @@
+.wt-community {
+  margin: 32px 0;
+  padding: 28px 0;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  text-align: left;
+}
+.wt-community h3 {
+  font-size: 20px;
+  margin: 0 0 10px;
+  letter-spacing: -0.02em;
+}
+.wt-community p {
+  line-height: 1.6;
+  margin: 8px 0 16px;
+}
+.wt-community .muted {
+  color: var(--muted);
+}
+.wt-community-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.wt-community textarea {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.65;
+  caret-color: var(--sea-deep);
+}
+.wt-community textarea:focus-visible,
+.wt-community button:focus-visible,
+.wt-community a:focus-visible {
+  outline: 2px solid var(--sea-deep);
+  outline-offset: 3px;
+}
+.wt-community-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.wt-community-actions .count {
+  margin-right: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+.wt-community-error {
+  color: var(--danger, #a32929);
+  line-height: 1.5;
+  margin-top: 12px;
+}
+.wt-comments {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+}
+.wt-comment {
+  padding: 20px 0;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.wt-comment p {
+  white-space: pre-wrap;
+  margin: 10px 0;
+}
+.wt-comment-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+}
+.wt-comment-meta time {
+  color: var(--muted);
+}
+.wt-comment .btn-ghost {
+  font-size: 13px;
+  min-height: 44px;
+  padding: 4px 8px;
+}
+.wt-community-notices {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+}
+.wt-community-notices li {
+  border-top: 1px solid var(--line);
+  padding: 14px 0;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.wt-community-notices a {
+  color: var(--ink);
+  flex: 1;
+  line-height: 1.6;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.wt-community-notices time {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+.wt-community-notices .unread {
+  font-weight: 700;
+}
+.wt-public-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.wt-public-character {
+  min-width: 0;
+}
+.wt-public-character img {
+  width: 100%;
+  aspect-ratio: 4/5;
+  object-fit: cover;
+  background: var(--paper);
+  border-radius: 12px;
+}
+.wt-public-character h4 {
+  margin: 14px 0 6px;
+  font-size: 18px;
+}
+.wt-public-character p {
+  overflow-wrap: anywhere;
+}
+.wt-public-character small {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--muted);
+}
+.wt-publication {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  margin-top: 12px;
+}
+.wt-publication label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.6;
+  font-size: 13px;
+}
+.wt-publication input {
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+.wt-publication p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.wt-report {
+  padding: 14px 0;
+}
+.wt-report label {
+  display: block;
+  margin-bottom: 8px;
+}
+.wt-community-attribution {
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: 24px;
+}
+.wt-community-attribution a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  color: var(--sea-deep);
+}
+@media (max-width: 680px) {
+  .wt-public-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 12px;
+  }
+  .wt-community {
+    margin: 24px 0;
+    padding: 24px 0;
+  }
+  .wt-community-notices li {
+    flex-wrap: wrap;
+  }
+  .wt-public-character .btn {
+    width: 100%;
+  }
+}
+@media (max-width: 380px) {
+  .wt-public-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wt-community .btn-ghost,
+.wt-publication .btn-ghost {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* 공백이 적은 번역도 카드 안에서 줄바꿈한다. */
+.wt-community,
+.wt-publication {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.wt-community .btn,
+.wt-publication .btn {
+  min-width: 0;
+  min-height: 44px;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* 종 단추와 작은 창(2026-10-24) — 내 작업실 「내 웹툰」 줄 오른쪽 */
+.wt .wt-bell-wrap { position: relative; display: inline-flex; }
+.wt .wt-bell {
+  position: relative; width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid #ffffff4d; background: #ffffff0f; color: var(--ink);
+}
+.wt .wt-bell:hover { background: var(--water-light); }
+.wt .wt-bell[aria-expanded="true"] { border-color: var(--sea); }
+.wt .wt-bell-dot {
+  position: absolute; top: -6px; right: -6px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px;
+  background: var(--sea); color: var(--paper); font-size: 11px; font-weight: 700; line-height: 19px; text-align: center;
+}
+.wt .wt-bell-pop {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: 380px; max-height: min(520px, 70vh); overflow: auto;
+  background: var(--bg); border: 1px solid var(--line-strong); border-radius: 14px; box-shadow: 0 18px 40px #0009;
+}
+.wt .wt-bell-pop .wt-community { margin: 0; padding: 8px 16px 14px; border: 0; }
+.wt .wt-bell-pop .wt-community-head { margin: 0; padding: 8px 0; }
+.wt .wt-bell-pop .wt-community-head b { font-size: 15px; }
+.wt .wt-community-link { font: inherit; font-size: 12.5px; color: var(--sea); background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap; }
+.wt .wt-community-link:disabled { opacity: .5; cursor: default; }
+.wt .wt-community-tabs { display: flex; gap: 6px; margin: 2px 0 8px; }
+.wt .wt-community-tabs button {
+  font: inherit; font-size: 12.5px; padding: 5px 11px; border-radius: 99px; border: 1px solid var(--line-strong);
+  background: none; color: var(--muted); cursor: pointer;
+}
+.wt .wt-community-tabs button.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.wt .wt-bell-pop .wt-community-empty { margin: 14px 2px; font-size: 13px; line-height: 1.6; }
+.wt .wt-bell-pop .wt-community-notices { list-style: none; margin: 0; padding: 0; display: grid; }
+.wt .wt-bell-pop .wt-community-notices li {
+  display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid var(--line);
+}
+.wt .wt-bell-pop .wt-community-notices li:last-child { border-bottom: 0; }
+.wt .wt-bell-pop .wt-community-notices a,
+.wt .wt-bell-pop .wt-community-gone { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; color: var(--ink); text-decoration: none; }
+.wt .wt-bell-pop .wt-community-cover { flex: 0 0 auto; width: 40px; height: 52px; border-radius: 7px; object-fit: cover; object-position: top; background: var(--bg-2); }
+.wt .wt-bell-pop .wt-community-notices b { display: block; font-size: 13.5px; font-weight: 400; line-height: 1.45; }
+.wt .wt-bell-pop .wt-community-notices li.unread b { font-weight: 700; }
+.wt .wt-bell-pop .wt-community-notices li.unread b::before {
+  content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--sea); margin-right: 7px; vertical-align: 2px;
+}
+.wt .wt-bell-pop .wt-community-notices time { display: block; font-size: 11.5px; color: var(--dim); margin-top: 2px; }
+@media (max-width: 767px) {
+  .wt .wt-bell-wrap { position: static; }
+  .wt .wt-bell-pop { left: 0; right: 0; width: auto; }
+}
+@media (max-width: 767px) {
+  /* 폰 — 종 + 둘러보기 한 줄, 새 웹툰 만들기는 아래 줄 전체 */
+  .wt .wt-my-head:has(.wt-bell-wrap) { position: relative; }
+  .wt .wt-my-headacts:has(.wt-bell-wrap) { flex-direction: row; flex-wrap: wrap; }
+  .wt .wt-my-headacts:has(.wt-bell-wrap) .btn-w { flex: 1; width: auto; }
+  .wt .wt-my-headacts:has(.wt-bell-wrap) .btn-p { flex: 1 1 100%; }
+}

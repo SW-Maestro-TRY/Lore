@@ -23,10 +23,10 @@ export function collectErrors(page: Page): string[] {
 /**
  * 목 서버로 연다. clock 은 KST(`2026-09-05T10:00`).
  *
- * ★ `skin=scrapbook` 을 붙이는 이유 — 2026-09-06 부터 `/zzal` 의 기본 화면이 여울 시안이다.
- *   여울은 아직 서버에 안 붙은 배치 확인용 판이라 목 서버 흐름을 검사할 수 없다.
- *   이 검사들이 보는 것은 **규칙과 서버 계약**이고, 그건 스크랩북이 들고 있다.
- *   여울이 엔진에 붙는 날 이 한 조각만 지우면 된다.
+ * This helper intentionally tests the still-addressable legacy scrapbook + mock engine.
+ * The default /zzal route is now Yeoul/focused with live API contracts; these tests do
+ * not cover it. Current focused telemetry/browser fixtures live in zzal/fe/tests.
+ * Keep legacy regressions until that route is retired; do not remove the query alone.
  */
 export async function gotoMock(page: Page, preset: Preset, clock = '2026-09-05T10:00'): Promise<void> {
   await page.goto(`/zzal?skin=scrapbook&mock=${preset}&clock=${clock}`, { waitUntil: 'domcontentloaded' });

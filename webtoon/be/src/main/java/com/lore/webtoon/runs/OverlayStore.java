@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -20,14 +21,17 @@ import java.util.Set;
  * 떨어뜨린다 — 여기서 세우면 항목 하나가 이상할 때 화 전체를 못 굽는다.
  *
  * 깎는 규칙은 파이썬({@code landing/overlay.py} 의 {@code clean_item})과 같다.
- * 한쪽만 바꾸면 같은 편집실이 어디에 저장하느냐에 따라 다르게 굽힌다.
+ * 한쪽만 바꾸면 같은 편집실이 어디에 저장하느냐에 따라 다르게 굽힌다. 말풍선 글꼴({@code font})만
+ * 여기에만 있다 — 파이썬은 작품 폴더의 overlay.json 을 굽는 옛 길이고, 편집실은 이제 DB 에
+ * 저장한다({@link WebtoonOverlay}).
  */
 @Service
 public class OverlayStore {
 
     private static final Logger log = LoggerFactory.getLogger(OverlayStore.class);
 
-    static final Set<String> TYPES = Set.of("bubble", "sticker", "sfx");
+    /** 얹는 것의 종류. {@code text} 는 말풍선 없이 그림 위에 놓는 글자(편집실 「그리기」의 글자 도구). */
+    static final Set<String> TYPES = Set.of("bubble", "sticker", "sfx", "text");
     static final List<String> VARIANTS =
             List.of("normal", "shout", "whisper", "thought", "narration", "flash");
     /** 꼬리가 달리는 종류. 나레이션·회상에는 애초에 꼬리가 없다. */
@@ -37,18 +41,87 @@ public class OverlayStore {
     private static final int TEXT_MAX = 400;
 
     private final OverlayRepository overlays;
+
+    /**
+     * 여백 단(0~3) → 지면 폭의 몇 배. 편집실이 보여 주는 눈금과 같아야 한다
+     * ({@code editorCore.ts gapScale}, 하네스 {@code strip.GAP_RATIO} 기본값).
+     * 한쪽만 바꾸면 편집실에서 본 여백과 공개본·내려받은 파일의 여백이 달라진다.
+     */
+    static final double[] GAP_RATIO = {0, 0.07, 0.26, 0.62};
+
+    /**
+     * 표지(1장) 뒤 기본 여백 단(2026-10-25). 표지와 첫 장면이 붙어 있으면 표지가 첫 컷처럼
+     * 읽힌다. 편집실에서 그 자리를 고쳤으면(붙임 포함) 고친 값이 이긴다.
+     */
+    static final int COVER_GAP_STEP = 1;
+
+    /** 이 단의 여백이 폭의 몇 배인가. 모르는 단은 0(붙임). */
+    public static double gapRatio(int step) {
+        return step >= 0 && step < GAP_RATIO.length ? GAP_RATIO[step] : 0;
+    }
     private final ObjectMapper mapper = new ObjectMapper();
 
     public OverlayStore(OverlayRepository overlays) {
         this.overlays = overlays;
     }
 
-    /** 이 작품에 얹은 것. 없으면 빈 것 — 화면은 그것을 "아직 안 얹었다" 로 읽는다. */
+    /* 장 위에 직접 그린 것(리터치). 따로 담고 읽을 때만 합친다({@link PaintStore}). 세터로 받는다 —
+       생성자에 넣으면 이 클래스를 직접 만드는 시험이 모두 바뀌고, 없으면 말풍선만 읽는다. */
+    private PaintStore paints;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPaints(PaintStore paints) {
+        this.paints = paints;
+    }
+
+    /**
+     * 이 작품에 얹은 것. 없으면 빈 것 — 화면은 그것을 "아직 안 얹었다" 로 읽는다.
+     *
+     * 장 위에 직접 그린 것이 있으면 그 장에 {@code paint} 로 같이 싣는다. 말풍선이 없는 장이면
+     * {@code items} 없이 {@code paint} 만 단다 — 빈 {@code items} 를 실으면 화면이 그 장을
+     * "말풍선을 다 지웠다" 로 읽고 그대로 되돌려 보낸다.
+     */
     @Transactional(readOnly = true)
     public JsonNode read(String runId, int episode) {
-        return overlays.findByRunIdAndEpisode(runId, episode)
+        JsonNode out = overlays.findByRunIdAndEpisode(runId, episode)
                 .map(one -> parse(one.getDataJson()))
                 .orElseGet(this::empty);
+        if (paints != null && out instanceof ObjectNode root) {
+            Map<Integer, JsonNode> painted = paints.read(runId, episode);
+            if (!painted.isEmpty()) {
+                ObjectNode scenes = root.path("scenes") instanceof ObjectNode got ? got : root.putObject("scenes");
+                painted.forEach((no, paint) -> {
+                    String key = String.valueOf(no);
+                    ObjectNode scene = scenes.path(key) instanceof ObjectNode got ? got : scenes.putObject(key);
+                    scene.set("paint", paint);
+                });
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 사람이 편집실에서 고친 여백. {장 번호: 단(0~3)} — 안 고친 장은 없다.
+     *
+     * 저장만 되고 아무도 안 읽어서, 편집실에서 벌려 둔 여백이 공개본과
+     * 내려받은 파일에서 사라져 있었다.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Integer, Integer> gapsOf(String runId, int episode) {
+        java.util.Map<Integer, Integer> out = new java.util.HashMap<>();
+        JsonNode gaps = read(runId, episode).path("gaps");
+        gaps.fieldNames().forEachRemaining(key -> {
+            try {
+                int g = gaps.path(key).asInt(-1);
+                if (g >= 0 && g < GAP_RATIO.length) {
+                    out.put(Integer.parseInt(key), g);
+                }
+            } catch (NumberFormatException ignored) {
+                // 장 번호가 아닌 칸은 건너뛴다
+            }
+        });
+        out.putIfAbsent(1, COVER_GAP_STEP);
+        return out;
     }
 
     /**
@@ -159,6 +232,17 @@ public class OverlayStore {
         out.put("size", clamp(raw.path("size"), 4, 200, 15));
         out.put("rot", clamp(raw.path("rot"), -180, 180, 0));
         out.put("tail", tail);
+        /* 말풍선 글꼴 — 고를 수 있는 것만 남긴다. 기본 글꼴은 값을 두지 않으므로, 값이 없는 옛
+           항목도 지금처럼 기본 글꼴로 굽힌다. */
+        String font = raw.path("font").asText("").trim().toLowerCase();
+        if (("bubble".equals(kind) || "text".equals(kind)) && BubbleArtist.FONTS.containsKey(font)) {
+            out.put("font", font);
+        }
+        /* 글자 색 — 글자 도구만 쓴다. 모르는 값은 먹색. */
+        if ("text".equals(kind)) {
+            String color = raw.path("color").asText("").trim().toLowerCase();
+            out.put("color", color.matches("^#[0-9a-f]{6}$") ? color : "#111111");
+        }
         /* 꼬리 끝은 사람이 끌어다 놓은 자리다. 풍선 크기에 대한 %(가로·세로)라
            그림 크기가 달라져도 같은 곳을 가리킨다. 안 보내면 옛 규칙(왼쪽/
            오른쪽)에서 만든다 — 예전에 저장한 것이 그대로 열려야 한다. */

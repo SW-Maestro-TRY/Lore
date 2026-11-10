@@ -98,7 +98,7 @@ public class UsageService {
                     runId, seq,
                     blankTo(c.stage(), "(모름)"), blankTo(c.provider(), "(모름)"),
                     blankTo(c.model(), "(모름)"),
-                    c.inputTokens(), c.outputTokens(),
+                    c.inputTokens(), c.outputTokens(), c.cachedTokens(),
                     c.costUsd(), c.costKrw(), c.costBasis(),
                     cut(c.error()),
                     c.calledAt() == null ? Instant.now() : c.calledAt()));
@@ -132,15 +132,25 @@ public class UsageService {
                     one.path("stage").asText(""),
                     one.path("provider").asText(""),
                     one.path("model").asText(""),
-                    used.path("input").asLong(0),
-                    used.path("output").asLong(0),
+                    // 글은 usage, 그림은 cost.cost_fields 에 표준 토큰을 남긴다.
+                    used.path("input").asLong(cost.path("tokens_in").asLong(0)),
+                    used.path("output").asLong(cost.path("tokens_out").asLong(0)),
+                    used.path("cache_read").asLong(cost.path("tokens_cached").asLong(0)),
                     cost.path("total").asDouble(0),
                     cost.path("total_krw").asLong(0),
                     cost.path("cost_basis").asText(null),
                     one.path("error").asText(null),
                     calledAt(one.path("at"))));
         }
-        return ingest(runId, out);
+        try {
+            return ingest(runId, out);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            /* 시트와 이야기가 같은 run 에서 나란히 돌다 둘 다 이 파일을 읽으면(#548), 둘 다
+               「없다」를 보고 넣다가 한쪽이 (run_id, seq) 유니크에 걸린다(2026-10-10 운영,
+               #727). 그 묶음은 통째로 롤백되므로 한 번 더 읽어 남은 것만 넣는다. */
+            log.info("비용 기록이 겹쳐 다시 넣습니다 (run={})", runId);
+            return ingest(runId, out);
+        }
     }
 
     /** 캐릭터 만들기의 기록 이름 앞자리. 작품 번호(날짜-시각)와 안 겹치고, 편수에서 뺄 때 쓴다. */
@@ -234,7 +244,7 @@ public class UsageService {
      * 파일을 다시 빚지 않아도 되게.
      */
     public record Call(String stage, String provider, String model,
-                       long inputTokens, long outputTokens,
+                       long inputTokens, long outputTokens, long cachedTokens,
                        double costUsd, long costKrw, String costBasis,
                        String error, Instant calledAt) {
     }

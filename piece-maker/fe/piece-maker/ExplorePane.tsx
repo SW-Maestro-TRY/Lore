@@ -5,7 +5,7 @@
  *
  * 패널과 카드 한 장에 `memo` 를 쓴다. 작성 패널에서 해석을 칠 때마다 카드를 다시 그리지 않게 하려는 것이다.
  * 그래서 이 패널이 받는 값과 함수는 바뀔 때만 새로 만들어야 한다. */
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import { SEARCH_MAX_LENGTH, type Card } from "../lib/api";
 import { ALL_KINDS, kindsOf } from "../lib/search";
 import Icon from "./Icon";
@@ -68,13 +68,10 @@ const EvidenceCard = memo(function EvidenceCard({
             </span>
           ))}
         </div>
-        <div className="card-actions">
-          <button className="btn" data-action="detail" onClick={() => onOpen(card.id)}>상세·출처</button>
-          <button className="add-btn" data-action="add" aria-pressed={selected} onClick={() => onToggle(card)}>
-            <Icon name={selected ? "check" : "plus"} />
-            {selected ? "담았어요" : "가설에 담기"}
-          </button>
-        </div>
+        <button className="add-btn" data-action="add" aria-pressed={selected} onClick={() => onToggle(card)}>
+          <Icon name={selected ? "check" : "plus"} />
+          {selected ? "담았어요" : "가설에 담기"}
+        </button>
       </div>
     </article>
   );
@@ -97,6 +94,16 @@ function ExplorePane({
   onToggle,
   onHelp,
 }: Props) {
+  const [compactSearch, setCompactSearch] = useState(false);
+  useEffect(() => {
+    // 화면 배치와 같은 경계에서 안내 문구만 짧게 보인다.
+    const mobile = window.matchMedia("(max-width: 900px)");
+    const update = () => setCompactSearch(mobile.matches);
+    update();
+    mobile.addEventListener("change", update);
+    return () => mobile.removeEventListener("change", update);
+  }, []);
+
   const kinds = kindsOf(meta.status === "ready" ? meta.meta.kinds : []);
   // 고른 유형이 장부에 없으면 "전체"로 본다(장부 정보를 다시 받아 유형이 달라졌을 때).
   const activeFilter = kinds.includes(filter) ? filter : ALL_KINDS;
@@ -119,7 +126,7 @@ function ExplorePane({
         <input
           id="piece-maker-search"
           type="search"
-          placeholder="인물, 사건, 물건… 기억나는 단어로 검색"
+          placeholder={compactSearch ? "인물·사건·물건 검색" : "인물, 사건, 물건… 기억나는 단어로 검색"}
           autoComplete="off"
           maxLength={SEARCH_MAX_LENGTH}
           value={query}

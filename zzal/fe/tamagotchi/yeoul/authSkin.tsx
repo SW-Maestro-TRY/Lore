@@ -18,6 +18,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useZzalLocale } from '../../lib/locale';
 import { C, C2, GAEGU, SANS, fz, gap, radius, shadow } from './ui';
 
 /** 창 머리에 붙는 말. 지킬 수 있는 것만 적는다 — 고른 그림은 실제로 `holdUpload` 가 들고 있다. */
@@ -110,10 +111,19 @@ body[data-zzal-auth="1"] [role="dialog"][aria-modal="true"]{
   /* ★ margin:auto 를 끈다 — 공통 창은 가운데 정렬을 그 여백으로 하는데, 우리가 세로로
      쌓으면 그 여백이 머리 띠와 창 사이를 벌려 **두 장으로 읽힌다**(실측 121px 틈). */
   margin:0 auto;
-  /* 넘치면 창 안에서 구른다. 주 버튼은 공통 창이 이미 바닥에 붙여 두어 늘 보인다(공통 창의 sticky). */
-  max-height:min(72dvh, 620px); overflow-y:auto;
+  /* ★ 높이를 따로 자르지 않는다(2026-10-26). 예전 min(72dvh,620px) 캡은 "버튼은 공통 창이 바닥에 붙인다" 고
+     믿었는데 단계형은 그걸 꺼 둬서, 잘린 창 안 아래로 버튼이 숨었다. 이제 오버레이(보이는 영역 높이) 안에서
+     창이 줄고, 폼만 구르며 주 버튼은 폼 바닥에 붙는다. */
+  min-height:0; flex:0 1 auto;
 }
 body[data-zzal-auth="1"] [role="dialog"][aria-modal="true"] h2{ letter-spacing:0; }
+/* ★ 머리 띠는 첫 단계(이메일)에만, 그리고 키보드가 내려가 있을 때만(2026-10-26). 키보드 위 200~290px 에
+   그림 띠(약 90px)까지 얹으면 지금 칸·버튼이 밀려난다. 키보드 표시는 <html data-vv-keyboard>(공용 훅). */
+html[data-vv-keyboard] body[data-zzal-auth="1"] .zzal-auth-intro,
+body[data-zzal-auth="1"] div:has(> [role="dialog"][data-step-mode]:not([data-step-mode="email"])) .zzal-auth-intro{ display:none; }
+html[data-vv-keyboard] body[data-zzal-auth="1"] [role="dialog"][aria-modal="true"],
+body[data-zzal-auth="1"] [role="dialog"][data-step-mode]:not([data-step-mode="email"]){ border-radius:${radius.xl}px; }
+
 .zzal-auth-intro{
   width:100%; max-width:420px; margin:0 auto; box-sizing:border-box;
   display:flex; align-items:center; gap:${gap.lg}px;
@@ -144,6 +154,8 @@ export interface AuthSkinProps {
 }
 
 export default function AuthSkin({ open, thumb, pending }: AuthSkinProps) {
+  const locale = useZzalLocale();
+  const words = locale === 'en' ? {line:'Your drawing is ready. Log in to continue.',note:'Your selected drawing is kept here.',alt:'Your selected drawing'} : locale === 'ja' ? {line:'絵を受け取りました。続けるにはログインしてください。',note:'選んだ絵はそのまま残っています。',alt:'選んだ絵'} : AUTH_INTRO;
   useBodyFlag(open);
   const host = useOverlayHost(open && pending);
   if (!open) return null;
@@ -153,10 +165,10 @@ export default function AuthSkin({ open, thumb, pending }: AuthSkinProps) {
       {host && pending && createPortal(
         <div className="zzal-auth-intro" data-part="auth-intro">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          {thumb && <img src={thumb} alt={AUTH_INTRO.alt} />}
+          {thumb && <img src={thumb} alt={words.alt} />}
           <span style={{ display: 'flex', flexDirection: 'column', gap: gap.xs, minWidth: 0 }}>
-            <span className="zzal-auth-line">{AUTH_INTRO.line}</span>
-            <span className="zzal-auth-note">{AUTH_INTRO.note}</span>
+            <span className="zzal-auth-line">{words.line}</span>
+            <span className="zzal-auth-note">{words.note}</span>
           </span>
         </div>,
         host,

@@ -652,4 +652,39 @@ public class ZzalMotion {
     public Instant getCreatedAt() {
         return createdAt;
     }
+
+    /**
+     * dev(리모컨) — 상태를 직접 세팅한다. OPEN 으로 두면 판정 시각을 지금으로 찍는다(그림 키가 없으면 기본 키를 빌린다).
+     * ★ 운영 코드는 부르지 않는다. 운영의 전이는 굽기·검수·도착이 순서대로 지나가며 일어난다 — 리모컨은 그
+     *   한 칸을 바로 만들어 화면을 보려는 것이다.
+     */
+    public void devSetStatus(MotionStatus status, String fallbackImageKey, Instant now) {
+        this.status = status;
+        if (status == MotionStatus.OPEN) {
+            if (this.imageKey == null) {
+                this.imageKey = fallbackImageKey;
+            }
+            if (this.openedAt == null) {
+                this.openedAt = now;
+            }
+        }
+        if (status == MotionStatus.NONE) {
+            this.openedAt = null;
+            this.revealedAt = null;
+            this.seenAt = null;
+            this.nightOf = null;
+            this.claimedAt = null;
+            this.claimedBy = null;
+        }
+    }
+
+    /** dev(리모컨) — 도착 시각을 지금/없음으로. 운영은 깨어 있는 첫 정산에서만 찍는다({@link #reveal}). */
+    public void devSetRevealed(Instant at) {
+        this.revealedAt = at;
+    }
+
+    /** dev(리모컨) — 열람 시각을 지금/없음으로. */
+    public void devSetSeen(Instant at) {
+        this.seenAt = at;
+    }
 }

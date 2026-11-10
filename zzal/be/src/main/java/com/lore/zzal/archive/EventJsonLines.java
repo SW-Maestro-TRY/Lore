@@ -54,6 +54,15 @@ public final class EventJsonLines {
     public static String line(EventRow row) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", row.id());
+        out.put("event_id", row.eventId());
+        out.put("schema_version", row.schemaVersion());
+        out.put("session_id", row.sessionId());
+        out.put("context", row.context());
+        out.put("source_screen", row.sourceScreen());
+        out.put("reported_ts", row.reportedTs());
+        out.put("timestamp_quality", row.timestampQuality());
+        out.put("identity_status", row.identityStatus());
+        out.put("event_origin", row.eventOrigin());
         out.put("name", row.name());
         out.put("anon_id", row.anonId());
         out.put("user_id", row.userId());

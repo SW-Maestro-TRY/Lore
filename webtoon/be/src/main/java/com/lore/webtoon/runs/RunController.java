@@ -87,6 +87,21 @@ public class RunController {
         this.notes = notes;
     }
 
+    /* 장 위에 직접 그린 것(리터치)과 스포이드용 밑그림. 세터로 받는다 — 생성자에 넣으면 이 클래스를 직접
+       만드는 시험이 모두 바뀐다. 없으면(시험) 그 두 길만 404 다. */
+    private PaintStore paints;
+    private PagePixels pixels;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPaints(PaintStore paints) {
+        this.paints = paints;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPixels(PagePixels pixels) {
+        this.pixels = pixels;
+    }
+
     public RunController(RunService runs, PageStore pages, EpisodeExport export,
                          OverlayStore overlays, BakeService bakery, StoryStore stories,
                          RegenService regen, AfterRun after, WorkLedger ledger,
@@ -141,7 +156,10 @@ public class RunController {
      */
     private boolean mayRead(String runId) {
         Long userId = CreditGate.currentUser();
-        return ledger.mayRead(runId, userId) || (userId != null && admins.isAdmin(userId));
+        /* 「링크 있는 사람만」 작품(#898)은 주소의 k 가 맞으면 로그인 없이 읽는다. 그림({@link #page})도 같은 문지기를
+           지나서, 맞으면 잠깐 열리는 주소로 넘겨 준다 — 그림은 비공개 자리에 있어 CloudFront 로는 안 열린다. */
+        return ledger.mayRead(runId, userId, com.lore.webtoon.work.WorkVisibility.requestKey())
+                || (userId != null && admins.isAdmin(userId));
     }
 
     private static <T> ResponseEntity<T> hidden() {
@@ -238,6 +256,43 @@ public class RunController {
     }
 
     /**
+     * 한 장 위에 직접 그린 것(붓 · 지우개 선)을 담는다. <b>그 장을 그릴 때마다 부른다</b>(자동 저장).
+     *
+     * 말풍선 저장과 따로 오간다 — 선은 점이 많아 본문이 크다. 말풍선 저장에 같이 실으면 글 한 자 고칠
+     * 때마다 그 본문이 통째로 오가고, 본문이 커서 막히면 말풍선 저장까지 같이 막힌다. 통째로 덮어쓰고,
+     * 선이 하나도 없으면 지운다. 모양과 한도는 {@link PaintStore}.
+     */
+    @Operation(summary = "직접 그린 것 저장",
+            description = "본문 {\"v\":1,\"strokes\":[{\"k\":\"b|e\",\"c\":\"#rrggbb\",\"w\":60,\"p\":[x,y,…]}]} — 자리·굵기는 그림 크기의 1/10000.")
+    @PostMapping("/{runId}/scenes/{no}/paint")
+    public Map<String, Object> savePaint(@PathVariable String runId, @PathVariable int no,
+                                         @RequestParam(defaultValue = "1") int ep,
+                                         @RequestBody(required = false) Map<String, Object> body) {
+        mustOwn(runId);
+        if (paints == null || no < 1) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "그런 장이 없습니다");
+        }
+        return Map.of("ok", true, "strokes", paints.save(runId, ep, no, asNode(body)));
+    }
+
+    /**
+     * 스포이드가 색을 읽을 밑그림 — 같은 출처로 준다({@link PagePixels}). 편집실에서만 쓰므로 주인만.
+     */
+    @Operation(summary = "스포이드용 밑그림", description = "굽는 그림과 같은 파일. 주인만.")
+    @GetMapping("/{runId}/page/{no}/pixels")
+    public ResponseEntity<byte[]> pagePixels(@PathVariable String runId, @PathVariable int no) {
+        mustOwn(runId);
+        byte[] bytes = pixels == null ? null : pixels.raw(runId, no);
+        if (bytes == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "private, max-age=300")
+                .contentType(MediaType.parseMediaType(PagePixels.typeOf(bytes)))
+                .body(bytes);
+    }
+
+    /**
      * 얹은 것을 그림에 굽는다 — 그리고 받을 주소를 알려 준다.
      *
      * 화면은 굽자마자 그 주소로 파일을 받는다. 원본은 안 건드리므로 편집실은
@@ -302,10 +357,31 @@ public class RunController {
                 }
             }
         }
-        /* 남이 열 수 있는 작품인가(#638) — 아니면 화면이 공유 버튼을 감춘다. 링크를 보내도 받은 사람은 404 다. */
+        /* 남이 열 수 있는 작품인가(#638) — 아니면 화면이 공유 버튼을 감춘다. 링크를 보내도 받은 사람은 404 다.
+           링크 공개(#898)는 여기서 false 다 — 둘러보기 · 댓글처럼 「누구나」에 기대는 칸은 링크 공개에서도 닫는다. */
         found.put("public", ledger.isOpen(runId));
+        /* 공개 범위 세 단계와, 주인 · 관리자에게만 링크 열쇠 — 공유 버튼이 열쇠 붙은 주소를 만든다.
+           링크로 온 사람에게는 열쇠를 다시 주지 않는다(이미 주소에 있다). */
+        ledger.find(runId).ifPresent(work -> {
+            found.put("visibility", work.visibility());
+            Long viewer = CreditGate.currentUser();
+            if (work.isLinkOnly() && viewer != null && (ledger.mayChange(runId, viewer) || admins.isAdmin(viewer))) {
+                found.put("share_key", work.getShareKey());
+            }
+        });
         /* 안전 검사에 걸려 빈 장으로 둔 장들(#626) — 화면이 그 자리에 안내를 얹는다. */
         found.put("unsafe_pages", regen.unsafePages(runId));
+        /* 그 장마다 걸린 이유(선정성·폭력·잔혹 …) — 무엇을 고치면 되는지 알린다(2026-10-27). */
+        found.put("unsafe_reasons", regen.unsafeReasons(runId));
+        /* 같은 이유를 코드로 — 화면이 영어·일본어·중국어로 옮긴다. 위 한국어 문장은 옛 화면용으로 남긴다. */
+        found.put("unsafe_kinds", regen.unsafeKinds(runId));
+        /* 이 작품의 한 장 다시 그리기 값(#787) — 화질마다 달라서 작품과 같이 준다. */
+        found.put("regen_cost", regenCost(runId));
+        /* 다시 그리기 창의 화질 고르개 — 작품 화질이 처음 골라져 있고, 낮추면 값도 내려간다. */
+        found.put("quality", com.lore.webtoon.job.WebtoonQuality.normalize(regen.qualityOf(runId)));
+        found.put("regen_choices", com.lore.webtoon.job.WebtoonQuality.regenChoices());
+        /* 남은 장 중 지금 그리는 중인 장 — 화면이 「그리는 중」을 띄우고 다 될 때까지 다시 묻는다. */
+        found.put("drawing_pages", regen.drawingPages(runId));
         /* 「넣은 설정이 간 곳」 칸은 운영용이라 관리자에게만 준다(#428). */
         if (admins.current()) {
             RunService.Inputs inputs = runs.inputsOf(runId);
@@ -348,9 +424,10 @@ public class RunController {
      * 파일의 성질이지 저장물의 성질이 아니다.
      */
     @Operation(summary = "한 편 내려받기",
-            description = "낱장을 이어 붙이고 LORE 표시를 찍어서 준다.")
+            description = "낱장을 이어 붙이고 LORE 표시를 찍어서 준다. plain=1 이면 말풍선·글자를 빼고 밑그림과 직접 그린 선만.")
     @GetMapping(value = "/{runId}/episode.png", produces = MediaType.IMAGE_PNG_VALUE)
-    public ResponseEntity<byte[]> episode(@PathVariable String runId) {
+    public ResponseEntity<byte[]> episode(@PathVariable String runId,
+                                          @RequestParam(required = false) String plain) {
         if (!mayRead(runId)) {
             return hidden();
         }
@@ -358,13 +435,14 @@ public class RunController {
         if (meta == null) {
             return ResponseEntity.notFound().build();
         }
-        byte[] png = export.png(runId);
+        boolean bare = flag(plain);
+        byte[] png = export.png(runId, bare);
         if (png == null) {
             return ResponseEntity.notFound().build();
         }
         // 받는 파일 이름은 LORE_제목_1화.png — 옛 브라우저에는 작품 번호(DownloadName).
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), null))
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), null, episodeOf(meta), bare))
                 .contentType(MediaType.IMAGE_PNG)
                 .body(png);
     }
@@ -383,7 +461,64 @@ public class RunController {
         return t == null ? "" : String.valueOf(t);
     }
 
+    /* ---- 남은 장 이어 그리기 ------------------------------------------------- */
+
+    /**
+     * 크레딧이 모자라 안 그리고 남겨 둔 장을 이어 그린다. <b>여기서부터 실제로 돈이 나간다.</b>
+     *
+     * 한 편 값은 기본 장 수까지라({@code WebtoonQuality.BASE_PAGES}), 장면이 더 많은데 잔액이 모자라면
+     * 앞 장까지만 그려 완성한다. 다음 날 매일 지급으로 잔액이 생기면 여기서 이어 그린다 — 잔액이 닿는
+     * 장까지만 앞에서부터 그리고, 한 장도 못 그리면 402(크레딧이 모자라요)다.
+     *
+     * 장마다 다시 그리기와 같은 줄에 선다. 화면은 돌려받은 번호마다 {@code GET /regens/{id}} 를 묻는다.
+     * 장마다 따로 받고, 그 장을 못 그리면 그 장 값만 돌려준다.
+     */
+    @Operation(summary = "남은 장 이어 그리기", description = "잔액이 닿는 장까지만 앞에서부터. 장마다 id 로 진행을 물어야 한다.")
+    @PostMapping("/{runId}/continue")
+    public ResponseEntity<Map<String, Object>> continuePages(@PathVariable String runId,
+                                                             @RequestBody(required = false)
+                                                             Map<String, Object> body) {
+        Long userId = mustOwn(runId);
+        /* 이미 그리는 중인 장은 빼고 센다 — 화면을 새로 열어 단추를 또 눌러도 같은 장을 두 번 받지 않는다. */
+        List<Integer> drawing = regen.drawingPages(runId);
+        List<Integer> pending = runs.pendingPages(runId).stream().filter(n -> !drawing.contains(n)).toList();
+        if (pending.isEmpty()) {
+            return ResponseEntity.ok(Map.of("started", List.of(), "left", 0));
+        }
+        int per = com.lore.webtoon.job.WebtoonQuality.extraPageCreditsOf(regen.qualityOf(runId));
+        int have = credits.balanceToday(userId);
+        /* 「여기까지 열기」는 앞에서부터 count 장 — 그 장 수 값이 다 있어야 연다. 고른 만큼이 아니면 사람이 낸 값과 열린 장이 어긋난다.
+           count 가 없으면 잔액이 닿는 데까지 연다. */
+        int want = body != null && body.get("count") instanceof Number n ? Math.min(n.intValue(), pending.size()) : pending.size();
+        if (want <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "열 장 수가 없어요");
+        }
+        if (body != null && body.get("count") != null && have < want * per) {
+            throw new BusinessException(CreditGate.notEnough(),
+                    "크레딧이 모자라요 (" + want + "장 " + (want * per) + " · 보유 " + have + ")");
+        }
+        int afford = Math.min(want, have / per);
+        if (afford <= 0) {
+            throw new BusinessException(CreditGate.notEnough(),
+                    "크레딧이 모자라요 (한 장 " + per + " · 보유 " + have + ")");
+        }
+        List<Map<String, Object>> started = new ArrayList<>();
+        for (int no : pending.subList(0, afford)) {
+            /* 낸 사람을 기록에 적고 → 받고 → 줄에 넣는다(#864). 못 그리면 기록에 적힌 대로 그 장 값을 돌려준다. */
+            String id = regen.queuePending(runId, no, pending, userId);
+            credits.charge(userId, per, RegenService.pagesRef(runId, no, id), "남은 장 이어 그리기");
+            regen.go(id);
+            started.add(regen.statusOf(id));
+        }
+        return ResponseEntity.ok(Map.of("started", started, "left", pending.size() - afford));
+    }
+
     /* ---- 다시 그리기 ------------------------------------------------------- */
+
+    /** 이 작품의 한 장을 다시 그리는 값. 작품을 만든 화질을 따른다(#787). */
+    private int regenCost(String runId) {
+        return com.lore.webtoon.job.WebtoonQuality.regenCreditsOf(regen.qualityOf(runId));
+    }
 
     /**
      * 이 장을 다시 그린다. <b>여기서부터 실제로 돈이 나간다.</b>
@@ -400,10 +535,17 @@ public class RunController {
         Long userId = mustOwn(runId);
         /* 화면이 단추에 값을 적어 놓고 실제로는 안 받고 있었다. 만들기·캐릭터와
            같은 규칙으로 여기서도 받는다 — **시작하기 전에** 낼 수 있는지 보고,
-           줄을 세운 뒤에 뺀다. 먼저 빼면 시작이 실패했을 때 낸 것만 사라진다.
+           기록을 만든 뒤에 빼고, 뺀 뒤에 줄에 넣는다(#864). 기록보다 먼저 빼면 기록이
+           실패했을 때 낸 것만 사라지고, 줄에 먼저 넣으면 받기 전에 실패했을 때 돌려줄 줄이 없다.
            같은 ref 로 두 번 불려도 한 번만 빠진다(CreditGate.charge). */
         /* 안전 검사에 걸려 빈 장으로 완성된 장은 다시 그리기가 무료다(#626) — 크레딧은 처음에 그대로 받았다. */
-        int cost = regen.isUnsafe(runId, no) ? 0 : credits.regenCost();
+        /* 값은 작품을 만든 화질을 따른다 — 너울은 한 장 원가가 커서 6이다(#787).
+           편집실에서 화질을 골라 보냈으면 그 화질 값이다 — 너울 작품도 이 장만 파도로 그리면 파도 값. */
+        String asked = body == null || body.get("quality") == null ? null : String.valueOf(body.get("quality"));
+        String quality = com.lore.webtoon.job.WebtoonQuality.isKnown(asked)
+                ? com.lore.webtoon.job.WebtoonQuality.normalize(asked) : null;
+        int cost = regen.isUnsafe(runId, no) ? 0
+                : quality == null ? regenCost(runId) : com.lore.webtoon.job.WebtoonQuality.regenCreditsOf(quality);
         String blocked = cost > 0 ? credits.whyBlocked(userId, cost) : null;
         if (blocked != null) {
             throw new BusinessException(CreditGate.notEnough(), blocked);
@@ -425,12 +567,12 @@ public class RunController {
             } catch (java.io.IOException e) {
                 throw new BusinessException(com.lore.common.exception.ErrorCode.INTERNAL_ERROR, "장면 설명을 저장하지 못했습니다");
             }
-            String id = regen.start(runId, no, note);
+            /* 낸 사람은 기록에 적는다 — 실패하면, 서버가 다시 떠도, 그걸로 돌려준다(#626, #864). */
+            String id = regen.queue(runId, no, note, quality, cost > 0 ? userId : null);
             if (cost > 0) {
-                String ref = "regen:" + runId + ":" + no + ":" + id;
-                credits.charge(userId, cost, ref, "장 다시 그리기");
-                regen.charged(id, userId, ref);           // 실패하면 돌려준다(#626)
+                credits.charge(userId, cost, RegenService.regenRef(runId, no, id), "장 다시 그리기");
             }
+            regen.go(id);
             return ResponseEntity.ok(regen.statusOf(id));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
@@ -523,9 +665,10 @@ public class RunController {
      * 붙는다</b>: 낱장으로 나가도 어디서 만든 것인지 남아야 한다.
      */
     @Operation(summary = "컷 하나 내려받기",
-            description = "그 장 하나에 LORE 표시를 찍어서 준다.")
+            description = "그 장 하나에 LORE 표시를 찍어서 준다. plain=1 이면 말풍선·글자를 빼고 밑그림과 직접 그린 선만.")
     @GetMapping(value = "/{runId}/page/{no}/download", produces = MediaType.IMAGE_PNG_VALUE)
-    public ResponseEntity<byte[]> pageDownload(@PathVariable String runId, @PathVariable int no) {
+    public ResponseEntity<byte[]> pageDownload(@PathVariable String runId, @PathVariable int no,
+                                               @RequestParam(required = false) String plain) {
         if (!mayRead(runId)) {
             return hidden();
         }
@@ -533,13 +676,23 @@ public class RunController {
         if (meta == null) {
             return ResponseEntity.notFound().build();
         }
-        byte[] png = export.pagePng(runId, no);
+        boolean bare = flag(plain);
+        byte[] png = export.pagePng(runId, no, bare);
         if (png == null) {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), no))
+                .header(HttpHeaders.CONTENT_DISPOSITION, DownloadName.header(runId, titleOf(meta), no, episodeOf(meta), bare))
                 .contentType(MediaType.IMAGE_PNG)
                 .body(png);
     }
+    /** 주소의 켜기 값 — 있고 비어 있지 않고 0 이 아니면 켠 것({@link #page} 의 raw 와 같은 규칙). */
+    private static boolean flag(String v) {
+        return v != null && !v.isBlank() && !"0".equals(v) && !"false".equalsIgnoreCase(v);
+    }
+
+    private static int episodeOf(Map<String,Object> meta) {
+        return meta.get("episode") instanceof Number n ? n.intValue() : 1;
+    }
+
 }

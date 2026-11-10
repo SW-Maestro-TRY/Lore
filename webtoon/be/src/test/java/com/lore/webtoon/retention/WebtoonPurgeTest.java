@@ -87,6 +87,21 @@ class WebtoonPurgeTest {
     }
 
     @Test
+    @DisplayName("조연 시트의 그림과 줄도 지운다 — 만들기 기록 번호로 찾으므로 그보다 먼저")
+    void castSheetsToo() {
+        when(rows.castSheetKeys(anyList())).thenReturn(List.of("private/webtoon/char/s1.png"));
+
+        purge(true).purge(USER);
+
+        ArgumentCaptor<List<String>> keys = ArgumentCaptor.captor();
+        verify(storage).delete(keys.capture());
+        assertThat(keys.getValue()).contains("private/webtoon/char/s1.png");
+        InOrder order = inOrder(rows);
+        order.verify(rows).deleteCastSheets(anyList());
+        order.verify(rows).deleteJobs(USER);
+    }
+
+    @Test
     @DisplayName("버킷이 없으면(로컬) 그림을 지우지 않는다")
     void localKeepsArt() {
         purge(false).purge(USER);
@@ -112,7 +127,10 @@ class WebtoonPurgeTest {
         verify(rows).deleteCharacters(USER);
         verify(rows).deleteBrowserLinks(USER);
         verify(rows).deleteNotifySettings(USER);
+        verify(rows).deleteInvites(USER);
+        verify(rows).deleteInviteCode(USER);
         verify(rows).deletePushSubscriptions(USER);
+        verify(rows).deleteAttendReminds(USER);
         // 지울 키가 없으면 S3 를 부르지 않는다.
         verify(storage, never()).delete(anyList());
     }

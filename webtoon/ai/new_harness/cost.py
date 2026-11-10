@@ -5,7 +5,8 @@
 그대로 읽어 쓴다 — 컷 쪽과 다른 값이 나오면 안 되기 때문이다.
 
 단가표에 없는 모델은 `story.charsheet_unit_cost` 의 장당 고정 어림값으로
-떨어진다. 어느 쪽으로 계산했는지는 `cost_basis`("tokens" / "flat")에 남는다 —
+떨어진다. 어느 쪽으로 계산했는지는 `cost_basis`("tokens" / "flat" / "billed")에 남는다
+(`billed` 는 OpenRouter 처럼 응답이 알려 준 실제 청구액이다) —
 `STYLE_FINDINGS.md` 를 쓸 때는 `cost_basis == "tokens"` 인 것만 써야
 어림값이 실측처럼 섞이지 않는다 (`CLAUDE.md` 참고).
 """
@@ -54,6 +55,8 @@ def rate_for(model: str) -> dict:
     table = _pricing().get("rates") or {}
     if not isinstance(table, dict) or not model:
         return {}
+    # OpenRouter 이름(openai/gpt-image-2)은 회사 이름을 떼면 같은 모델이다.
+    model = model.split("/", 1)[1] if "/" in model else model
     best, best_len = {}, -1
     for key, row in table.items():
         name = str(key).strip()
@@ -84,6 +87,19 @@ def token_fields(usage) -> dict:
     """
     if not isinstance(usage, dict):
         return {k: None for k in TOKEN_KEYS}
+
+    # OpenRouter 그림 API: prompt_tokens / completion_tokens / cost(USD)
+    if "prompt_tokens" in usage or "completion_tokens" in usage:
+        return {
+            "tokens_in": _num(usage, "prompt_tokens"),
+            "tokens_out": _num(usage, "completion_tokens"),
+            "tokens_thought": None,
+            "tokens_cached": None,
+            "tokens_total": _num(usage, "total_tokens"),
+            "tokens_in_text": None,
+            "tokens_in_image": None,
+            "tokens_out_image": _num(usage, "completion_tokens"),
+        }
 
     if "input_tokens" in usage or "output_tokens" in usage:
         details = usage.get("input_tokens_details") or {}
@@ -144,7 +160,12 @@ def call_cost(provider: str, model: str, quality: str,
 def cost_fields(provider: str, model: str, quality: str, usage) -> dict:
     """호출 하나의 토큰 + 비용 전부. `meta["cost"]` 로 그대로 들어간다."""
     tokens = token_fields(usage)
-    usd, basis = call_cost(provider, model, quality, tokens)
+    billed = usage.get("cost") if isinstance(usage, dict) else None
+    if isinstance(billed, (int, float)):
+        # 응답이 실제 청구액을 알려 주면(OpenRouter) 그 값이 정답이다.
+        usd, basis = float(billed), "billed"
+    else:
+        usd, basis = call_cost(provider, model, quality, tokens)
     krw = usd_to_krw()
     out = dict(tokens)
     out["cost_basis"] = basis

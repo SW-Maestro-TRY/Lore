@@ -4,7 +4,7 @@
 .wt .wt-queue-gauge { position: relative; height: 12px; border-radius: 999px; background: var(--line); overflow: hidden; }
 .wt .wt-queue-gauge i {
   position: absolute; inset: 0 auto 0 0; border-radius: inherit; transition: width 1s linear;
-  background: linear-gradient(90deg, var(--sea), #57b6c4);
+  background: var(--sea);
   background-size: 28px 100%;
 }
 /* 차오르는 끝이 살아 있게 — 빛이 오른쪽으로 흐른다 */

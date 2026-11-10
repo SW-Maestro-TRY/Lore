@@ -52,6 +52,17 @@ def load_dotenv(path: Path) -> None:
 # setdefault 라 먼저 읽힌 쪽이 이기고, 이미 있는 환경변수는 덮어쓰지 않는다.
 load_dotenv(HERE / ".env")
 
+# 서버별 Codex 프록시 전환. Java moderation 은 WEBTOON_API_KEY 로 공식 API 를
+# 계속 사용한다(무료 엔드포인트). 생성 파이썬에만 별도 프록시 키를 적용한다.
+CODEX_PROXY_ENABLED = os.environ.get("WEBTOON_CODEX_PROXY", "").lower() in ("1", "true", "yes", "on")
+if CODEX_PROXY_ENABLED:
+    proxy_key = os.environ.get("CODEX_PROXY_API_KEY", "").strip()
+    proxy_url = os.environ.get("CODEX_PROXY_BASE_URL", "").strip()
+    if not proxy_key or not proxy_url:
+        raise SystemExit("WEBTOON_CODEX_PROXY 에 CODEX_PROXY_API_KEY 와 CODEX_PROXY_BASE_URL 이 필요합니다")
+    os.environ["OPENAI_API_KEY"] = proxy_key
+    os.environ["OPENAI_BASE_URL"] = proxy_url
+
 # 운영 서버(EC2)는 Parameter Store 에서 키 하나(WEBTOON_API_KEY)만 받는다
 # (/opt/lore/load-secrets.sh → systemd EnvironmentFile → 자바 프로세스 →
 # 이 스크립트를 자식 프로세스로 부르며 환경을 그대로 물려준다).
@@ -75,11 +86,16 @@ IMAGE_PROVIDERS = tuple(story.IMAGE_PROVIDERS)      # gemini / openai
 # (STORY_PROVIDER · SHEET_IMAGE_MODEL …).
 TEXT_STAGES = ("STORY", "SCENE", "STORY_REVIEW", "DETAIL", "CUTSCRIPT", "CUTSCRIPT_FIX",
                "REVIEW", "FIX", "BOARD", "SHEET", "PAGE_REVIEW", "COVER_REVIEW", "CAST", "PERSONA",
-               "FULL_REVIEW", "CAST_SHEET")
+               "FULL_REVIEW", "CAST_SHEET", "NARRATION", "WORLD_MAKE")
 IMAGE_STAGES = ("SHEET_IMAGE", "PAGE_IMAGE", "CAST_SHEET_IMAGE")
 STAGES = TEXT_STAGES + IMAGE_STAGES
 
 DEFAULT_MAX_TOKENS = story.env_int("NH_MAX_TOKENS", 16000)
+# 단계별 답 길이 상한. 「내 내용」 장면 나누기는 긴 이야기에서 16,000 의 94%(14,994)까지 찼다(2026-10-25 운영
+# Logfire) — 조금만 길면 JSON 이 중간에 끊긴다. 상한은 쓴 만큼만 값이 나가므로 넉넉히 둔다.
+STAGE_MAX_TOKENS = {"SCENE": 32000}
+# 그래도 끊기면 상한을 두 배로 한 번만 다시 부른다. 이 값 위로는 올리지 않는다(gpt-5.1 최대 출력 128k 안).
+RETRY_MAX_TOKENS = 64000
 DEFAULT_TEMPERATURE = story.env_float("NH_TEMPERATURE", 0.9)
 
 
@@ -117,12 +133,67 @@ def _pick(stage: str, suffix: str, fallbacks: tuple) -> tuple[str, str]:
 #
 # 로컬에서 gemini 로 돌리고 싶으면 .env 에 NH_PROVIDER=gemini 를 적으면 된다 —
 # 설정이 있는 쪽이 언제나 이긴다.
+#
+# 같은 OpenAI 모델을 OpenRouter 를 거쳐 부르려면 NH_PROVIDER=openrouter 와
+# OPENROUTER_API_KEY 를 준다. 글·그림이 함께 넘어가고, 단계별 모델은 아래
+# STAGE_DEFAULT_MODELS 의 openrouter 칸(openai/ 를 붙인 같은 이름)을 쓴다.
 DEFAULT_PROVIDER = "openai"
+
+
+# **검수는 OpenRouter 의 google/gemini-3.5-flash 가 한다(2026-11-05).** 이야기 검수 · 장 검수 ·
+# 표지 검수 · 화 전체 검수 넷. 글을 짓는 쪽(OpenAI)과 다른 회사 모델이 읽어야 같은 버릇을 같이
+# 놓치지 않는다.
+#
+# 근거 — 완성작 13편의 한 장에 정답을 아는 결함(제자리 · 건너뜀 · 되돌아감, 화 전체는 같은 장 반복)을
+# 심고 같은 입력을 두 모델에 보였다(OpenRouter, 156회, haeun/검수모델-실험-2026-11-05).
+#   장 검수 결함 검출  gpt-4.1 22/37(59%)  →  gemini-3.5-flash 36/39(92%)
+#   결함 종류까지 맞힘  8/37(22%)  →  29/39(74%)
+#   화 전체 반복 지적   gpt-5.1 5/13(38%)  →  13/13(100%)
+# 대신 멀쩡한 장을 다시 그리라고 하는 일은 2/13 → 6/13 으로 늘었다. 다시 그리기는 장마다
+# 횟수 상한(MAX_PAGE_REDRAWS)이 있어 비용이 묶인다.
+#
+# **10/26 에 gemini(직접 API)로 정해 두었지만 운영에서는 한 번도 돌지 않았다.** 운영 · staging
+# 설정에 gemini 키가 없어서 아래 「키가 없으면 건너뛴다」가 조용히 OpenAI 로 돌렸다(11/05 운영
+# webtoon_usage 로 확인). 실험과 같은 길(OpenRouter)로 바꾼 것은 운영에 이미 OpenRouter 키가
+# 있고(장면 단계가 쓴다) 비교가 그 길로 되었기 때문이다.
+#
+# 순서: `<단계>_PROVIDER` > 이 표 > `NH_PROVIDER` · `PROVIDER` > DEFAULT_PROVIDER.
+# 이 표가 전체 설정(NH_PROVIDER)보다 앞이다 — dev 박스는 NH_PROVIDER=openai 를 적어 두고
+# 있어서(infra/dev/env.example) 뒤에 두면 검수가 영영 안 넘어간다.
+#
+# **키가 없으면 이 표를 건너뛴다.** OpenRouter 키가 없는 환경에서도 검수 단계가 키 없음으로
+# 만들기 전체를 죽이지 않고 NH_PROVIDER 로 돈다. 대신 조용히 넘어가지 않게 plan() 이 어디서
+# 왔는지 찍는다.
+#
+# **장면(SCENE)은 OpenRouter 의 google/gemini-3.8-flash 다(2026-10-27).** 같은 이야기 5개를 두 모델로 나눠
+# 보니 gemini 가 장면을 중심 사건 하나씩으로 묶고 마지막을 가장 큰 일이 터진 순간에서 멈췄다. gpt-5.1 은
+# 한 사건을 두세 장으로 쪼개고 이동만 하는 장을 따로 두었다(haeun/story-lab-2026-10-27/scene). 값은 1/4.
+# 비교는 전부 OpenRouter 로 했으므로 운영도 그 길 그대로다 — Gemini 직접 API 는 시험하지 않았다.
+# OpenRouter 키가 없으면 전처럼 NH_PROVIDER(운영은 openai) 의 gpt-5.1 로 돈다.
+STAGE_DEFAULT_PROVIDERS = {"STORY_REVIEW": "openrouter", "PAGE_REVIEW": "openrouter",
+                           "COVER_REVIEW": "openrouter", "FULL_REVIEW": "openrouter",
+                           "SCENE": "openrouter", "PAGE_IMAGE": "openai"}
+
+
+def _has_key(provider: str) -> bool:
+    return bool(env(story.PROVIDERS[provider]["key_var"]))
+
+
+def _stage_default_provider(stage: str) -> str:
+    """이 단계에 코드로 정해 둔 프로바이더. 키가 없으면 빈 값."""
+    name = STAGE_DEFAULT_PROVIDERS.get(stage.upper(), "")
+    return name if name and _has_key(name) else ""
 
 
 def provider_for(stage: str) -> str:
     """이 단계가 쓸 프로바이더. 모르는 이름이면 거기서 멈춘다."""
-    name, where = _pick(stage, "PROVIDER", ("NH_PROVIDER", "PROVIDER"))
+    if CODEX_PROXY_ENABLED:
+        return "openai"
+    name, where = _pick(stage, "PROVIDER", ())
+    if not name:
+        name = _stage_default_provider(stage)
+    if not name:
+        name, where = _pick(stage, "PROVIDER", ("NH_PROVIDER", "PROVIDER"))
     name = (name or DEFAULT_PROVIDER).lower()
     allowed = IMAGE_PROVIDERS if stage.upper() in IMAGE_STAGES else PROVIDERS
     if name not in allowed:
@@ -164,7 +235,7 @@ def image_default(provider: str) -> str:
 # 올라도 편당 차이는 작다. 8장짜리 화를 22장으로 읽은 적이 있어서 없는 쪽
 # 번호는 fullreview.parse 가 버린다.
 #
-# 표지 검수(COVER_REVIEW)는 칸·글상자를 세고 제목을 옮겨 적기만 하는 일이라
+# 표지 검수(COVER_REVIEW)는 칸·말풍선을 세고 제목을 옮겨 적기만 하는 일이라
 # 기본 모델(gpt-4.1) 그대로 둔다(2026-09-30 결정).
 #
 # **인물(CAST)도 gpt-5.1 이다(#532).** 이야기 후보의 인물이 라벨만 붙은 채
@@ -177,15 +248,33 @@ STAGE_DEFAULT_MODELS = {("STORY", "openai"): "gpt-5.1",
                         ("CAST", "openai"): "gpt-5.1",
                         ("PERSONA", "openai"): "gpt-5.1",
                         ("SCENE", "openai"): "gpt-5.1",
-                        ("FULL_REVIEW", "openai"): "gpt-5.1"}
+                        ("NARRATION", "openai"): "gpt-5.1",
+                        ("FULL_REVIEW", "openai"): "gpt-5.1",
+                        ("BRANCH", "openai"): "gpt-5.1"}          # 세계관 체험 갈림 정리 — 기본값(4.1)이면 이름이 어색했다(2026-11-04)
+# OpenRouter 로 부를 때도 같은 모델이다. 이름 앞에 회사 이름만 붙는다.
+STAGE_DEFAULT_MODELS.update({(stage, "openrouter"): f"openai/{name}"
+                             for (stage, _), name in list(STAGE_DEFAULT_MODELS.items())})
+# 장면만 예외 — 위 비교에 쓴 모델 그대로(STAGE_DEFAULT_PROVIDERS 의 SCENE 참고).
+STAGE_DEFAULT_MODELS[("SCENE", "openrouter")] = "google/gemini-3.8-flash"
+# 검수 넷도 예외 — 위 실험에 쓴 모델 그대로(STAGE_DEFAULT_PROVIDERS 의 검수 참고).
+for _review in ("STORY_REVIEW", "PAGE_REVIEW", "COVER_REVIEW", "FULL_REVIEW"):
+    STAGE_DEFAULT_MODELS[(_review, "openrouter")] = "google/gemini-3.5-flash"
+# 본편 장면 그림만 Flare로 그린다. 시트와 조연 시트는 기존 이미지 모델을 유지한다.
+STAGE_DEFAULT_MODELS[("PAGE_IMAGE", "openai")] = "gpt-image-2.5-flare"
 
 
 def model_for(stage: str, provider: str) -> str:
     """이 단계가 쓸 모델 이름."""
+    if CODEX_PROXY_ENABLED and stage.upper() not in IMAGE_STAGES:
+        return env("CODEX_PROXY_TEXT_MODEL", "gpt-6-sol")
     if stage.upper() in IMAGE_STAGES:
         model, _ = _pick(stage, "MODEL", ("NH_IMAGE_MODEL",))
-        return model or image_default(provider)
-    model, _ = _pick(stage, "MODEL", ("NH_MODEL",))
+        return model or STAGE_DEFAULT_MODELS.get((stage.upper(), provider)) or image_default(provider)
+    model, where = _pick(stage, "MODEL", ("NH_MODEL",))
+    # 전체 모델 설정(NH_MODEL)은 전체 프로바이더의 모델 이름이다. 검수처럼 코드가 다른
+    # 프로바이더로 돌린 단계에 그 이름을 넘기면 없는 모델이 된다.
+    if where == "NH_MODEL" and provider == _stage_default_provider(stage):
+        model = ""
     return (model or STAGE_DEFAULT_MODELS.get((stage.upper(), provider))
             or story.default_model_for(provider))
 
@@ -216,14 +305,27 @@ class Call:
         temp = DEFAULT_TEMPERATURE if temperature is None else temperature
         started = time.monotonic()
         at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+        limit = max_tokens or STAGE_MAX_TOKENS.get(self.stage) or DEFAULT_MAX_TOKENS
         text, usage, stop = self.backend.complete(
             self.model,
             prompt,
             temp if self.temp_ok else None,
-            max_tokens or DEFAULT_MAX_TOKENS,
+            limit,
             images=images or None,
         )
+        if stop == "max_tokens" and limit < RETRY_MAX_TOKENS:
+            # 끊긴 답은 JSON 이 깨져 그 걸음이 실패하거나 장면이 빠진다. 경고만 하고 쓰면 안 된다.
+            story.warn(f"[{self.stage}] 응답이 길이 제한({limit})에서 끊겨 상한을 올려 한 번 다시 부릅니다.")
+            first = usage
+            limit = min(limit * 2, RETRY_MAX_TOKENS)
+            text, usage, stop = self.backend.complete(
+                self.model, prompt, temp if self.temp_ok else None, limit, images=images or None)
+            usage = _add_usage(first, usage)
         cost = story.cost_of(self.model, usage)
+        if CODEX_PROXY_ENABLED:
+            cost = {"input": 0.0, "output": 0.0, "cache_read": 0.0,
+                    "cache_write": 0.0, "total": 0.0, "total_krw": 0,
+                    "cost_basis": "codex_subscription"}
         # 원화도 같이 박는다 — 그림 호출(cost.cost_fields)은 이미 넣고 있어서,
         # 글만 빠지면 한 run 의 비용을 더할 때 두 단위가 섞인다. 환율은 호출
         # 시점 값으로 **박아서** 남긴다(나중에 다시 계산하지 않는다).
@@ -248,9 +350,18 @@ class Call:
             "cost": cost,
         }
         if stop == "max_tokens":
-            story.warn(f"[{self.stage}] 응답이 길이 제한에서 끊겼습니다 "
-                       f"(NH_MAX_TOKENS={max_tokens or DEFAULT_MAX_TOKENS}).")
+            story.warn(f"[{self.stage}] 응답이 길이 제한에서 끊겼습니다 (상한 {limit}).")
         return text, meta
+
+
+def _add_usage(a: dict, b: dict) -> dict:
+    """두 번 부른 몫을 한 호출로 합친다 — 끊겨서 버린 첫 호출 값도 실제로 나간 돈이다."""
+    out = dict(b or {})
+    for k, v in (a or {}).items():
+        if isinstance(v, (int, float)) and isinstance(out.get(k, 0), (int, float)):
+            out[k] = (out.get(k) or 0) + v
+    out["retried_for_length"] = True
+    return out
 
 
 STAGE_LABEL = {
@@ -265,12 +376,13 @@ STAGE_LABEL = {
     "CUTSCRIPT_FIX": "컷 대본 픽스 (독자 검수·자기수정)",
     "BOARD": "콘티",
     "SHEET": "시트 사양",
+    "WORLD_MAKE": "세계관 만들기 — 세계·사건 셋·예시 주인공 둘 (세계관 체험)",
     "SHEET_IMAGE": "시트 그림",
     "CAST_SHEET": "조연 시트 사양 (글로 적힌 생김새만으로, 크레딧 1)",
     "CAST_SHEET_IMAGE": "조연 시트 그림",
     "PAGE_IMAGE": "페이지 그림",
     "PAGE_REVIEW": "그림 검수 (장마다)",
-    "COVER_REVIEW": "표지 검수 (칸 하나 · 글상자 없음 · 제목 그대로)",
+    "COVER_REVIEW": "표지 검수 (칸 하나 · 말풍선 없음 · 제목 그대로)",
     "FULL_REVIEW": "화 전체 검수 (다 그린 뒤 처음부터 끝까지)",
 }
 
@@ -280,7 +392,11 @@ def plan() -> list[dict]:
     out = []
     for stage in STAGES:
         provider = provider_for(stage)
-        _, pfrom = _pick(stage, "PROVIDER", ("NH_PROVIDER", "PROVIDER"))
+        _, pfrom = _pick(stage, "PROVIDER", ())
+        if not pfrom and _stage_default_provider(stage):
+            pfrom = "코드가 정한 단계 기본값 (llm.py STAGE_DEFAULT_PROVIDERS)"
+        if not pfrom:
+            _, pfrom = _pick(stage, "PROVIDER", ("NH_PROVIDER", "PROVIDER"))
         _, mfrom = _pick(stage, "MODEL",
                          ("NH_IMAGE_MODEL",) if stage in IMAGE_STAGES else ("NH_MODEL",))
         out.append({

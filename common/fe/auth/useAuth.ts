@@ -15,6 +15,7 @@
 
 import { useSyncExternalStore } from "react";
 import { ApiError } from "../api/client";
+import { track, setTelemetryActor } from "../analytics";
 import {
   getMe,
   login as loginApi,
@@ -55,6 +56,7 @@ const listeners = new Set<() => void>();
 
 function setState(next: AuthState): void {
   state = next;
+  setTelemetryActor(next.status === "authenticated" ? "authenticated" : next.status === "anonymous" ? "anonymous" : "unknown", next.user?.userId);
   listeners.forEach((notify) => notify());
 }
 
@@ -115,24 +117,43 @@ export function reloadMe(): Promise<void> {
 }
 
 /**
+ * 로그인·가입은 됐는데 **내 정보(/users/me)로 확인이 안 되는** 경우(합본 H16).
+ * 쿠키가 저장되지 않았거나(인앱 쿠키 차단·http) 서버가 잠깐 실패한 경우다. 예전엔 이걸 삼키고
+ * 성공으로 닫아, 헤더는 그대로 "로그인" 이고 여울 그림도 안 올라갔다.
+ */
+export class SessionCheckError extends Error {
+  readonly code = "me_failed";
+  constructor() {
+    super("로그인 상태를 확인하지 못했어요. 다시 시도해 주세요");
+    this.name = "SessionCheckError";
+  }
+}
+
+/** 방금 받은 쿠키로 정말 로그인됐는지 확인한다. 한 번 더 물어보고도 아니면 SessionCheckError. */
+async function confirmSession(): Promise<void> {
+  await load(true);
+  if (state.status === "authenticated") return;
+  await load(true);
+  if ((state as AuthState).status !== "authenticated") throw new SessionCheckError();
+}
+
+/**
  * 로그인. 성공하면 곧바로 내 정보까지 채워 넣는다 —
  * 쿠키만 받고 상태를 안 갱신하면 헤더가 여전히 "로그인" 을 그린다.
  * 실패는 ApiError 로 그대로 던진다. 문구를 고르는 건 화면 몫이다.
  */
 export async function signIn(input: LoginInput): Promise<void> {
   await loginApi(input);
-  await load(true);
+  await confirmSession();
 }
 
 /**
- * 가입. **로그인 상태가 되지 않는다** — 서버가 토큰을 주지 않기 때문이다.
- *
- * ★ 화면은 가입 뒤 로그인 화면으로 보낸다. 방금 정한 비밀번호를 한 번 더 치게 하는 셈이지만,
- *   그 자리에서 비밀번호가 맞는지 확인된다. 오타를 낸 채 가입한 사람이 다음 접속에서야
- *   못 들어오는 일을 막는다.
+ * 가입. **성공하면 바로 로그인 상태가 된다**(2026-10-08 #690 — 서버가 로그인과 같은 쿠키 2종을 준다).
+ * 로그인과 마찬가지로 내 정보까지 다시 받아 채운다 — 안 그러면 헤더가 여전히 "로그인" 을 그린다.
  */
 export async function signUp(input: SignUpInput): Promise<void> {
   await signUpApi(input);
+  await confirmSession();
 }
 
 /**
@@ -140,6 +161,10 @@ export async function signUp(input: SignUpInput): Promise<void> {
  * "로그아웃 눌렀는데 에러" 만큼 이상한 것이 없다(auth/api.ts 의 logout 주석과 같은 약속).
  */
 export async function signOut(): Promise<void> {
+  // 로그아웃도 센다 — 헤더 "로그아웃" 을 눌렀다가 1초 만에 다시 로그인하는 오조작이 운영에서
+  // 보였는데(10/7), 로그아웃 기록이 없어 재로그인만 찍혀 있었다. 이벤트 이름은 서버가
+  // 형식(소문자·밑줄)으로만 거르므로 따로 목록에 올릴 것이 없다.
+  track("auth_logout");
   await logoutApi();
   settled = true;
   setState({ status: "anonymous", user: null });

@@ -69,6 +69,15 @@ class JobFailureTest {
     }
 
     @Test
+    @DisplayName("그림 요청 글이 너무 길면 그 이유만 한 문장으로 — 앞 문장에 이어 붙이면 화면이 번역하지 못한다")
+    void 너무_긴_요청() {
+        String said = new JobFailure("PAGE_IMAGE", "error", List.of(), "400 string_above_max_length")
+                .humanMessage("3번째 장을 그리지 못했습니다");
+
+        assertThat(said).startsWith("그림 요청 글이 너무 길어").doesNotContain("3번째");
+    }
+
+    @Test
     @DisplayName("알아볼 수 없는 실패는 어디서 멈췄는지만 말한다")
     void 모르는_실패() {
         String said = new JobFailure("SHEET", "error", List.of(), "boom")
@@ -140,7 +149,7 @@ class JobFailureTest {
         assertThat(runner.isUnsafePage("run-2", 5)).isFalse();
         assertThat(runner.unsafePages("없는-작품")).isEmpty();
         assertThat(runner.partialMessage("run-2"))
-                .startsWith("4쪽, 6쪽 장면이 이미지 안전 기준(선정성)에 걸려 빈 장으로")
+                .startsWith("4쪽(선정성), 6쪽(안전 기준) 장면이 이미지 안전 기준에 걸려 빈 장으로")
                 .contains("무료");
     }
 }

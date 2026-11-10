@@ -90,6 +90,8 @@ export interface TamagotchiServer {
   care: (action: CareAction) => Promise<PetDetail | null>;
   sleep: () => Promise<PetDetail | null>;
   wake: () => Promise<PetDetail | null>;
+  /** 부르기(재회) — 여행 중인 아이를 데려온다. */
+  callBack: () => Promise<PetDetail | null>;
   setPersonality: (p: Personality, world?: string) => Promise<PetDetail | null>;
   setBackground: (bg: string) => Promise<PetDetail | null>;
   share: (motionKey: string, kind: ShareKind) => Promise<{ token: string; url: string } | null>;
@@ -443,6 +445,14 @@ export function useTamagotchi({ server = null }: TamagotchiOptions = {}) {
     if (next) setLocal((s) => ({ ...s, standLine: '' }));
   }, [can]);
 
+  /** 부르기(재회) — 여행 중일 때만. 돌봄 잠금(`can`)과 반대로 **여행 중에만** 열린다. */
+  const callBack = useCallback(async () => {
+    if (!petRef.current?.trip || srv.current?.acting) return;
+    track('zzal_trip_called_back', { skin: 'scrapbook' });
+    const next = await srv.current?.callBack();
+    if (next) say('돌아왔어요');
+  }, [say]);
+
   const choosePersonality = useCallback(async (p: Personality, world?: string) => {
     track('zzal_personality', { personality: p });
     const next = await srv.current?.setPersonality(p, world);
@@ -582,7 +592,7 @@ export function useTamagotchi({ server = null }: TamagotchiOptions = {}) {
     state,
     can,
     derived,
-    actions: { feed, snack, pet: petAct, clean, bath, medicine, sleep, choosePersonality, changeBackground, share },
+    actions: { feed, snack, pet: petAct, clean, bath, medicine, sleep, callBack, choosePersonality, changeBackground, share },
     sample: { feed: sampleFeed, pet: samplePet },
     form: { onPickImg, patchForm, randomName, submit },
     chat: { setDraft: setChatDraft, send: sendChat },

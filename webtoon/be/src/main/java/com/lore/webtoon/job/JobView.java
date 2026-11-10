@@ -34,7 +34,7 @@ public record JobView(
         /** 인물 단계가 세운 인물(#534) — 인물 단계에서 기다릴 때만. 아니면 {@code null}. */
         List<Map<String, Object>> cast,
         /** 그때 무엇을 기다리나 — {@code pick}(한 명 고르기) · {@code confirm}(이대로 진행). */
-        String castKind,
+        String cast_kind,
         /** 주인공 페르소나 — 인물 단계에서 기다릴 때만 확인용으로 보여 준다(#534). 아니면 {@code null}. */
         Map<String, Object> persona,
         /** 장면 초안(#548) — 장면 확인 자리에서만. {n, text, user_text}. 아니면 {@code null}. */
@@ -63,6 +63,11 @@ public record JobView(
         String stage_label,
         String say,
         boolean checkpoints,
+        /**
+         * 게스트가 이야기 고르기에서 앞으로 몇 초 안에 골라야 하나(#851). 화면이 앞에 떠 있는 동안은
+         * 묻을 때마다 다시 채워진다. 로그인한 사람이거나 고르는 자리가 아니면 {@code null} — 끝이 없다.
+         */
+        Integer pick_seconds_left,
         /**
          * 줄에서의 자리. <b>내 차례면 {@code null}</b> — 적을 것이 없다.
          *
@@ -103,7 +108,17 @@ public record JobView(
         /* 고쳐서 다시 그리기를 몇 번 더 할 수 있나 */
         int sheet_fix_left,
         /* 안전 검사에 걸려 빈 장으로 완성된 장 번호들(#626). 없으면 빈 목록 */
-        List<Integer> unsafe_pages) {
+        List<Integer> unsafe_pages,
+        /* 몇 화인가 — 다음 화로 만든 작업은 2 이상(continuation.json). 진행 화면이 「N화 만들기」로 쓴다 */
+        int episode,
+        /* 서버 재시작으로 끊겨 「이어서 만들기」를 할 수 있나, 그때 받는 크레딧(돌려준 값만큼, 아니면 0) */
+        boolean resumable,
+        int resume_cost,
+        /**
+         * 함께 주인공인 사람의 시트(#899) — {name, ready}. 그림은 조연 시트와 같은 자리
+         * ({@code GET /jobs/{id}/cast-sheet/{name}.png})에 있다. 주인공이 한 명이면 {@code null}.
+         */
+        List<Map<String, Object>> co_sheets) {
 
     /**
      * @param total      0 이면 아직 몇 장인지 모른다 — 그때는 통째로 안 보낸다.
@@ -158,7 +173,22 @@ public record JobView(
                       int sheetVersions, List<Map<String, Object>> castSheets, Map<String, Object> input,
                       String styleLabel,
                       String stageLabel, JobQueue.Spot spot,
-                      String notifyEmail, JobEta.Eta eta, int sheetFixLeft, List<Integer> unsafePages) {
+                      String notifyEmail, JobEta.Eta eta, int sheetFixLeft, List<Integer> unsafePages, int episode,
+                      Art diskArt, int resumeCost, Integer pickSecondsLeft) {
+        return of(job, now, directions, cast, castKind, persona, scenes, story, sheetReady, sheetVersions, castSheets,
+                input, styleLabel, stageLabel, spot, notifyEmail, eta, sheetFixLeft, unsafePages, episode, diskArt,
+                resumeCost, pickSecondsLeft, null);
+    }
+
+    static JobView of(WebtoonJob job, JobProgress.Snapshot now,
+                      List<Map<String, Object>> directions, List<Map<String, Object>> cast,
+                      String castKind, Map<String, Object> persona,
+                      List<Map<String, Object>> scenes, Map<String, Object> story, boolean sheetReady,
+                      int sheetVersions, List<Map<String, Object>> castSheets, Map<String, Object> input,
+                      String styleLabel,
+                      String stageLabel, JobQueue.Spot spot,
+                      String notifyEmail, JobEta.Eta eta, int sheetFixLeft, List<Integer> unsafePages, int episode,
+                      Art diskArt, int resumeCost, Integer pickSecondsLeft, List<Map<String, Object>> coSheets) {
         int stageIndex = job.getStage().order();
         if (eta == null) {
             eta = JobEta.of(job, now, 1, spot == null ? 0 : spot.seconds(), Instant.now());
@@ -194,17 +224,22 @@ public record JobView(
                 stageLabel,
                 now.say(),
                 job.isCheckpoints(),
+                pickSecondsLeft,
                 spot == null ? null
                         : new Queue(spot.ahead(), spot.minutes(), spot.line()),
                 new Notice(job.getUserId() != null, notifyEmail, job.getNotifiedAt() != null),
                 eta.minutes(),
                 pct,
-                now.total() > 0 ? new Art(now.done(), now.total(), now.retryPage(), drawn) : null,
+                now.total() > 0 ? new Art(now.done(), now.total(), now.retryPage(), drawn) : diskArt,
                 now.redraw().isEmpty() ? null : new Redraw(now.redraw(), now.redrawDone()),
                 now.log(),
                 eta.work(),
                 job.isSheetBlocked(),
                 sheetFixLeft,
-                unsafePages == null ? List.of() : unsafePages);
+                unsafePages == null ? List.of() : unsafePages,
+                episode,
+                job.isResumable(),
+                resumeCost,
+                coSheets);
     }
 }

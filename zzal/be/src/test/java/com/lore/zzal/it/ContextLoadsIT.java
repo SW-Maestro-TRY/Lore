@@ -91,7 +91,8 @@ class ContextLoadsIT extends ZzalItSupport {
         Method sweep = NightSweep.class.getMethod("sweep");
         Scheduled scheduled = sweep.getAnnotation(Scheduled.class);
         assertThat(scheduled).isNotNull();
-        assertThat(scheduled.cron()).isEqualTo("0 0 23 * * *");
+        // 2026-10-26 시간대 2단계 — 15분 눈금. 한국 펫은 KST 23:00 눈금에 지금까지처럼 한 번 돈다(NightSweep).
+        assertThat(scheduled.cron()).isEqualTo("0 */15 * * * *");
         assertThat(scheduled.zone()).isEqualTo("Asia/Seoul");
         assertThat(nightSweep).isNotNull();
 
@@ -116,7 +117,8 @@ class ContextLoadsIT extends ZzalItSupport {
     @DisplayName("★ 부화는 설정에 적힌 그 버전으로 뜬다 — 폴백이 없어 조용히 딴 버전으로 내려가지 않는다")
     void hatchPipelineIsV2() {
         assertThat(pipelineRegistry.currentVersion(GenKind.HATCH)).isEqualTo("v1");
-        assertThat(pipelineRegistry.steps(GenKind.HATCH, "v1")).hasSize(5);
+        assertThat(pipelineRegistry.steps(GenKind.HATCH, "v1")).hasSize(4);          // #696 — 1층에서 끝
+        assertThat(pipelineRegistry.steps(GenKind.LAYER2, "v1")).hasSize(2);         // 2층은 뒤에서
     }
 
     @Test
@@ -125,6 +127,12 @@ class ContextLoadsIT extends ZzalItSupport {
         assertThat(context.getBeanNamesForType(DevClockController.class))
                 .as("app.zzal.dev-tools 가 false 면 이 컨트롤러는 빈으로 안 올라온다(주소 자체가 404)")
                 .isNotEmpty();
+        // 리모컨(상태·이벤트·굽기·ping)도 같은 스위치 뒤에 함께 뜬다. 꺼졌을 때 없는 것은 DevToolsOffIT 가 고정한다.
+        for (Class<?> type : List.of(com.lore.zzal.dev.DevStateController.class, com.lore.zzal.dev.DevBakeController.class,
+                com.lore.zzal.dev.DevPingController.class, com.lore.zzal.dev.DevService.class,
+                com.lore.zzal.dev.DevBakeService.class)) {
+            assertThat(context.getBeanNamesForType(type)).as("%s 가 안 떴다", type.getSimpleName()).isNotEmpty();
+        }
     }
 
     @Test

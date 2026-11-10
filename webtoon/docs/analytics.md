@@ -23,6 +23,24 @@
 - 모아 두었다가 5초마다 또는 20줄이 차면 보냅니다. 화면이 숨겨지거나 페이지를 떠날 때는
   남은 것을 `sendBeacon` 으로 보냅니다.
 
+## 서버 쪽 기록 세 가지 — 무엇을 어디서 보나
+
+화면 행동(`webtoon_event`)만으로는 「무엇을 불렀고 왜 실패했나」를 못 봅니다. 서버가 따로 남기는 것:
+
+| 표 | 무엇 | 한 줄 단위 |
+|---|---|---|
+| `webtoon_api_log` (2026-11-03) | 웹툰 API 요청 전부 — 방식·주소·접은 모양(`shape`)·응답 코드·걸린 ms·누가(`user_id`·`browser_uid`)·요청 JSON(가린 뒤 8,000자)·오류 응답과 GET 이 아닌 요청의 응답 앞부분·예외 첫 줄. 그리고 뒤에서 도는 작업(`kind=task`, 지금은 세계관 AI 채우기 `WORLD_MAKE`) — 걸린 ms·성공·실패 이유·비용 기록 번호(`ref`) | 요청 한 번 · 작업 한 번 |
+| `webtoon_usage` | 모델 호출마다 단계·모델·입력/출력/캐시 토큰·달러·원·실패 이유 | 모델 호출 한 번 |
+| `webtoon_job` | 만들기(세계관 체험 포함) 한 편 — 입력값(`input_json`)·시작/끝·실패 단계·코드·자세한 이유·환급 | 작업 한 번 |
+
+- `/events` 는 `webtoon_api_log` 에 안 남깁니다(그 자체가 기록).
+- 요청 본문의 비밀번호·토큰·카드·전화·이메일 칸은 `***`, 1,000자 넘는 글(사진 data 주소 등)은 앞 300자만.
+  파일 올리기는 크기만. 응답은 흘려 보내며 앞 2,000바이트만 베낍니다(내려받기·진행 상황을 붙잡지 않음).
+- 쓰기는 뒤 스레드가 합니다. 큐(5,000줄)가 차면 버리고 로그에 수를 남깁니다.
+- 보관 90일(`ApiLogRetention`, 05:50). 탈퇴 정리(`WebtoonPurge`)가 그 사람 줄을 지웁니다.
+- 세계관 AI 채우기의 토큰·원가: `select * from webtoon_usage where run_id = (webtoon_api_log.ref)`.
+- 광고별로 이어 보기: `webtoon_event` 의 첫 `source`(utm 한 줄)와 같은 `browser_uid` 를 `webtoon_api_log` 에서 찾습니다.
+
 ## 사람 구분
 
 | 칸 | 무엇 |
@@ -31,6 +49,82 @@
 | `user_id` | 로그인했으면 계정 번호 |
 
 같은 사람을 로그인 전후로 잇고 싶으면 `uid` 로 묶습니다(로그인한 뒤의 줄에는 둘 다 있습니다).
+
+### 내부 접속 따로 표시 (관리자 · 멘토 · 지인)
+
+접속자를 셀 때 우리 쪽 접속이 섞이면 실사용자 숫자가 부풀려집니다. 다섯 가지로 나눠 봅니다.
+
+| 구분 | 기준 |
+|---|---|
+| 관리자 | `users.role = 'ADMIN'` 인 계정이 로그인한 적 있는 브라우저(`uid`) |
+| 멘토 | 아래 멘토 목록의 `user_id` 가 로그인한 적 있는 브라우저(`uid`) |
+| 지인 | 아래 지인 목록의 `user_id` 가 로그인한 적 있는 브라우저(`uid`) |
+| 내부 브라우저 | 로그인 없이 쓰는 우리 쪽 브라우저를 아래 목록에 `uid` 로 직접 적은 것 |
+| 외부 | 위 셋이 아닌 나머지 |
+
+- **브라우저(`uid`)로 묶습니다.** 로그인하기 전 줄에는 `user_id` 가 없어서, 계정만 보면 같은
+  브라우저의 로그인 전 방문이 외부로 잡힙니다.
+- 한 브라우저가 여럿에 해당하면 관리자 → 멘토 → 지인 순으로 앞의 것으로 셉니다.
+- 멘토는 SW마에스트로 멘토님 계정입니다. 피드백을 주려고 써 보신 것이라 실사용자에서 빼되, 지인과는 따로 셉니다(멘토 피드백과 지인 반응을 섞지 않으려고).
+- 로그인 없이 랜딩만 보는 우리 쪽 브라우저는 계정으로 가를 수 없어서 `uid` 를 직접 적습니다. `uid` 는 브라우저 저장소(`lore_uid`)에 있는 값이라, 저장소를 지웠거나 다른 기기·브라우저로 보면 새 값이 되므로 알게 될 때마다 더합니다.
+- 멘토 · 지인 명단은 운영 DB 표 `webtoon_internal_user`(`user_id`, `kind` = `MENTOR` · `FRIEND`)에
+  있습니다(#778). 쿼리에 번호를 직접 적지 않고 이 표와 잇습니다. 이름 · 이메일은 표에 없고
+  `users` 와 이어서 봅니다. 아래 목록은 표에 넣은 근거를 남겨 두는 것입니다.
+- 알게 될 때마다 운영에 한 줄 넣고 아래 목록에도 근거를 더합니다. 이메일은 저장소에 적지
+  않습니다.
+
+  ```sh
+  webtoon/tools/examples/db-sql.sh prod "insert into webtoon_internal_user (user_id, kind) values (<번호>, 'MENTOR') on conflict do nothing" --write
+  ```
+
+| 지인 | `user_id` | 근거 |
+|---|---|---|
+| 펭귄 만든이 | 80 | 2026-10-08 13:28 에 펭귄 이야기 후보를 만든 계정. 지인용 링크(`friends/friend/sprint-0928`)로 들어옴 |
+| 향이 만든이 | 81 | 2026-10-08 13:17 에 향이 캐릭터를 만든 계정. 지인용 링크(`friends/friend/sprint-0928`)로 들어옴 |
+
+| 멘토 | `user_id` | 근거 |
+|---|---|---|
+| 멘토님 | 135 | 2026-10-10 22:21 춘식이로 웹툰(작업 31 「조회수는 내가 먹는다」)을 만들고, 그 사용 피드백을 따로 남겨 주심 |
+| 멘토님 | 163 | 2026-10-24 가입. 「슈퍼 세컨드브레인」을 만든 계정 |
+
+| 내부 브라우저 | `uid` | 근거 |
+|---|---|---|
+| 하은 폰(추정) | `umt9v2vvibb0yfz69` | 모바일, 로그인 없이 랜딩만 39줄(10/5 16:29 ~ 10/9 19:59). 하은 님이 본인 것 같다고 함 |
+
+```sql
+-- 날짜만 바꿔 쓴다. 멘토·지인은 webtoon_internal_user 에서 읽고, 내부 브라우저를 더하면 uid 목록에 값을 넣는다.
+with internal as (
+  select e.uid, bool_or(u.role = 'ADMIN') as admin,
+         bool_or(iu.kind = 'MENTOR') as mentor, bool_or(iu.kind = 'FRIEND') as friend
+  from webtoon_event e join users u on u.id = e.user_id
+  left join webtoon_internal_user iu on iu.user_id = u.id
+  where u.role = 'ADMIN' or iu.user_id is not null
+  group by e.uid
+)
+select case when i.admin then '관리자' when i.mentor then '멘토' when i.friend then '지인'
+            when e.uid in ('umt9v2vvibb0yfz69') then '내부 브라우저' else '외부' end as 구분,
+       count(distinct e.uid) as 브라우저
+from webtoon_event e left join internal i on i.uid = e.uid
+where e.name = 'session_start' and e.occurred_at >= timestamptz '2026-10-09 00:00+09'
+group by 1 order by 1;
+```
+
+로그인 세션(`user_refresh_token`)으로 사람을 셀 때도 같은 기준으로 `users.role` 과
+`webtoon_internal_user` 의 `user_id` 를 빼서 봅니다.
+
+다른 쿼리에서 셀 사람을 고를 때는 아래 조건 하나를 `where` 에 붙입니다(`e` = `webtoon_event`).
+로그인 전 줄까지 가르려고 `user_id` 가 아니라 브라우저(`uid`)로 봅니다.
+
+| 보기 | 붙이는 조건 |
+|---|---|
+| 전체 | 없음 |
+| 멘토 · 지인 제외 | `and not exists (select 1 from webtoon_event x join webtoon_internal_user i on i.user_id = x.user_id where x.uid = e.uid or x.user_id = e.user_id)` |
+| 멘토 · 지인만 | `and exists (select 1 from webtoon_event x join webtoon_internal_user i on i.user_id = x.user_id where x.uid = e.uid or x.user_id = e.user_id)` |
+
+`not in` 으로 쓰지 않습니다. `uid` 는 빈 값일 수 있어서, 목록에 빈 값이 하나라도 섞이면 결과가
+0 줄이 됩니다.
+
+아래 「자주 보는 숫자」의 쿼리는 전체 기준입니다. 멘토 · 지인을 빼려면 이 조건을 붙입니다.
 
 ## 무엇을 안 남기나
 
@@ -150,7 +244,7 @@
 | 저장 | 없음 | 완성본은 만들면 자동으로 남아서 「저장」 동작이 따로 없습니다. 가장 가까운 것은 찜(`like_toggle`)과 편집실의 이미지로 뽑기(`bake`) |
 | 다운로드 | `download_click`(`webtoon/fe/screens/result/Result.tsx:295,333`) | 있음 — 누른 것까지만 압니다 |
 | 공유 | `share_click`(`webtoon/fe/screens/result/ShareMenu.tsx:44,50`) · `card_share` | 있음 — 누른 것까지만 압니다 |
-| 크레딧 충전 | `charge_open`(`webtoon/fe/screens/mypage/MyPage.tsx:228`) | 일부 — 충전 창을 연 것만. 실제 충전은 결제가 없어 일어나지 않습니다 |
+| 크레딧 충전 | `charge_open` · `charge_submit` | 창을 연 사람과 「결제하기」를 누른 사람·횟수. 실제 결제 완료는 서버 주문 기록(`common/be/.../payment/`)으로 센다 |
 | 결제 | 없음 | PG 전이라 없습니다(#155) |
 
 ## 유입 경로 (UTM) — 광고·홍보 링크 규칙
@@ -181,11 +275,12 @@
 
 | 이벤트 | 언제 | 주요 값 |
 |---|---|---|
-| `session_start` | 한 탭에서 웹툰 화면을 처음 열 때 (`WebtoonPage.tsx`) | `kind`: new · returning(이 브라우저가 전에 왔었나), `target`(들어온 화면), `logged_in` |
-| `page_view` | 화면이 바뀔 때마다 | `view` 칸에 화면 이름, `step`(만들기 화면만), `run`, `logged_in` |
-| `page_leave` | 화면을 떠날 때 (다른 화면으로 가거나 페이지를 닫을 때) | `target`(떠난 화면), `ms`(머문 시간, 탭이 뒤로 가 있던 시간 포함) |
+| `lp_view` | 광고 전용 랜딩(`/lp/<소재>`)을 열었을 때. 정적 페이지가 직접 보낸다 | `target`: 소재 이름. 행의 `source` 에 광고 주소의 utm 이 담긴다 |
+| `session_start` | 한 탭에서 웹툰 화면을 처음 열 때 (`WebtoonPage.tsx`) | `kind`: new · returning(이 브라우저가 전에 왔었나), `target`(들어온 화면), `logged_in`, `vw`·`vh`(화면 폭·높이 px), `touch`(터치 기기인가) |
+| `page_view` | 화면이 바뀔 때마다 (만들기는 걸음마다) | `view` 칸에 화면 이름, `step`(만들기 화면만), `run`, `logged_in`, `how`·`via`(어떻게 왔나 — 아래 표) |
+| `page_leave` | 화면을 떠날 때 (다른 화면으로 가거나 페이지를 닫을 때) | `target`(떠난 화면), `ms`(머문 시간, 탭이 뒤로 가 있던 시간 포함), `depth_pct`(그 화면을 어디까지 내려 봤나 %), `how`·`via`(어떻게 갔나) |
 | `auth_done` | 이 방문 중에 로그인 안 한 상태에서 로그인 상태가 됨 | `target`(그때 보던 화면) |
-| `login_prompt` | 로그인이 필요한 문턱을 봄 | `where`: editor · character_limit |
+| `login_prompt` | 로그인이 필요한 문턱을 봄 | `where`: editor · character_limit · world_publish |
 | `landing_cta` | 첫 화면의 시작 단추 | `where`: hero · bottom · need_create · need_try · works_all |
 | `create_blocked` | 마지막 걸음에서 막힘이 보일 때 | `reason`: blocked · free_used, `logged_in`, `free_left` |
 | `create_start` | 「웹툰 만들기」를 누름 | `quality`, `style`, `mode`, `count`(사진 수), `character`, `has_desc`, `has_note`, `preset`(장르를 목록에서 골랐나), `cost`, `free_left`, `logged_in` |
@@ -200,7 +295,12 @@
 | `job_cancel` | 만들기 중단 | `status`, `count`(그린 장), `page`(전체 장) |
 | `remake_after_fail` | 실패 화면에서 다시 만들기 | `job` |
 | **`next_episode_click`** | 다음화 단추 (아직 준비 중 창이 뜸) | `where`: mine_button(PC 내 작품) · mine_mobile(폰 내 작품) · mine_tile(다른 편 줄의 EP.n 만들기) · other_foot(남의 작품 「다음화 보기」), `mine`, `run`, `ep`, `logged_in` |
+| **`remix_cta_click`** | 남의 작품 완성본에서 만들기로 넘어가는 단추(#669, #750) | `where`: end_card(마지막 장 아래 바다색 영역) · link_bar(UTM 을 달고 바로 들어온 사람에게만 뜨는 제목 아래 줄) · next_note(「다음화 보기」 준비 중 창), `source`(보던 작품 run), `logged_in`, `free_left`(게스트 남은 무료 편수) |
+| `quick_character_saved` | 빠른 시작(광고 랜딩 → `quick=1`)에서 이름·설명만 적고 「다음」을 눌러 캐릭터가 저장됨(2026-10-27). 그림은 첫 작품의 시트로 채워진다 | `character`, `logged_in` |
 | `read_end` | 완성본을 끝까지 내림 (작품당 한 번) | `run`, `mine`, `ep`, `page` |
+| `play_leave` | 세계관 체험 안의 한 칸(worlds · world · event · char · making · done · stories)을 떠남 — 그 칸에 머문 시간. 다음 칸으로 옮기면 how=move, 창을 닫으면 close | `where`, `world`, `event`, `ms`, `how` |
+| `app_banner_view` · `app_banner_click` · `app_install_dialog_view` · `app_waitlist_join` · `app_install_guide` · `app_install_prompt` | 둘러보기 맨 위 앱 설치 띠(#981) — 띠가 처음 보임(한 화면에 한 번) · 띠를 누름(`where`: banner 는 띠 아무 곳, button 은 Android·iPhone 단추) · 출시 알림 창이 열림 · 이메일 신청 · 창 안 기기 탭 바꿈 · 안드로이드 「바로 추가하기」 | `where`, `device`(ios · android), `logged_in` |
+| `signup_offer_view` · `signup_offer_click` · `signup_offer_dismiss` | 오늘 무료 몫을 다 쓴 비회원이 가입 안내를 봄 · 가입/로그인을 누름 · 닫음. 완독 때는 작품당 한 번, 만들기 단추를 누르면 매번 | `where`: result_read_end · reading_end · end_card · link_bar 등 단추 자리, `run` |
 | `share_click` | 완성본 공유 | `target`: native · menu · kakao · x · line · postype · copy |
 | `download_click` · `download_per_page_open` | 내려받기 | `kind`: episode · page, `page` |
 | `editor_open` · `sibling_open` | 편집실 · 같은 캐릭터의 다른 편 | `run` |
@@ -215,10 +315,73 @@
 | `swap_survey_view` · `swap_survey` | 종이 바뀐 카드(#331)의 설문 팝업이 뜸 · 답함 (다 그려지고 5초 뒤, 카드마다 한 번) | `character`, `result`: confused(당황했어요) · fine(괜찮았어요) |
 | `limit_view` | 하루 몫이 다 됨 | `kind`: character |
 | `regen_start` · `regen_result` · `regen_revert` · `bake` | 편집실 다시 그리기 · 결과 · 판 되돌리기 · 이미지로 뽑기 | `cut`, `count`(태그 수), `has_note`, `status`, `n`(판) |
-| `charge_open` | 마이페이지에서 충전 창을 엶 | `where` |
+| `charge_open` | 충전 창을 엶 | `where`: mypage · credit_short(크레딧 부족 안내) · series_fork(다음 화 두 갈래) |
+| `series_fork_view` | 다음 화 화면에서 크레딧이 모자라 두 갈래(충전 · 출석)가 보임(2026-11-03) | `run`, `ep`, `cost`, `balance`, `n`(출석만으로 며칠 뒤 모이나, 0 이면 오늘 · 모르면 -1) |
+| `series_fork_pick` | 두 갈래 중 하나를 누름 — 클릭률의 분자 | `pick`: charge · attend, `run`, `ep`, `n` |
+| `series_fork_event` | 알림이 걸린 뒤 다음 화 화면의 「출석 이벤트 · D일 뒤 N화」를 눌러 이벤트 페이지로 감 | `run`, `ep`, `n` |
+| `series_remind_on` · `series_remind_off` | 출석을 고르고 알림을 걸었음 · 껐음(AttendRemindService). 이 기기 푸시 권한 창의 답은 따로 `notify_ask_push`(`where`: series_fork, `result`) | `run`, `ep`, `how`: ask(권한을 물었음) · known(이미 정해져 있었음) |
+| `charge_submit` | 충전 창의 「N원 결제하기」를 누름. 결제가 아직 안 열렸어도 남는다 — 관리자 개요의 「결제하기를 누른 사람」 | `where`, `pick`(상품 코드), `cost`(원), `count`(크레딧), `ok`(그때 결제가 열려 있었나) |
 | `feedback_view` · `feedback_submit` · `feedback_skip` | 설문이 뜸 · 보냄 · 건너뜀 (#471, [validation.md](validation.md)). 답 자체는 `webtoon_feedback` 표에 있다 | `where`: result · mypage, `run`, `count`(문항 수), `ok`(보상을 받았나) |
 | `feedback_open` | 마이페이지 「피드백 보내기」를 엶 | `where` |
 | `feedback_prompt_view` · `feedback_prompt_click` | 다시 온 사람 안내가 뜸 · 「설문하러 가기」를 누름 | `where`(그때 보던 화면) |
+| `play_view` | 세계관 체험(`view=play`) 안에서 칸이 바뀔 때마다. 주소의 world · ep · stage 만 바뀌어 `page_view` 가 안 남기 때문에 따로 둔다(2026-11-04) | `where`: worlds(세계 목록) · world(사건 목록) · event(사건 보기) · char(캐릭터 고르기) · making · done(만화) · stories · load_failed, `world`, `event`(사건 id), `run`, `job`, `count`(세계 수), `logged_in` |
+| `play_char_mine` · `play_char_new` | 캐릭터 고르기에서 「+ 내 캐릭터」를 누름 · 「새 캐릭터 만들기」로 감 | `world`, `event`, `count`(내 캐릭터 수), `where`: list · tiles, `logged_in` |
+| `play_start` · `play_started` · `play_failed` | 「○○ 넣기」를 누름 · 서버가 받음 · 못 받음. 체험 한 판의 실제 결과는 `webtoon_job` 이 정본 | `world`, `event`, `kind`: example(세계가 정한 예시) · example_person(사건 자료의 예시 주인공) · builtin · mine, `character`(id 가 기호일 때만), `job`, `status`(HTTP), `reason`: credit_short · other, `logged_in` |
+| `play_job_status` · `play_cancel` | 만드는 화면이 끝(done · error)을 봄 · 만들기 중단 | `world`, `event`, `job`, `run`, `status`(중단은 그때 단계 story · art · review) |
+| `install_invite_shown` | 일반 웹툰·세계관 체험 생성 중 설치 안내가 5초 뒤 실제로 뜸. 한 탭 세션에 한 번 | `where`: progress · play, `job` |
+| `install_invite_click` | 안내의 주요 단추를 누름 | `where`, `job`, `kind`: prompt(브라우저 설치 창) · guide(수동 안내) |
+| `install_guide_view` · `install_invite_dismissed` | 수동 추가 방법을 봄 · 안내를 닫음 | `where`, `job`, `kind`: ios · mobile · desktop(방법) / invite · guide(닫은 위치) |
+| `install_prompt_choice` | 브라우저 설치 창에서 선택. 수락은 설치 완료를 뜻하지 않음 | `where`, `job`, `result`: accepted · dismissed |
+| `app_installed` | 브라우저의 `appinstalled` 이벤트가 발생함. 해당 이벤트를 지원하는 브라우저의 설치 확인 | `where`: webtoon, `kind`: browser |
+| `app_open_standalone` | 설치형 창에서 웹툰을 엶. 탭 세션당 한 번. iOS 등에서 설치 사용의 간접 신호 | `where`: webtoon |
+| `play_next` | 만화 아래에서 다음으로 감 | `where`: next_event · same_world · other_world · other_run, `world`, `event`, `run` |
+| `world_new_step` | 세계관 만들기 걸음을 엶(처음 들어올 때 포함) | `step`, `count`(전체 걸음 수 — PC 2 · 폰 3), `mode`: new · edit |
+| `world_part_add` | 세계에 표지 · 등장인물 · 사건을 새로 넣음 | `kind`: cover · cast · event, `count`(넣은 뒤 수) |
+| `world_ai_fill` · `world_book_import` | 「AI로 채우기」(지금은 닫혀 있어 `result=closed`) · 설정집 가져오기 | `result`: closed · start · done · error, `status`, `count`(설정집 수) |
+| `world_publish` · `world_published` · `world_publish_failed` | 「세계관 올리기」를 누름 · 올라감 · 못 올림 | `mode`, `count`(사건 수), `n`(등장인물 수), `has_photo`(표지), `result`: public · private, `logged_in`, `world`, `kind`: server · local(서버 길이 없어 이 브라우저에만), `status`, `reason`: need_login · other |
+| `world_login_click` | 올리기가 로그인으로 막힌 뒤 뜬 「로그인」 단추를 누름. 막힌 순간엔 `login_prompt`(`where`: world_publish)도 남는다 | `where`: world_publish |
+
+### 홈 화면 추가 안내 집계
+
+`app_installed`는 브라우저가 설치 완료를 알려 준 건수만 셉니다. iOS의 수동 추가 완료는
+브라우저가 알려 주지 않아 정확히 셀 수 없고, `app_open_standalone`은 설치형 창에서
+웹툰을 실제로 연 브라우저 수로 따로 봅니다. `install_invite_click`이나
+`install_prompt_choice(result=accepted)`를 설치 완료로 합산하지 않습니다.
+
+```sql
+select name, count(*) as events, count(distinct uid) as browsers
+from webtoon_event
+where name in ('install_invite_shown', 'install_invite_click',
+  'install_prompt_choice', 'app_installed', 'app_open_standalone')
+  and occurred_at >= now() - interval '7 days'
+group by name order by name;
+```
+
+### 자동 기록 (`lib/track.ts` 「자동 기록」)
+
+화면마다 따로 달지 않아도 웹툰 화면에 있는 동안은 아래가 전부 남습니다. 「1걸음에서 왜
+빠지나」를 물었을 때, 고르고 1초 만에 나간 사람이 무엇을 눌렀는지(「이전」 단추인지 브라우저
+뒤로 가기인지) 기록에 없어서 더했습니다(#733).
+
+| 이벤트 | 언제 | 주요 값 |
+|---|---|---|
+| `ui_click` | 단추·링크·카드·체크 칸을 누름. **비활성 단추를 누른 것도**(`disabled: true`) | `target`(누른 것의 이름), `kind`(button · a · card · input_checkbox …), `where`(어느 칸), `to`(링크면 갈 화면, 바깥이면 external), `step`, `n`(같은 줄 카드 중 몇 번째), `ok`(체크 칸이면 켰나) |
+| `field_edit` | 입력 칸에서 나감 · 고르기 칸을 바꿈 | `field`(칸 이름), `where`, `len`(글자 수), `edited`(들어올 때와 글자 수가 달라졌나), `step`. **내용은 안 남긴다** |
+| `file_pick` | 파일을 고름 | `field`, `count`(몇 개), `step` |
+| `ui_error` | 화면에 오류·안내 문구가 뜸 (`.err` · 토스트 · `role=alert` 등) | `error`(문구의 영문 기호), `where`, `step` |
+| `js_error` | 잡히지 않은 자바스크립트 오류 | `error`, `where`(파일:줄), `kind`: error · rejection |
+| `api_error` · `api_slow` | API 가 실패함 · 5초 넘게 걸림 | `where`(주소 모양, 번호 자리는 `id` 로 접음 — 예: `webtoon.v1.runs.id.bake`), `status`(0 이면 연결 실패), `ms`, `kind`(get · post …) |
+| `tab_hidden` · `tab_back` | 탭을 숨김 · 돌아옴 | `ms`(그 전까지 보던 시간 · 떠나 있던 시간) |
+
+`how` 값 — `load`(처음 열거나 새로고침) · `click`(무언가를 눌러서, `via` 에 그 이름) ·
+`history`(브라우저 뒤로·앞으로, 폰의 뒤로 단추·밀기 포함) · `auto`(누른 것 없이 코드가 옮김) ·
+`close`(창을 닫거나 새로고침해서 떠남, `page_leave` 만).
+
+**누른 것의 이름(`target` · `via`)은 사람이 쓴 글이 아닙니다.** `data-track` 속성 → `id` →
+사전에 **정확히** 있는 화면 문구의 영문(`knownEnglishOf`) → 칸 모양(class) 순서로 정합니다.
+카드에 적힌 캐릭터 이름처럼 사전에 없는 글은 이름으로 안 쓰고 `ccard` 같은 칸 모양만 남깁니다.
+오류 문구도 사전에 있거나 영문으로만 된 것(브라우저 오류)만 기호로 남기고, 나머지는
+`unlisted` 입니다. 같은 오류는 한 번 열 때 다섯 번까지만 셉니다.
 
 ### 알고 있는 한계
 
@@ -457,3 +620,15 @@ select count(distinct uid) filter (where name = 'page_view' and view = 'sharedCa
 from webtoon_event
 where occurred_at > now() - interval '30 days';
 ```
+
+## 외부 도구 거울 (#966)
+
+웹툰 `track()` 은 우리 표(`webtoon_event`)에 남기면서 같은 이름 · 같은 값을 외부 도구에도 보낸다(`webtoon/fe/lib/mirror.ts`).
+우리 표가 기준이고 외부 도구는 대조용이다.
+
+- GA4 `G-YTH2YN6019` — 루트 레이아웃이 gtag 를 켜는 운영 호스트에서만. 공용 `common/fe/analytics.ts` 거울과 같은 규칙
+- 앰플리튜드 — 빌드 환경변수 `NEXT_PUBLIC_AMPLITUDE_API_KEY` 가 있을 때만. 키를 넣기 전에 개인정보처리방침(제7조 · 제13조)을 먼저 게시한다
+- `navigator.webdriver` 가 참인 자동 브라우저는 어느 쪽에도 안 보낸다
+
+우리 표에는 광고 검토용 자동 접속도 「들어온 사람」으로 남는다(2026-11-04: 광고 게시 직후 광고마다 4~8건, 입력 · 고르기 기록 0).
+관리자 「유입 출처」 표의 「행동한 사람」 칸이 그것을 가른다(`AdminOverview.PASSIVE`).

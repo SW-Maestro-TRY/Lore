@@ -23,7 +23,6 @@ import {
   trackDraftAbandoned,
   trackFeedbackOpened,
   trackResultAction,
-  trackResultViewed,
   trackSubmitBlocked,
   type CardFrom,
 } from "../lib/track";
@@ -47,6 +46,7 @@ import CreditCoin from "./CreditCoin";
 import CreditLedgerView from "./CreditLedgerView";
 import SharePanel from "./SharePanel";
 import FeedbackPanel from "./FeedbackPanel";
+import { useResultViewed } from "./useResultViewed";
 
 const NEW_DRAFT_TOAST = "맡긴 가설은 내 가설에 두고 새 가설을 시작했어요.";
 
@@ -95,6 +95,7 @@ export default function PieceMaker() {
   /** 맡긴 초안이면 그 가설을 되묻는다. 판정이 아직이면 이따금 다시 묻는다. */
   const { state: watched, reload: reloadHypothesis } = useHypothesis(frozen ? (draft.hypothesisId ?? null) : null, requests);
   const hypothesis = watched.status === "ready" ? watched.hypothesis : null;
+  const judgementFailed = hypothesis?.judgementStatus === "FAILED";
 
   // 현재 계정에서 새로 조회한 결과로만 미확정 접수본의 소유자를 확인한다.
   useEffect(() => {
@@ -232,12 +233,10 @@ export default function PieceMaker() {
       ? { judgement: hypothesis.judgement, presentation: hypothesis.presentation }
       : null;
 
-  // 판정 결과가 화면에 나온 때를 남긴다. 서버는 판정 시각만 알고 독자가 봤는지는 모른다.
+  // 받은 결과가 실제로 화면에 보일 때만 기록한다. FAILED는 정상 열람에 포함하지 않는다.
+  const resultRef = useRef<HTMLDivElement>(null);
+  useResultViewed(resultRef, result?.judgement.reason.trim() ? hypothesis!.id : null, requests, authOpen || modal !== null);
   const shown = hypothesis?.judgementStatus === "FAILED" ? "FAILED" : result ? "COMPLETE" : null;
-  const shownId = hypothesis?.id;
-  useEffect(() => {
-    if (shown && shownId !== undefined) trackResultViewed(shownId, shown);
-  }, [shown, shownId]);
 
   /** 맡긴 가설을 두고 새 가설을 시작했다. 그때 화면에 나와 있던 판정 상태를 함께 남긴다(결과가 나오기 전이면 PENDING). */
   const shownNow = useRef(shown);
@@ -534,7 +533,7 @@ export default function PieceMaker() {
       case "ready": {
         const value = watched.hypothesis;
         if (value.judgementStatus === "PENDING") return JUDGE_TEXT.pending;
-        if (value.judgementStatus === "FAILED") return JUDGE_TEXT.judgeFailed(value.failureMessage ?? "");
+        if (value.judgementStatus === "FAILED") return "";
         if (result) return JUDGE_TEXT.done;
         return cited?.key === judgedKey ? JUDGE_TEXT.brokenResult : JUDGE_TEXT.resolving;
       }
@@ -559,7 +558,7 @@ export default function PieceMaker() {
     if (modal === null) return null;
     switch (modal.kind) {
       case "detail":
-        return detailModal(modal.card, hasCard(draft, modal.card.id), {
+        return detailModal(modal.card, hasCard(draft, modal.card.id), frozen, {
           onClose: closeModal,
           // 모달에서 담거나 빼면 모달을 닫는다. 목록에서 담을 때는 포커스를 건드리지 않는다.
           onToggle: (card) => {
@@ -646,6 +645,7 @@ export default function PieceMaker() {
             <ComposePane
               ready={ready}
               frozen={frozen}
+              judgementFailed={judgementFailed}
               chapter={chapter}
               draft={draft}
               saveStatus={saveStatus}
@@ -654,7 +654,7 @@ export default function PieceMaker() {
                 {isAuthenticated && <div className="credit-feedback" aria-live="polite" data-part="credit-feedback">
                   {creditStatus === "loading" ? "잔액 확인 중…" : creditStatus === "error" ? <>
                     잔액을 확인하지 못했어요. <button className="btn quiet" onClick={refreshCredit}>다시 확인</button>
-                  </> : creditNotice ? <>{creditNotice} {credit !== null && `남은 크레딧 ${credit}`}</> : null}
+                  </> : creditNotice || null}
                 </div>}
                 <JudgePanel
                   canJudge={
@@ -669,8 +669,10 @@ export default function PieceMaker() {
                   price={meta.status === "ready" ? meta.meta.judgeCredits : null}
                   frozen={frozen}
                   pending={hypothesis?.judgementStatus === "PENDING"}
+                  failed={judgementFailed}
                   stateText={stateText}
                   result={result}
+                  resultRef={resultRef}
                   chapter={chapter}
                   titleOf={(id) => findCard(id)?.title}
                   onJudge={requestJudge}

@@ -243,6 +243,7 @@ public class AdminService {
         Instant now = Instant.now();
         Instant leaseCutoff = now.minus(agentLease);
         List<ZzalMotion> mine = motionRepository.findByStatusOrderByIdAsc(MotionStatus.LOCAL_REQUESTED).stream()
+                .filter(m -> !com.lore.zzal.motion.RetiredRewardGeneration.isRetiredNewMotion(m.getSeq()))
                 .filter(m -> m.claimByAgent(now, leaseCutoff))
                 .toList();
         return describe(mine);

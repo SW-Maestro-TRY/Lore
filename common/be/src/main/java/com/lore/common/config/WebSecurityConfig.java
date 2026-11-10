@@ -61,6 +61,7 @@ public class WebSecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/piece-maker/v1/public/**").permitAll()
                         // 피드백(오류 신고 · 판정 후기)은 로그인 전에도 받는다 — 이 POST 하나만 연다
                         .requestMatchers(HttpMethod.POST, "/api/piece-maker/v1/public/feedback").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/piece-maker/v1/ad-landings").permitAll()
 
                         // ★★ 맥미니(codex 러너) 전용 문 — 사람 로그인이 아니라 **전용 열쇠**로 지킨다.
                         //   여기를 로그인 뒤로 두면 러너가 새벽에 혼자 못 올린다(사람 토큰은 몇 시간이면 만료).
@@ -92,6 +93,12 @@ public class WebSecurityConfig {
                         //    한 번에 받을 개수 상한, 허용된 키만 통과, 본문에 담긴 익명 번호는
                         //    믿지 않고 쿠키만 신뢰(본문을 믿으면 남의 번호로 기록을 심을 수 있다).
                         .requestMatchers(HttpMethod.POST, "/api/v1/events").permitAll()
+
+                        // 충전 결제(#155). 상품표는 로그인 전에도 보여 준다.
+                        // 통보 주소는 페이앱 서버가 부르므로 계정이 없다 — 대신 PaymentService 가
+                        // 연동값 세 개와 금액·결제요청번호를 맞춰 본다(안 맞으면 아무것도 안 한다).
+                        .requestMatchers(HttpMethod.GET, "/api/v1/payments/packages").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/payapp/feedback").permitAll()
 
                         // 나머지는 로그인 필요.
                         // ★ 관리자 주소를 여기서 role 로 가르지 않는다 — 지금 JWT 에는 role 이

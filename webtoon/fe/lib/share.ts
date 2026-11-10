@@ -13,11 +13,21 @@
  * 그 키를 쓸 도메인을 등록해 두는 것으로 남용을 막는다.
  */
 
-/** 이 작품을 여는 주소. 서버가 아니라 지금 보고 있는 곳 기준이다. */
-export function shareUrl(runId: string, episode = 1): string {
+/** 이 작품을 여는 주소. 서버가 아니라 지금 보고 있는 곳 기준이다.
+ *  `key` 는 「링크 공유(일부공개)」 작품의 열쇠(#898) — 붙어 있어야 받은 사람이 로그인 없이 연다. */
+export function shareUrl(runId: string, episode = 1, key?: string | null): string {
   const base = typeof window === "undefined" ? "" : window.location.origin;
   const ep = episode > 1 ? `&ep=${episode}` : "";
-  return `${base}/webtoon?run=${encodeURIComponent(runId)}${ep}`;
+  const k = key ? `&k=${encodeURIComponent(key)}` : "";
+  return `${base}/webtoon?run=${encodeURIComponent(runId)}${ep}${k}`;
+}
+
+/** 공유 주소에 유입 출처를 단다 — 광고·SNS 링크와 같은 모양(utm_source/medium/content)이라
+ *  받은 사람이 들어오면 첫 방문 기록에 `share/<어디로>/<무엇을>` 으로 남는다(track.ts utmLine).
+ *  `via` 는 눌린 공유칸(x·line·kakao·copy·native…), `what` 은 보낸 것(webtoon·card). */
+export function withShareUtm(url: string, via: string, what: string): string {
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}utm_source=share&utm_medium=${encodeURIComponent(via)}&utm_content=${encodeURIComponent(what)}`;
 }
 
 export interface ShareTarget {

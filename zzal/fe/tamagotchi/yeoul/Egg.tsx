@@ -5,6 +5,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import RomiSampleRoom from '../focused-room/RomiSampleRoom';
 import { EGG_IMG } from './constants';
 import { C, C2, GAEGU, MONO, TAP_MIN, gap, monoSize, radius, fz, ink } from './ui';
 import { useLive } from './useHatch';
@@ -21,6 +22,7 @@ export default function Egg({ y }: { y: Yeoul }) {
   const { v, actions } = y;
   const live = useLive();
   const e = v.egg;
+  const [sampleOpen, setSampleOpen] = useState(false);
   // 진짜로 굽고 있으면 서버가 지금 하는 일을 그대로 보여 준다. 기다림을 감추지 않는다.
   // 실패도 서버가 보낸 말(`message`)을 그대로 쓴다 — 우리가 지어내면 진짜 이유가 가려진다.
   const stage = live.petId
@@ -57,7 +59,8 @@ export default function Egg({ y }: { y: Yeoul }) {
     : e.isReady ? 'yShakeBig 1.35s ease-in-out infinite' : 'yWiggle 2.2s ease-in-out infinite';
 
   return (
-    <div data-part="egg" style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, padding: '18px 22px 26px', gap: gap.xl, background: C.eggBg }}>
+    <div data-part="egg" style={{ flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0, padding: '18px 22px 26px', gap: gap.xl, background: C.eggBg, position: 'relative' }}>
+      {sampleOpen && <div role="dialog" aria-modal="true" aria-label="로미의 방" style={{position:'absolute',inset:0,zIndex:60,background:C.paper,display:'flex',flexDirection:'column'}}><RomiSampleRoom onBack={() => setSampleOpen(false)} onReady={live.ready ? () => { setSampleOpen(false); actions.tapEgg(); } : undefined}/></div>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: gap.sm }}>
         <span style={{ fontFamily: GAEGU, fontWeight: 700, fontSize: fz.h1, lineHeight: 1.25, color: C.ink }}>{e.title}</span>
         <span style={{ fontSize: fz.md, lineHeight: 1.7, color: ink(.6) }}>{e.sub}</span>
@@ -85,7 +88,7 @@ export default function Egg({ y }: { y: Yeoul }) {
         <button onClick={actions.tapEgg} data-action="egg-cta" style={{ padding: 16, borderRadius: radius.md, border: 'none', background: e.ctaBg, color: e.ctaFg, fontSize: fz.lg }}>{e.cta}</button>
         {/* ★ 누르는 자리 `TAP_MIN`(2026-09-23 · 실측 24px). 테두리도 바탕도 없는 글자 단추라
             판만 키우고 남는 몫을 음수 여백으로 되돌린다 — 보이는 글자 자리는 그대로다(44-10*2=24). */}
-        <button onClick={actions.backToSample} style={{ minHeight: TAP_MIN, margin: '-10px 0', padding: 4, border: 'none', background: 'none', fontSize: fz.sm, color: C.faint2 }}>여울 샘플로 돌아가기</button>
+        <button onClick={() => setSampleOpen(true)} style={{ minHeight: TAP_MIN, margin: '-10px 0', padding: 4, border: 'none', background: 'none', fontSize: fz.sm, color: C.faint2 }}>로미의 방 구경하기</button>
       </div>
     </div>
   );

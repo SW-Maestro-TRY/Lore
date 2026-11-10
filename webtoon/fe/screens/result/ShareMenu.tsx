@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useT } from "../../lib/i18n";
-import { copyLink, shareNative, SHARE_TARGETS, shareUrl, type ShareTarget } from "../../lib/share";
+import { copyLink, shareNative, SHARE_TARGETS, shareUrl, withShareUtm, type ShareTarget } from "../../lib/share";
 import { IconShare } from "../../ui/Icons";
 import { track } from "../../lib/track";
 import "./i18n";
@@ -16,6 +16,8 @@ export default function ShareMenu({
   character,
   className = "btn btn-w",
   iconOnly = false,
+  label,
+  shareKey,
 }: {
   runId: string;
   episode?: number;
@@ -23,6 +25,10 @@ export default function ShareMenu({
   character?: string;
   className?: string;
   iconOnly?: boolean;
+  /** 단추 글자. 없으면 「공유」 */
+  label?: string;
+  /** 「링크 공유(일부공개)」 작품의 열쇠(#898). 있으면 공유 주소에 붙는다. */
+  shareKey?: string | null;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -34,13 +40,14 @@ export default function ShareMenu({
     return () => window.clearTimeout(t);
   }, [said]);
 
-  const url = shareUrl(runId, episode);
+  /* 공유칸마다 다른 주소 — 어디로 보낸 링크로 들어왔는지 센다. */
+  const urlVia = (via: string) => withShareUtm(shareUrl(runId, episode, shareKey), via, "webtoon");
   const text = title ? (character ? `${character} · ${title}` : title) : t("LORE 로 만든 웹툰");
 
   /* 폰의 공유 화면은 사용자가 닫아도 「됐다」고 돌려준다(share.ts). 그래서 공유가
      실제로 됐는지는 모르고, 「어디로 보내려고 눌렀나」까지만 남긴다(#413). */
   const start = async () => {
-    const native = await shareNative(url, text);
+    const native = await shareNative(urlVia("native"), text);
     track("share_click", { run: runId, ep: episode, target: native ? "native" : "menu" });
     if (native) return;
     setOpen((was) => !was);
@@ -48,6 +55,7 @@ export default function ShareMenu({
 
   const pick = async (tg: ShareTarget) => {
     track("share_click", { run: runId, ep: episode, target: tg.key });
+    const url = urlVia(tg.key);
     if (tg.href) {
       window.open(tg.href(url, text), "_blank", "noopener,noreferrer");
       setOpen(false);
@@ -70,7 +78,7 @@ export default function ShareMenu({
     <span className="wt-share">
       <button type="button" className={className} onClick={start} aria-expanded={open}
               aria-label={t("공유")} title={t("공유")}>
-        <IconShare size={iconOnly ? 18 : 18} />{!iconOnly && ` ${t("공유")}`}
+        <IconShare size={iconOnly ? 18 : 18} />{!iconOnly && ` ${label ?? t("공유")}`}
       </button>
       {open && (
         <span className="wt-share-list" role="menu">

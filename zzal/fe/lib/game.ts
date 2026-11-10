@@ -94,13 +94,14 @@ const base = (petId: number) => `${PET_BASE}/${petId}/games`;
  * 실패 코드 — ZZAL_PET_NOT_FOUND(404), ZZAL_GAME_DAILY_LIMIT · ZZAL_FEATURE_LOCKED(RUN 잠김) ·
  * ZZAL_PET_SLEEPING · ZZAL_SICK_REFUSES(409).
  */
-export function startGame(petId: number, kind: GameKind = 'LEFT_RIGHT'): Promise<GameState> {
-  return request<GameState>(base(petId), { method: 'POST', body: { kind } });
+export function startGame(petId: number, kind: GameKind = 'LEFT_RIGHT', firstIntroStep?: 'GAME'): Promise<GameState> {
+  return request<GameState>(base(petId), { method: 'POST', body: { kind, ...(firstIntroStep ? {firstIntroStep} : {}) } });
 }
 
 /** 한 판 치기(LEFT_RIGHT). 실패 코드 — ZZAL_GAME_NOT_FOUND(404), ZZAL_GAME_FINISHED(409). */
-export function guess(petId: number, gameId: number, pick: Side): Promise<GuessResult> {
-  return request<GuessResult>(`${base(petId)}/${gameId}/guess`, { method: 'POST', body: { pick } });
+export interface GameGuessIdentity {requestId:string;expectedRound:number}
+export function guess(petId: number, gameId: number, pick: Side, identity?:GameGuessIdentity): Promise<GuessResult> {
+  return request<GuessResult>(`${base(petId)}/${gameId}/guess`, { method: 'POST', body: { pick, ...(identity??{}) } });
 }
 
 /** 치던 판 잇기(새로고침 복구). 치던 판이 없어도 에러가 아니다 — playing 이 false 로 온다. */

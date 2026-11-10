@@ -71,7 +71,7 @@ public final class TutorialSchedule {
      *   시계를 켜는 유일한 길이 마지막 칸을 끝내는 것이기 때문이다.
      */
     public static State of(ZzalPet pet) {
-        if (!pet.isInTutorial()) {
+        if (!pet.isInTutorial() || pet.hasFirstIntro()) {
             return null;
         }
         int at = pet.getTutorialStep();

@@ -1,0 +1,419 @@
+/* The editor canvas remains white; its controls use the approved gallery tokens. */
+.wt .wt-ed {
+  zoom: 1;
+  background: var(--paper);
+}
+.wt .wt-ed-top,
+.wt .wt-ed-left,
+.wt .wt-ed-dock {
+  background: var(--bg);
+  border-color: var(--line);
+}
+.wt .wt-ed-stage {
+  background: #070e18;
+  padding: 28px;
+}
+.wt .wt-ed .credit,
+.wt .wt-ed .btn-quiet,
+.wt .wt-ed .ep-tab,
+.wt .wt-ed .dock-item,
+.wt .wt-ed .fb-tag {
+  background: var(--water-light);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+.wt .wt-ed .btn-primary,
+.wt .wt-ed .ep-tab[aria-current="true"],
+.wt .wt-ed .dock-tab.is-on,
+.wt .wt-ed .fb-tag[aria-pressed="true"],
+.wt .wt-ed-workstoggle[aria-expanded="true"],
+.wt .wt-ed-dockopen {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.wt .wt-ed .btn-primary:hover:not(:disabled) {
+  background: var(--sea);
+  color: var(--paper);
+}
+.wt .wt-ed .scene {
+  background: var(--bg);
+  border-radius: 12px;
+  border-color: var(--line);
+  overflow: hidden;
+  box-shadow: 0 16px 40px #0003;
+}
+.wt .wt-ed .scene.is-active {
+  border-color: var(--sea);
+}
+.wt .wt-ed .scene-head,
+.wt .wt-ed .scene-tools {
+  padding: 12px 16px;
+}
+.wt .wt-ed .scene-note {
+  padding: 4px 16px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+.wt .wt-ed .scene-gap {
+  background: var(--paper);
+  border-color: var(--line-strong);
+}
+.wt .wt-ed .dock-item .prev {
+  color: #111;
+}
+.wt .wt-ed .dock-item .prev .bub {
+  color: #111;
+}
+.wt .wt-ed .wt-ed-regen-inline {
+  width: auto;
+  max-width: none;
+  margin: 0 16px 16px;
+  padding: 20px;
+  box-sizing: border-box;
+}
+.wt .wt-ed-regen-inline h2 {
+  font-size: 17px;
+}
+.wt .wt-ed-regen-inline .wt-ed-regen-box {
+  gap: 16px;
+}
+.wt .wt-ed .fb-tag {
+  height: auto;
+  min-height: 34px;
+  font-size: 12px;
+}
+.wt .wt-ed-creditshort-x {
+  background: var(--water-light);
+}
+.wt .wt-ed .item-bar .ib.is-on {
+  color: var(--paper);
+}
+@media (max-width: 879px) {
+  .wt .wt-ed-stage {
+    padding: 16px 12px 90px;
+  }
+  .wt .wt-ed-strip {
+    padding: 10px 16px;
+  }
+  .wt .wt-ed-left {
+    padding: 16px;
+  }
+  .wt .wt-ed-sceneinfo {
+    max-height: 240px;
+    overflow: auto;
+  }
+  .wt .wt-ed .scene-head {
+    font-size: 12px;
+  }
+  .wt .wt-ed .wt-ed-regen-inline {
+    margin: 0 10px 10px;
+    padding: 16px;
+  }
+  .wt .wt-ed-chips {
+    gap: 8px;
+  }
+  .wt .wt-ed-bake,
+  .wt .wt-ed-done {
+    padding: 0 12px;
+    font-size: 12px;
+  }
+}
+
+.wt .wt-ed .scene {
+  overflow: clip;
+}
+.wt .wt-ed .scene-tools:has([aria-expanded="true"]) {
+  display: none;
+}
+.wt .wt-ed [data-act="regen"] {
+  scroll-margin-top: calc(var(--lore-header-h, 64px) + 88px);
+}
+.wt .wt-ed-regen-inline .ask-scene {
+  display: none;
+}
+.wt .wt-ed-dock {
+  overflow-x: hidden;
+}
+.wt .wt-ed .wt-share-trigger {
+  background: var(--water-light);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.wt .wt-ed-regen-box .fb-lead:has(+ .fb-tags:empty) { display: none; }
+
+/* 편집실 가독성 — 제목과 장면 글자를 눈에 띄게 키우고, 편집 간격은 한 번만 준다. */
+.wt .wt-ed {
+  font-size: 16px;
+}
+
+.wt .wt-ed-strip {
+  gap: 14px;
+  padding: 12px 20px;
+  min-height: 68px;
+}
+.wt .wt-ed-titlerow h1 { font-size: 21px; line-height: 1.3; }
+.wt .wt-ed-title #edMeta { font-size: 15px; line-height: 1.45; }
+.wt .wt-ed-workstoggle,
+.wt .wt-ed-overlaytoggle,
+.wt .wt-ed-bake,
+.wt .wt-ed-done { font-size: 15px; }
+.wt .wt-ed .credit { font-size: 15px; }
+.wt .wt-ed .credit-unit,
+.wt .wt-ed .credit-more,
+.wt .wt-ed-ledgerbtn { font-size: 13px; }
+
+.wt .wt-ed-lefthead { font-size: 16px; }
+.wt .wt-ed .work-name { font-size: 16px; }
+.wt .wt-ed .work-sub { font-size: 14px; }
+.wt .wt-ed-pagegrid { gap: 8px; }
+.wt .wt-ed-thumb { height: 72px; }
+.wt .wt-ed-thumb span { font-size: 13px; }
+.wt .wt-ed-sceneinfo { gap: 2px; padding-top: 10px; margin-top: 4px; }
+.wt .wt-ed-sceneparts { gap: 12px; padding: 4px 10px 8px; }
+.wt .wt-ed-sceneparts .part { gap: 4px; }
+.wt .wt-ed-sceneparts .part span { font-size: 16px; }
+.wt .wt-ed-sceneparts .part p { font-size: 17px; line-height: 1.65; }
+
+.wt .wt-ed-stage { gap: 10px; padding: 24px; }
+.wt .wt-ed .ep-tab { height: 38px; font-size: 15px; }
+.wt .wt-ed-footnote { display: none; }
+.wt .wt-ed-done { display: none !important; }
+.wt .wt-ed .scene { margin-bottom: 12px; padding-bottom: 6px; }
+.wt .wt-ed .scene-head { gap: 8px; padding: 10px 14px 6px; font-size: 16px; }
+.wt .wt-ed .scene-no { font-size: 16px; }
+.wt .wt-ed .ver,
+.wt .wt-ed .flag { font-size: 15px; }
+.wt .wt-ed .scene-note { margin: 8px 14px 0; font-size: 16px; line-height: 1.65; }
+.wt .wt-ed .scene-tools { gap: 6px; padding: 8px 14px 0; }
+.wt .wt-ed .scene-tools .btn { height: 40px; font-size: 15px; padding: 0 15px; }
+.wt .wt-ed .cost { font-size: 15px; padding: 3px 8px; }
+.wt .wt-ed .scene-gap { min-height: 38px; margin-bottom: 8px; }
+.wt .wt-ed .scene-gap > span { font-size: 15px; }
+.wt .wt-ed .gap-steps { gap: 8px; }
+.wt .wt-ed .gap-dot { width: 13px; height: 13px; }
+
+/* 이전 판은 안내 문구 없이 큰 썸네일만 보여 준다. */
+.wt .wt-ed .ver-strip-label { display: none; }
+.wt .wt-ed .page-versions { gap: 10px; padding: 10px 14px 4px; }
+.wt .wt-ed .ver-strip { gap: 8px; }
+.wt .wt-ed .ver-thumb { width: 68px; height: 90px; }
+.wt .wt-ed .ver-thumb .ver-label { display: none; }
+
+.wt .wt-ed-dock { gap: 12px; padding: 14px; }
+.wt .wt-ed .dock-tab { height: 40px; font-size: 15px; padding: 0 12px; }
+.wt .wt-ed-dockbody { gap: 8px; }
+.wt .wt-ed-dockgrid { gap: 8px; }
+.wt .wt-ed .dock-item { min-height: 60px; gap: 5px; padding: 8px 6px; }
+.wt .wt-ed .dock-item span { font-size: 15px; }
+.wt .wt-ed .dock-props-head { font-size: 15px; }
+.wt .wt-ed-ledger li,
+.wt .wt-ed .dock-ledger li { font-size: 13px; }
+
+/* 다시 그리기 폼의 기본 문단 여백과 flex 간격이 겹쳐 생기던 큰 공백을 한 번만 준다. */
+.wt .wt-ed .wt-ed-regen-inline {
+  margin: 4px 14px 12px;
+  padding: 16px 18px;
+  border-radius: 12px;
+}
+.wt .wt-ed-regen-inline .wt-ed-regen-box { gap: 10px; }
+.wt .wt-ed-regen-inline { scroll-margin-top: calc(var(--lore-header-h, 64px) + 88px); }
+.wt .wt-ed-regen-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wt .wt-ed-regen-close { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 8px; color: var(--muted); background: transparent; cursor: pointer; }
+.wt .wt-ed-regen-close:hover { color: var(--ink); background: var(--line); }
+.wt .wt-ed-regen-close:focus-visible { outline: 2px solid var(--sea); outline-offset: 2px; }
+.wt .wt-ed-regen-inline h2 { margin: 0; font-size: 20px; line-height: 1.35; }
+.wt .wt-ed-regen-inline .ask-sub { margin: 0; font-size: 15px; line-height: 1.45; }
+.wt .wt-ed-regen-inline .ask-unsafe { margin: 0; font-size: 15px; line-height: 1.5; }
+.wt .wt-ed .wt-ed-regen-inline .fb-lead { margin: 2px 0 0; font-size: 16px; line-height: 1.4; }
+.wt .wt-ed-regen-inline .fb-tags { gap: 6px; }
+.wt .wt-ed .wt-ed-regen-inline .fb-tag {
+  min-height: 38px;
+  padding: 7px 11px;
+  border-radius: 8px;
+  font-size: 15px;
+  line-height: 1.35;
+}
+.wt .wt-ed-askfield { gap: 4px; }
+.wt .wt-ed-askfield > span { font-size: 16px; line-height: 1.4; }
+.wt .wt-ed-askfield textarea.field { min-height: 104px; font-size: 16px; line-height: 1.55; padding: 10px 12px; }
+.wt .wt-ed #regenAskWhere,
+.wt .wt-ed #regenAskWhat { line-height: 1.7; }
+.wt .wt-ed #regenAskWhere { min-height: 160px; }
+.wt .wt-ed #regenAskWhat { min-height: 240px; }
+.wt .wt-ed-regen-inline .check-line { gap: 8px; font-size: 15px; }
+.wt .wt-ed .wt-ed-regen-inline .ask-actions { gap: 8px; margin-top: 2px; }
+.wt .wt-ed .wt-ed-regen-inline .ask-actions .btn { min-height: 44px; height: auto; font-size: 15px; }
+
+.wt .wt-ed .ask-box h2 { font-size: 20px; }
+.wt .wt-ed .ask-sub,
+.wt .wt-ed .ask-scene-part { font-size: 15px; }
+.wt .wt-ed .fb-lead { font-size: 16px; }
+.wt .wt-ed .fb-tag { min-height: 40px; padding: 8px 12px; font-size: 15px; }
+.wt .wt-ed .check-line { min-height: 40px; font-size: 15px; }
+
+@media (max-width: 879px) {
+  .wt .wt-ed-strip { gap: 8px; padding: 10px 14px; }
+  .wt .wt-ed-titlerow h1 { font-size: 20px; }
+  .wt .wt-ed-left { padding: 14px; }
+  .wt .wt-ed-stage { gap: 8px; padding: 14px 12px 88px; }
+  .wt .wt-ed .scene-head { font-size: 15px; }
+  .wt .wt-ed .scene-tools .btn { font-size: 15px; }
+  .wt .wt-ed-dock { padding: 10px 14px calc(14px + env(safe-area-inset-bottom, 0px)); }
+  .wt .wt-ed .dock-item span { font-size: 14px; }
+  .wt .wt-ed .wt-ed-regen-inline { margin: 4px 8px 10px; padding: 14px; }
+  .wt .wt-ed-regen-inline .wt-ed-regen-box { gap: 9px; }
+  .wt .wt-ed .wt-ed-regen-inline .fb-tag { min-height: 40px; }
+}
+
+/* 다시 그리기 화질 — 화질마다 특징과 값을 붙인 세 칸. 아래에 고른 화질의 설명, 너울이면 낮추면 싸진다는 한 줄. */
+.wt .wt-ed-regenq { display: flex; flex-direction: column; gap: 8px; }
+.wt .wt-ed-regenq[hidden] { display: none; }
+.wt .wt-ed-regenq .fb-lead { margin: 0; }
+.wt .wt-ed-regenq-opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.wt .wt-ed-regenq-opt {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  min-height: 58px; padding: 10px 12px; box-sizing: border-box;
+  border: 1px solid var(--line-strong); border-radius: 10px;
+  background: transparent; color: var(--muted); text-align: left; cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.wt .wt-ed-regenq-opt:hover { border-color: var(--ink); color: var(--ink); }
+.wt .wt-ed-regenq-opt[aria-checked="true"] { border-color: var(--sea); background: #e6a39314; color: var(--ink); }
+.wt .wt-ed-regenq-opt:focus-visible { outline: 2px solid var(--sea); outline-offset: 2px; }
+.wt .wt-ed-regenq-opt .q-name { font-size: 14px; font-weight: 600; }
+.wt .wt-ed-regenq-opt .q-tag { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.wt .wt-ed-regenq-opt .q-name small { margin-left: 2px; font-size: 11px; font-weight: 500; color: var(--muted); }
+.wt .wt-ed-regenq-opt .q-cost { margin-top: 4px; font-size: 18px; font-weight: 800; letter-spacing: -.01em; }
+.wt .wt-ed-regenq-opt .q-cost small { margin-left: 1px; font-size: 12px; font-weight: 600; }
+.wt .wt-ed-regenq-opt[aria-checked="true"] .q-cost { color: var(--sea); }
+.wt .wt-ed-regenq-desc { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--ink); }
+.wt .wt-ed-regenq-desc:empty { display: none; }
+.wt .wt-ed-regenq-hint { margin: 0; font-size: 13px; line-height: 1.55; color: var(--sea); }
+.wt .wt-ed-regenq-hint[hidden] { display: none; }
+
+/* ---- 직접 그리기(리터치) -------------------------------------------------------
+   겹 순서: 그림(img) → 그린 겹(canvas) → 말풍선(.overlay). 굽는 쪽(BubbleArtist)도 같은 순서다.
+   그리기 모드(.is-painting)에서는 말풍선이 누름을 안 받고 그린 겹이 받는다 — 붓질이 말풍선 끌기로 새지 않게. */
+.wt .wt-ed .paint-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.wt .wt-ed .paint-layer.is-hidden { display: none; }
+.wt .wt-ed.is-painting .overlay { pointer-events: none; }
+.wt .wt-ed.is-painting .paint-layer { pointer-events: auto; touch-action: none; cursor: crosshair; }
+.wt .wt-ed.is-painting[data-brush-tool="picker"] .paint-layer { cursor: copy; }
+.wt .wt-ed.is-painting .scene.is-active .stage-wrap { box-shadow: inset 0 0 0 2px var(--sea); }
+
+.wt .wt-ed-docktabs { flex-wrap: wrap; }
+.wt .wt-ed .dock-tab { padding: 0 10px; }
+
+/* 그림 위에 떠 있는 줄 — 그리기 모드 표시이자 폰에서 서랍을 닫고도 도구를 바꾸는 자리 */
+.wt .wt-ed .paint-bar {
+  position: fixed; z-index: 61;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  left: calc(var(--ed-left-w, 260px) + (100vw - var(--ed-left-w, 260px) - var(--ed-right-w, 260px)) / 2);
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 2px; padding: 5px;
+  background: var(--ink); color: var(--paper); border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(7, 14, 24, 0.35);
+}
+.wt .wt-ed .paint-bar button {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 40px; height: 40px; padding: 0; border: 0; border-radius: 10px;
+  background: transparent; color: inherit; font: inherit; cursor: pointer;
+}
+.wt .wt-ed .paint-bar button:hover { background: rgba(255, 255, 255, 0.12); }
+.wt .wt-ed .paint-bar button[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+.wt .wt-ed .paint-bar button:disabled { opacity: 0.35; cursor: default; background: transparent; }
+.wt .wt-ed .paint-bar button:focus-visible { outline: 2px solid var(--sea); outline-offset: 1px; }
+.wt .wt-ed .paint-bar .pt-sep { width: 1px; height: 22px; margin: 0 4px; background: rgba(255, 255, 255, 0.22); }
+.wt .wt-ed .paint-bar .pt-color i { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--paper); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); }
+.wt .wt-ed .paint-bar .pt-size i { width: min(var(--d, 6px), 26px); height: min(var(--d, 6px), 26px); border-radius: 50%; background: currentColor; }
+.wt .wt-ed .paint-bar .pt-done { padding: 0 14px; font-size: 15px; font-weight: 700; background: var(--paper); color: var(--ink); }
+.wt .wt-ed .paint-bar .pt-done:hover { background: var(--water-light); }
+
+/* 서랍 「그리기」 갈래 */
+.wt .wt-ed .paint-panel { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 10px; }
+.wt .wt-ed .paint-panel .pp-row { display: flex; gap: 6px; }
+.wt .wt-ed .paint-panel .pp-lead { margin: 4px 0 0; font-size: 14px; font-weight: 700; color: var(--ink); }
+.wt .wt-ed .paint-panel button { font: inherit; cursor: pointer; }
+.wt .wt-ed .paint-panel .pt-tool,
+.wt .wt-ed .paint-panel .pp-btn {
+  flex: 1; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: 60px; padding: 8px 4px; border-radius: 10px;
+  border: 1px solid var(--line-strong); background: var(--water-light); color: var(--ink); font-size: 14px;
+}
+.wt .wt-ed .paint-panel .pp-btn { flex-direction: row; min-height: 44px; gap: 6px; }
+.wt .wt-ed .paint-panel .pt-tool[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.wt .wt-ed .paint-panel button:disabled { opacity: 0.4; cursor: default; }
+.wt .wt-ed .paint-panel .pp-clear { flex: none; color: var(--muted); background: transparent; }
+.wt .wt-ed .paint-panel .pp-colors { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.wt .wt-ed .paint-panel .pp-swatch {
+  position: relative; aspect-ratio: 1; width: 100%; padding: 0; border-radius: 50%;
+  border: 1px solid rgba(15, 51, 63, 0.25); background: var(--c);
+}
+.wt .wt-ed .paint-panel .pp-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
+.wt .wt-ed .paint-panel .pp-custom { display: block; cursor: pointer; background: conic-gradient(#e5484d, #ffd60a, #30a46c, #3e63dd, #8e4ec6, #e5484d); }
+.wt .wt-ed .paint-panel .pp-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.wt .wt-ed .paint-panel .pp-sizes { align-items: center; gap: 10px; }
+.wt .wt-ed .paint-panel .pp-dotbox {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+  border-radius: 10px; border: 1px solid var(--line-strong); background: var(--water-light); color: var(--ink);
+}
+.wt .wt-ed .paint-panel .pp-dotbox i { width: min(var(--d, 4px), 40px); height: min(var(--d, 4px), 40px); border-radius: 50%; background: currentColor; }
+
+@media (max-width: 879px) {
+  .wt .wt-ed .paint-bar { left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+  /* 그리는 동안은 오른쪽 아래 「도구」 손잡이 대신 떠 있는 줄이 서랍을 연다(색 단추) */
+  .wt .wt-ed.is-painting .wt-ed-dockopen { display: none; }
+  .wt .wt-ed .paint-panel .pp-colors { grid-template-columns: repeat(7, minmax(0, 40px)); }
+}
+
+/* 글자 도구 — 말풍선 없이 그림 위에 글자만. 줄을 나누는 규칙은 말풍선 글(.bub)과 같고 안쪽 여백이 없다.
+   굽는 쪽(BubbleArtist.plain)이 같은 폭 · 같은 줄 높이 · 가운데 맞춤으로 그린다. */
+.wt .wt-ed .txt {
+  width: 100%; box-sizing: border-box; padding: 0; margin: 0;
+  text-align: center; line-height: 1.35; font-weight: 600;
+  word-break: keep-all; overflow-wrap: break-word; white-space: pre-wrap;
+  font-family: "LORE Bubble Base", var(--font-ui);
+}
+.wt .wt-ed .txt[data-font="maruburi"] { font-family: "LORE Bubble MaruBuri", "LORE Bubble Base", var(--font-ui); }
+.wt .wt-ed .txt[data-font="suit"] { font-family: "LORE Bubble SUIT", "LORE Bubble Base", var(--font-ui); }
+.wt .wt-ed .txt[data-font="jua"] { font-family: "LORE Bubble Jua", "LORE Bubble Base", var(--font-ui); }
+.wt .wt-ed .item[data-type="text"]:not(.sel) { outline: 1px dashed transparent; }
+.wt .wt-ed.is-painting[data-brush-tool="text"] .paint-layer { cursor: text; }
+/* 글자 도구일 때만 글자를 잡고 옮긴다. 말풍선은 그대로 안 잡힌다. */
+.wt .wt-ed.is-painting[data-brush-tool="text"] .overlay .item[data-type="text"],
+.wt .wt-ed.is-painting[data-brush-tool="text"] .overlay .item-bar,
+.wt .wt-ed.is-painting[data-brush-tool="picker"] .overlay .item-bar { pointer-events: auto; }
+.wt .wt-ed.is-painting[data-brush-tool="text"] .overlay .item[data-type="text"]:not(.sel) { outline: 1px dashed rgba(255, 255, 255, 0.7); outline-offset: 2px; }
+@media (max-width: 879px) {
+  .wt .wt-ed .paint-bar button { min-width: 36px; }
+  .wt .wt-ed .paint-bar .pt-sep { margin: 0 2px; }
+  .wt .wt-ed .paint-bar .pt-done { padding: 0 11px; }
+}
+
+/* 굵기 슬라이더 — 서랍과 떠 있는 줄(펼침) 둘 다. 엄지로 잡을 수 있게 손잡이를 크게. */
+.wt .wt-ed [data-paint-range] { flex: 1; min-width: 0; height: 32px; margin: 0; accent-color: var(--sea); cursor: pointer; }
+@media (pointer: coarse) { .wt .wt-ed [data-paint-range] { height: 40px; } }
+.wt .wt-ed .paint-bar .pt-sizewrap { position: relative; display: inline-flex; }
+.wt .wt-ed .paint-bar .pt-pop {
+  position: absolute; bottom: calc(100% + 12px); left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; width: 240px; padding: 8px 12px;
+  background: var(--ink); color: var(--paper); border-radius: 12px; box-shadow: 0 10px 26px rgba(7, 14, 24, 0.35);
+}
+.wt .wt-ed .paint-bar .pt-pop[hidden] { display: none; }
+.wt .wt-ed .paint-bar .pt-popdot { flex: none; display: block; width: min(var(--d, 4px), 28px); height: min(var(--d, 4px), 28px); border-radius: 50%; background: currentColor; }
+.wt .wt-ed .paint-bar .pt-size[aria-expanded="true"] { background: rgba(255, 255, 255, 0.16); }
+@media (max-width: 879px) { .wt .wt-ed .paint-bar .pt-pop { width: min(260px, calc(100vw - 48px)); } }
+
+/* 붓 동그라미 커서 — 마우스로 그림 위에 올렸을 때 지금 굵기만큼 */
+.wt .wt-ed .paint-cursor {
+  position: fixed; left: 0; top: 0; z-index: 70; pointer-events: none; box-sizing: border-box;
+  border-radius: 50%; border: 1px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.75);
+}
+.wt .wt-ed .paint-cursor.is-eraser { border-style: dashed; }
+.wt .wt-ed .paint-cursor[hidden] { display: none; }
+@media (hover: hover) {
+  .wt .wt-ed.is-painting[data-brush-tool="brush"] .paint-layer,
+  .wt .wt-ed.is-painting[data-brush-tool="eraser"] .paint-layer { cursor: none; }
+}

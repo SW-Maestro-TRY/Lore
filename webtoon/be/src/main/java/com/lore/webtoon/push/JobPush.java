@@ -125,7 +125,8 @@ public class JobPush {
             if (to.isEmpty()) {
                 return;
             }
-            String title = titleOf(job.getRunId());
+            String series = seriesTitles == null ? null : seriesTitles.of(job.getPublicId());
+            String title = series != null ? series : titleOf(job.getRunId());
             out.execute(() -> {
                 for (PushSubscription sub : to) {
                     deliver(sub, PushMessages.of(kind, sub.getLang(), title, back), job, kind);
@@ -185,6 +186,11 @@ public class JobPush {
         }
         return "/webtoon?view=running&job=" + job.getPublicId();
     }
+
+    private com.lore.webtoon.story.SeriesTitles seriesTitles;
+    /** 연재 2화부터는 알림에도 작품 제목(1화 제목)을 쓴다(2026-10-26). 없으면 화의 제목. */
+    @Autowired(required = false)
+    public void setSeriesTitles(com.lore.webtoon.story.SeriesTitles seriesTitles) { this.seriesTitles = seriesTitles; }
 
     /** 사람이 볼 작품 이름. 아직 못 정했으면 null — 문구가 알아서 무난한 말로 바꾼다. */
     private String titleOf(String runId) {

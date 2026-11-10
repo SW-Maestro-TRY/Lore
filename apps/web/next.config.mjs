@@ -109,6 +109,17 @@ const nextConfig = {
         page('/demo/result',  'index.html'),   // 결과 (목업)
         page('/demo/mypage',  'index.html'),   // 마이페이지 (목업)
         page('/editor',       'editor.html'),  // 편집실
+        // 기업 협업 안내 페이지. 협업 메일에 링크로만 보내는 한 장짜리 정적 HTML 이고
+        // 헤더·푸터를 자기 안에 갖고 있다(그래서 Next 레이아웃을 건너뛰어도 된다).
+        // 그림·스크립트는 public/partners 안에 같이 둔다.
+        // 문의 폼은 같은 도메인의 /api/webtoon/v1/contact 로 보낸다.
+        { source: '/partners', destination: '/partners/index.html' },
+        // 웹툰 서비스 소개 페이지. 위와 같은 한 장짜리 정적 HTML 이고, 협업 문의는 /partners 로 보낸다.
+        { source: '/about', destination: '/about/index.html' },
+        // 광고 랜딩(2026-10-27, 담당: 하은). 광고 소재마다 한 장 — 넣은 설정 → 나온 1화 → 만들기.
+        // 위와 같은 한 장짜리 정적 HTML(public/lp/<소재>/index.html)이고 그림은 /api/webtoon/v1/runs/… 를 그대로 쓴다.
+        // 소재 이름은 메타 광고의 utm_content 와 같다(can · richet · ruda …). 홈이 아니라 여기로 떨어뜨린다 — 권병민 멘토 10/12.
+        { source: '/lp/:slug', destination: '/lp/:slug/index.html' },
       ],
     };
   },

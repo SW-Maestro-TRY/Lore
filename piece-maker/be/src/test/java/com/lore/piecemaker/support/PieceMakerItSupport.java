@@ -33,11 +33,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * PieceMaker 통합 시험이 공통으로 쓰는 것 — 시험 DB 확인 · 표본 25장 넣기 · HTTP 읽기.
+ * PieceMaker 통합 시험이 공통으로 쓰는 것 — 시험 DB 확인 · 화면 검사 자료의 표본 넣기 · HTTP 읽기.
  *
  * <h3>★ 표본은 시험마다 다시 넣는다</h3>
  * {@code piece-maker/be/src/test/resources/foreshadowings_sample.sql} 은 NA 의 {@code export_cards_sql.py} 가
- * 화면 검사 자료(piece-maker/fe/tests/fixtures/cards-ch400-sample.json)와 <b>같은 25장</b>으로 만든 파일이다.
+ * 화면 검사 자료(piece-maker/fe/tests/fixtures/cards-ch400-sample.json)와 <b>같은 카드</b>로 만든 파일이다.
  * 파일 안에 {@code TRUNCATE … RESTART IDENTITY} 가 있어 넣기가 곧 초기화다. 끝나면 표를 비운다 —
  * 남은 줄이 다음 시험을 엉뚱하게 통과시키지 않게.
  *
@@ -46,7 +46,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * zzal 의 {@code SchemaNameCollisionTest} 처럼 {@code settings.gradle} 이 있는 곳을 루트로 잡아 읽는다.
  *
  * <h3>★★ 비울 DB 를 이름으로 확인한다</h3>
- * 개발 DB(lore)를 가리킨 채 돌면 카드 1,651장이 25장으로 갈린다. 데이터베이스 이름이 {@code _test} 로
+ * 개발 DB(lore)를 가리킨 채 돌면 전체 카드가 검사용 표본으로 바뀐다. 데이터베이스 이름이 {@code _test} 로
  * 끝나지 않으면 컨텍스트를 만들기 전에 멈춘다(zzal 의 ZzalItSupport 와 같은 규칙).
  */
 public abstract class PieceMakerItSupport {
@@ -54,7 +54,7 @@ public abstract class PieceMakerItSupport {
     /** 표본 SQL 의 레포 안 자리. */
     protected static final String SAMPLE_SQL = "piece-maker/be/src/test/resources/foreshadowings_sample.sql";
 
-    /** 화면 검사 자료 — 표본 SQL 과 같은 25장. 카드 칸 열둘을 견줄 때 쓴다. */
+    /** 표본 SQL 과 같은 카드를 담은 화면 검사 자료다. 카드 칸 열둘을 견줄 때 쓴다. */
     protected static final String SAMPLE_FIXTURE = "piece-maker/fe/tests/fixtures/cards-ch400-sample.json";
 
     @Autowired protected MockMvc mockMvc;
@@ -88,11 +88,11 @@ public abstract class PieceMakerItSupport {
 
     // ── 표본 ──────────────────────────────────────────────────────────────
 
-    /** 표본 25장을 넣는다. 파일이 먼저 표를 비우므로 몇 번을 불러도 같은 25장이다. */
+    /** 표본 SQL을 넣는다. 적재한 카드 수가 화면 검사 자료와 같은지 확인한다. */
     @BeforeEach
     void loadSample() throws IOException {
         jdbc.execute(Files.readString(repoRoot().resolve(SAMPLE_SQL), StandardCharsets.UTF_8));
-        assertThat(count()).as("표본 25장").isEqualTo(25);
+        assertThat(count()).as("화면 검사 자료와 같은 카드 수").isEqualTo(sampleFixtureCards().size());
     }
 
     /** 카드 표를 비우고, 가설 표 둘과 시험이 만든 사용자의 크레딧 줄과 사용자도 지운다 — 다음 시험이 빈 표에서 시작하게. */
@@ -178,7 +178,7 @@ public abstract class PieceMakerItSupport {
         return n == null ? 0 : n;
     }
 
-    /** 화면 검사 자료의 카드 25장(400화 기준 값). */
+    /** 화면 검사 자료의 카드를 읽는다(400화 기준 값). */
     protected JsonNode sampleFixtureCards() throws IOException {
         return json.readTree(Files.readString(repoRoot().resolve(SAMPLE_FIXTURE), StandardCharsets.UTF_8)).path("cards");
     }

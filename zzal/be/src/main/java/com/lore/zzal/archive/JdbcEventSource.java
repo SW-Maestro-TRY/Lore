@@ -21,7 +21,7 @@ public class JdbcEventSource implements EventSource {
 
     private static final String SQL = """
             select id, name, anon_id, user_id, props, path, referrer, source, device, variant,
-                   occurred_at, received_at
+                   occurred_at, received_at, event_id, schema_version, session_id, context, source_screen, reported_ts, timestamp_quality, identity_status, event_origin
               from zzal_event
              where id > ?
                and received_at <= ?
@@ -57,7 +57,8 @@ public class JdbcEventSource implements EventSource {
                 rs.getString("device"),
                 rs.getString("variant"),
                 instant(rs, "occurred_at"),
-                instant(rs, "received_at"));
+                instant(rs, "received_at"), rs.getString("event_id"), (Integer)rs.getObject("schema_version"),
+                rs.getString("session_id"), rs.getString("context"), rs.getString("source_screen"), (Long)rs.getObject("reported_ts"), rs.getString("timestamp_quality"),rs.getString("identity_status"),rs.getString("event_origin"));
     }
 
     private static Instant instant(ResultSet rs, String column) throws SQLException {

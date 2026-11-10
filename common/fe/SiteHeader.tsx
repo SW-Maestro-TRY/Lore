@@ -8,42 +8,58 @@
 //
 // "use client" 인 이유: 현재 경로를 알아야 열려 있는 탭을 표시할 수 있어서다.
 // (로그인 상태와 모달도 클라이언트에서만 도는 것들이라 같은 이유로 여기 들어온다.)
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import TabLink from "./TabLink";
 import AuthModal from "./auth/AuthModal";
 import CreditCharge from "./mypage/CreditCharge";
 import { CREDITS_CHANGED, creditBalance } from "./api/credits";
+import { request } from "./api/client";
 import { useAuth } from "./auth/useAuth";
 import { TABS } from "./links";
 import styles from "./SiteHeader.module.css";
 
 /** 웹툰 탭의 마이페이지. 화면이 주소를 하나 갖고 있어서 헤더가 그냥 가리킨다. */
 const MY_PAGE = "/webtoon?view=mypage";
+const HEADER_AUTH_COPY = {
+  ko: { login: "로그인", logout: "로그아웃", confirm: "로그아웃 확인", question: "로그아웃할까요?", cancel: "취소" },
+  en: { login: "Log in", logout: "Log out", confirm: "Confirm logout", question: "Log out?", cancel: "Cancel" },
+  ja: { login: "ログイン", logout: "ログアウト", confirm: "ログアウトの確認", question: "ログアウトしますか？", cancel: "キャンセル" },
+} as const;
 
 export default function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
+  const onZzal = pathname === "/zzal" || pathname.startsWith("/zzal/");
+  // Match server/first hydration in Korean, then follow Zzal's selected document language.
+  const [headerLocale, setHeaderLocale] = useState<"ko" | "en" | "ja">("ko");
+  useEffect(() => {
+    if (!onZzal) return;
+    const sync = () => {
+      const language = document.documentElement.lang;
+      setHeaderLocale(language === "en" || language === "ja" ? language : "ko");
+    };
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+    return () => observer.disconnect();
+  }, [onZzal]);
+  const authCopy = HEADER_AUTH_COPY[onZzal ? headerLocale : "ko"];
 
   const onWebtoon = pathname.startsWith("/webtoon");
 
-  /* 크레딧은 계정 것이라 탭과 상관없이 같은 값이다 — 헤더에 두고 어디서나 보이게 한다.
-     누르면 충전 창이 열린다. 잔액을 묻는 것 자체가 오늘 몫을 챙겨 주는 길이라
-     (`/api/v1/credits/me`), 들어오자마자 한 번 부르면 오늘 것이 들어와 있다. */
-  const [credits, setCredits] = useState<number | null>(null);
-  const [chargeOpen, setChargeOpen] = useState(false);
-
-
   const { status, user, isAuthenticated } = useAuth();
 
+  /* 크레딧은 모든 탭에서 마이페이지 이름 왼쪽에 둔다. 잔액 조회가 오늘 몫도 챙긴다. */
+  const [credits, setCredits] = useState<number | null>(null);
+  const [chargeOpen, setChargeOpen] = useState(false);
   useEffect(() => {
     if (!isAuthenticated) { setCredits(null); return; }
     let alive = true;
     creditBalance()
       .then((b) => { if (alive) setCredits(b.balance); })
-      .catch(() => { /* 못 받으면 칩을 아예 안 그린다 */ });
-    /* 다른 화면이 크레딧을 움직였다고 알리면 바꾼다(notifyCreditsChanged). */
+      .catch(() => { /* 조회에 실패하면 잔액 칩을 숨긴다. */ });
     const onChanged = (e: Event) => {
       const next = (e as CustomEvent<{ balance?: number }>).detail?.balance;
       if (typeof next === "number") { setCredits(next); return; }
@@ -53,6 +69,56 @@ export default function SiteHeader() {
     return () => { alive = false; window.removeEventListener(CREDITS_CHANGED, onChanged); };
   }, [isAuthenticated]);
   const [authOpen, setAuthOpen] = useState(false);
+
+  /* 웹툰 소식(구독한 작품의 새 화 · 내 작품 댓글 등)에 안 읽은 것이 있으면 이름에 빨간 점(2026-10-25).
+     소식 창은 마이페이지 안에 있어서, 헤더에 표시가 없으면 소식이 온 줄 모른다.
+     마이페이지에서 읽으면 `lore:notices-changed` 로 알려 준다(CommunityBell). */
+  const [hasUnread, setHasUnread] = useState(false);
+  useEffect(() => {
+    if (!isAuthenticated || !onWebtoon) { setHasUnread(false); return; }
+    let alive = true;
+    const check = () => {
+      request<{ read_at: string | null }[]>("/api/webtoon/v1/community/notices")
+        .then((list) => { if (alive) setHasUnread(list.some((n) => !n.read_at)); })
+        .catch(() => { /* 못 받으면 점을 안 띄울 뿐이다 */ });
+    };
+    check();
+    const onChanged = (e: Event) => {
+      const n = (e as CustomEvent<number>).detail;
+      if (typeof n === "number") setHasUnread(n > 0); else check();
+    };
+    window.addEventListener("lore:notices-changed", onChanged);
+    return () => { alive = false; window.removeEventListener("lore:notices-changed", onChanged); };
+  }, [isAuthenticated, onWebtoon, pathname]);
+
+  /* 좁은 폰에서는 탭 줄이 옆으로 스크롤된다(헤더는 한 줄 고정). 그런데 스크롤이 늘 맨 앞이라
+     갤럭시 S26(360px, 글꼴 크게)에서 지금 보는 Webtoon 탭이 화면 밖에 있었고, 잘린 탭 글자가
+     오른쪽 단추 밑에 붙어 깨진 것처럼 보였다(2026-10-12 캡처). 그래서
+     - 지금 탭이 보이게 스크롤을 옮기고
+     - 잘린 쪽 가장자리를 흐리게 해서 더 있다는 것을 보인다(data-more-left / data-more-right). */
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const edges = () => {
+      const more = nav.scrollWidth - nav.clientWidth > 1;
+      nav.toggleAttribute("data-more-left", more && nav.scrollLeft > 1);
+      nav.toggleAttribute("data-more-right", more && nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1);
+    };
+    const active = nav.querySelector<HTMLElement>('[aria-current="page"]');
+    if (active && nav.scrollWidth > nav.clientWidth) {
+      const right = active.offsetLeft + active.offsetWidth - nav.offsetLeft;
+      if (right > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = right - nav.clientWidth + 4;
+    }
+    edges();
+    nav.addEventListener("scroll", edges, { passive: true });
+    window.addEventListener("resize", edges);
+    return () => {
+      nav.removeEventListener("scroll", edges);
+      window.removeEventListener("resize", edges);
+    };
+    // 로그인 단추가 이름으로 바뀌면 탭 줄 폭이 바뀐다 — 그때도 다시 맞춘다.
+  }, [pathname, status]);
 
   // 이메일 전체를 다 그리면 좁은 화면에서 헤더가 밀린다. 아이디 부분만 보여 주고
   // 전체는 title 로 남긴다(마우스를 올리면 보인다).
@@ -69,7 +135,7 @@ export default function SiteHeader() {
           LORE<span className={styles.wordmarkDot}>.</span>
         </Link>
 
-        <nav className={styles.nav}>
+        <nav className={styles.nav} ref={navRef}>
           {TABS.map((tab) => {
             const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
             return (
@@ -99,18 +165,20 @@ export default function SiteHeader() {
             <>
               {credits != null && (
                 <button type="button" className={styles.creditChip}
-                        onClick={() => setChargeOpen(true)}
-                        title="크레딧 충전">
+                        onClick={() => setChargeOpen(true)} title="크레딧 충전">
                   ◈ {credits.toLocaleString("ko-KR")}
                 </button>
               )}
-              <Link href={MY_PAGE} className={styles.authButton} title={user?.email}>
+              <Link href={MY_PAGE} className={`${styles.authButton} ${styles.authWithDot}`} title={user?.email}
+                    aria-label={hasUnread ? `${displayName} · 안 읽은 소식 있음` : undefined}>
                 {displayName}
+                {hasUnread && <span className={styles.unreadDot} aria-hidden="true" />}
               </Link>
             </>
           ) : (
-            <button type="button" className={styles.authButton} onClick={() => setAuthOpen(true)}>
-              로그인
+            <button type="button" className={styles.authButton} data-action="login"
+                    onClick={() => setAuthOpen(true)}>
+              {authCopy.login}
             </button>
           )}
         </div>
@@ -126,6 +194,7 @@ export default function SiteHeader() {
     {chargeOpen && <CreditCharge onClose={() => setChargeOpen(false)} />}
 
     <AuthModal
+      locale={pathname.startsWith("/zzal") ? "document" : undefined}
       open={authOpen}
       onClose={() => setAuthOpen(false)}
       onSuccess={onWebtoon ? () => router.push(MY_PAGE) : undefined}

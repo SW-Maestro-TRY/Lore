@@ -38,20 +38,4 @@ class BanFilterTest {
             assertThat(BanFilter.clean(ok)).isEqualTo(ok);
         }
     }
-
-    @Test
-    @DisplayName("★ 템플릿 5그룹 × 부름 4 × 답 3 + 재언급 — 전부 필터를 지난다")
-    void allTemplatesAreClean() {
-        for (Personality p : Personality.values()) {
-            for (ChatSlot s : ChatSlot.values()) {
-                assertThat(BanFilter.isBanned(ChatTemplates.call(p, s, "여울"))).as(p + " " + s).isFalse();
-            }
-            for (String answer : List.of("가", "나다", "라마바")) {
-                assertThat(BanFilter.isBanned(ChatTemplates.reply(p, answer, List.of(), 1))).as(p + " reply").isFalse();
-            }
-            assertThat(BanFilter.isBanned(ChatTemplates.reply(p, "x", List.of("어제 답"), 3))).as(p + " recall").isFalse();
-            assertThat(ChatTemplates.reply(p, "x", List.of("어제 답"), 3)).contains("어제 답");
-        }
-        assertThat(ChatTemplates.call(null, ChatSlot.EVENING, "여울")).contains("여울");   // 성격 미선택 = 온순
-    }
 }

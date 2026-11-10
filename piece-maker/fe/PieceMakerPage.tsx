@@ -7,7 +7,14 @@
 import "./assets/fonts.css";
 import "./piece-maker.css";
 import PieceMaker from "./piece-maker/PieceMaker";
+import { Suspense } from "react";
+import AdLandingTracker from "./piece-maker/AdLandingTracker";
 
 export default function PieceMakerPage() {
-  return <PieceMaker />;
+  return (
+    <>
+      <Suspense fallback={null}><AdLandingTracker /></Suspense>
+      <PieceMaker />
+    </>
+  );
 }

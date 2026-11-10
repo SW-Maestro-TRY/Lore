@@ -1,7 +1,9 @@
 # Lore 개발용 self-contained 스택 (base).
 #
 # 같은 compose 가 개발자 노트북과 dev EC2 양쪽에서 돈다 — 차이는 .env 하나뿐이다.
-#   노트북 : docker compose --env-file infra/dev/.env up --build   (→ http://localhost:3100)
+#   노트북 : scripts/dev.sh up 을 쓴다(브랜치별 스택·포트 분리·테스트 계정 — scripts/README-dev.md).
+#            이 파일로 직접 띄우면 project 가 lore-dev 하나라, 워크트리마다 같은 컨테이너를 덮어쓴다.
+#            docker compose --env-file infra/dev/.env up --build   (→ http://localhost:3100)
 #   dev EC2: docker compose -f docker-compose.yml -f docker-compose.dev-ec2.yml up -d
 #            (override 가 nginx(80/443·TLS)를 얹는다)
 #
@@ -119,6 +121,15 @@ services:
         condition: service_completed_successfully
     environment:
       LORE_ENV: dev
+      # PM 전용 설정만 전달한다. Meta 전송·자동 삭제는 미설정 시 꺼져 있다.
+      PIECE_MAKER_META_ENABLED: ${PIECE_MAKER_META_ENABLED:-false}
+      PIECE_MAKER_META_PIXEL_ID: ${PIECE_MAKER_META_PIXEL_ID:-}
+      PIECE_MAKER_META_SITE_ORIGIN: ${PIECE_MAKER_META_SITE_ORIGIN:-}
+      PIECE_MAKER_RETENTION_ENABLED: ${PIECE_MAKER_RETENTION_ENABLED:-false}
+      PIECE_MAKER_TEST_USER_IDS: ${PIECE_MAKER_TEST_USER_IDS:-}
+      PIECE_MAKER_TEST_EXCLUSIONS_REVIEWED: ${PIECE_MAKER_TEST_EXCLUSIONS_REVIEWED:-false}
+      PIECE_MAKER_HISTORY_VERIFIED_FROM: ${PIECE_MAKER_HISTORY_VERIFIED_FROM:-}
+      PIECE_MAKER_HISTORY_VERIFIED_THROUGH: ${PIECE_MAKER_HISTORY_VERIFIED_THROUGH:-}
       # DB — 컨테이너 이름 postgres 로 붙는다(SPRING_DATASOURCE_URL 이 yml 기본값을 덮는다)
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/lore
       DB_USERNAME: ${DB_USERNAME}
@@ -135,8 +146,52 @@ services:
       # ★ 실제 OpenAI 호출 스위치(app.zzal.generation.real). 이 값을 안 넘기면 키가 있어도
       #   application.yml 기본값(false)이라 가짜 모드로 뜬다. .env 의 ZZAL_GENERATION_REAL 로 켠다.
       ZZAL_GENERATION_REAL: ${ZZAL_GENERATION_REAL:-false}
+      # Reviewed catalog; empty until the environment's assets and manifest are explicitly published.
+      ZZAL_PUBLISHED_BACKGROUNDS: ${ZZAL_PUBLISHED_BACKGROUNDS:-[]}
+      # 채팅 대사 LLM 스위치(app.zzal.chat.llm, #704·#709). 기본 켜짐 — 키는 위 ZZAL_OPENAI_API_KEY 그대로(새 파라미터 없음).
+      # ★ 끄는 용도로만 쓴다. 꺼지면 채팅 부름이 아예 없다(템플릿 삭제) — 튜토리얼 대화 칸도 안 열린다.
+      ZZAL_CHAT_LLM: ${ZZAL_CHAT_LLM:-true}
+      ZZAL_CHAT_MAX_ATTEMPTS: ${ZZAL_CHAT_MAX_ATTEMPTS:-2}
+      ZZAL_DIARY_ENABLED: ${ZZAL_DIARY_ENABLED:-false}
+      ZZAL_DIARY_TIMEOUT_MS: ${ZZAL_DIARY_TIMEOUT_MS:-15000}
+      ZZAL_DIARY_SWEEP_MS: ${ZZAL_DIARY_SWEEP_MS:-30000}
+      ZZAL_DIARY_MAX_COMPLETION_TOKENS: ${ZZAL_DIARY_MAX_COMPLETION_TOKENS:-}
+      # ── 리모컨(dev API)·관리자 화면 ──
+      # 통로가 없어서 박스 .env 에 값을 넣어도 앱이 못 봤다(dev API 404·관리자 화면 안 열림, 9/22·10/9).
+      # 기본은 꺼짐 — 켜는 건 박스 /opt/lore-dev/.env 에서만(ZZAL_DEV_TOOLS=true · ZZAL_ADMIN=true).
+      # 운영·스테이징은 이 compose 를 안 쓰고 SSM 에도 이 키가 없어 빈이 안 올라온다(404).
+      ZZAL_DEV_TOOLS: ${ZZAL_DEV_TOOLS:-false}
+      ZZAL_ADMIN: ${ZZAL_ADMIN:-false}
+      # 관리자 봇(맥미니 러너) 토큰·사용자 번호. 비우면 봇 문만 꺼진다(사람 관리자 로그인은 그대로).
+      ZZAL_ADMIN_TOKEN: ${ZZAL_ADMIN_TOKEN:-}
+      ZZAL_ADMIN_BOT_USER_ID: ${ZZAL_ADMIN_BOT_USER_ID:-0}
       # 파이썬 후처리 실제 실행(돈 안 남). 슬림 JRE 이미지엔 numpy/scipy/PIL 이 없어 켜면 기동이 막힌다 → 기본 꺼짐.
       ZZAL_REAL_POSTPROCESS: ${ZZAL_REAL_POSTPROCESS:-false}
+      ZZAL_OPENAI_IDENTITY_MAX_COMPLETION_TOKENS: ${ZZAL_OPENAI_IDENTITY_MAX_COMPLETION_TOKENS:-}
+      # Custom generation stays off until all execution/dispatch guards are explicitly approved.
+      ZZAL_ATTENDANCE_CLI_ENABLED: ${ZZAL_ATTENDANCE_CLI_ENABLED:-false}
+      ZZAL_CUSTOM_ENABLED: ${ZZAL_CUSTOM_ENABLED:-false}
+      ZZAL_CUSTOM_PLANNER_MODEL: ${ZZAL_CUSTOM_PLANNER_MODEL:-gpt-5.6-luna}
+      ZZAL_CUSTOM_PLANNER_REASONING_EFFORT: ${ZZAL_CUSTOM_PLANNER_REASONING_EFFORT:-none}
+      ZZAL_CUSTOM_PLANNER_MAX_COMPLETION_TOKENS: ${ZZAL_CUSTOM_PLANNER_MAX_COMPLETION_TOKENS:-6144}
+      ZZAL_CUSTOM_PLANNER_TIMEOUT_SECONDS: ${ZZAL_CUSTOM_PLANNER_TIMEOUT_SECONDS:-90}
+      ZZAL_CUSTOM_PROVIDER: ${ZZAL_CUSTOM_PROVIDER:-}
+      ZZAL_CUSTOM_IMAGE_MODEL: ${ZZAL_CUSTOM_IMAGE_MODEL:-gpt-image-2}
+      ZZAL_CUSTOM_IMAGE_SIZE: ${ZZAL_CUSTOM_IMAGE_SIZE:-1248x1248}
+      ZZAL_CUSTOM_POSTPROCESS_VERSION: ${ZZAL_CUSTOM_POSTPROCESS_VERSION:-v1}
+      ZZAL_CUSTOM_DISPATCH_ENABLED: ${ZZAL_CUSTOM_DISPATCH_ENABLED:-false}
+      ZZAL_CUSTOM_DISPATCH_OUTPUT_ROOT: ${ZZAL_CUSTOM_DISPATCH_OUTPUT_ROOT:-}
+      # Explicit one-shot dev recovery; disabled until an approved target is supplied.
+      ZZAL_PUBLICATION_RECOVERY_ENABLED: ${ZZAL_PUBLICATION_RECOVERY_ENABLED:-false}
+      ZZAL_PUBLICATION_RECOVERY_OWNER_ID: ${ZZAL_PUBLICATION_RECOVERY_OWNER_ID:-}
+      ZZAL_PUBLICATION_RECOVERY_JOB_ID: ${ZZAL_PUBLICATION_RECOVERY_JOB_ID:-}
+      ZZAL_PUBLICATION_RECOVERY_OPERATION_ID: ${ZZAL_PUBLICATION_RECOVERY_OPERATION_ID:-}
+      ZZAL_PUBLICATION_RECOVERY_EXPIRES_AT: ${ZZAL_PUBLICATION_RECOVERY_EXPIRES_AT:-}
+      # Local observations only; this does not enable paid generation or public management endpoints.
+      ZZAL_METRICS_RUNTIME_ENABLED: ${ZZAL_METRICS_RUNTIME_ENABLED:-true}
+      ZZAL_METRICS_RUNTIME_INTERVAL_MS: ${ZZAL_METRICS_RUNTIME_INTERVAL_MS:-60000}
+      ZZAL_METRICS_QUEUE_ENABLED: ${ZZAL_METRICS_QUEUE_ENABLED:-true}
+      ZZAL_METRICS_SPOOL_DIRECTORY: ${ZZAL_METRICS_SPOOL_DIRECTORY:-/var/lib/lore/metrics-spool}
       # ── 웹툰 만들기 ────────────────────────────────────────────────
       # 하네스를 돌릴 파이썬(lore.webtoon.python.bin). 이미지가 심어 둔 두 번째 가상환경을
       # 가리킨다 — zzal 것(/opt/lore/venv)에는 openai·google-genai·PyYAML 이 없다.
@@ -145,15 +200,35 @@ services:
       # 하네스가 그림·이야기를 부를 때 쓰는 열쇠. 자바 프로세스 환경으로 들어가 파이썬이
       # 물려받고, llm.py 가 OPENAI_API_KEY 로 풀어 쓴다. 비우면 만들기가 그 자리에서 멈춘다.
       WEBTOON_API_KEY: ${WEBTOON_API_KEY:-}
+      # 웹툰 생성 파이썬만 Codex 프록시로 전환. 기존 키는 moderation 용으로 유지한다.
+      WEBTOON_CODEX_PROXY: ${WEBTOON_CODEX_PROXY:-false}
+      CODEX_PROXY_API_KEY: ${CODEX_PROXY_API_KEY:-}
+      CODEX_PROXY_BASE_URL: ${CODEX_PROXY_BASE_URL:-}
+      CODEX_PROXY_TEXT_MODEL: ${CODEX_PROXY_TEXT_MODEL:-gpt-6-sol}
       # 하네스 모델 호출 추적(Logfire, webtoon/ai/new_harness/tracing.py). 파이썬이 물려받는다.
       # 비우면 추적이 꺼진 채로 똑같이 돈다. 켜면 캐릭터 설명·사진이 프롬프트째 Logfire 로 나간다.
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
-      # new_harness 가 쓸 텍스트 모델 프로바이더/스토리 축 기능 스위치(llm.py·run.py).
-      # 안 주면 llm.py 기본값(gemini)으로 붙는데 dev 는 OpenAI 키만 있어서 그대로 두면
-      # 실패한다 — 비워 둬도 여기 통로만 열고, 실제 값은 .env 에서 openai 로 채운다.
+      # new_harness 가 쓸 모델 프로바이더/스토리 축 기능 스위치(llm.py·run.py).
+      # dev 는 openrouter(글·그림 모두 OpenRouter 경유, 모델은 같은 OpenAI 모델)로 둔다.
+      # 비워 둬도 여기 통로만 열고, 실제 값은 .env 에서 채운다.
       NH_PROVIDER: ${NH_PROVIDER:-}
+      # NH_PROVIDER=openrouter 일 때 쓰는 열쇠. 비우면 만들기가 첫 걸음에서 멈춘다.
+      # 입력 글 검사(moderation)는 OpenRouter 에 없어서 위 WEBTOON_API_KEY 로 계속 한다.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      # 있으면 검수 네 단계(이야기·장·표지·화 전체)가 Gemini 로 간다(llm.py
+      # STAGE_DEFAULT_PROVIDERS). 비우면 검수도 NH_PROVIDER 를 따른다.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # 운영 알림 디스코드 웹훅(#831, webtoon/be/.../ops/OpsAlert). 비우면 알림만 꺼진다.
+      LORE_WEBTOON_ALERT_DISCORD_WEBHOOK: ${LORE_WEBTOON_ALERT_DISCORD_WEBHOOK:-}
+      LORE_WEBTOON_ALERT_ENV: ${LORE_WEBTOON_ALERT_ENV:-dev}
       NH_STORY_AXES: ${NH_STORY_AXES:-}
       NH_STORY_ENGINES: ${NH_STORY_ENGINES:-}
+      # 단계별 모델 덮어쓰기(new_harness/llm.py 의 <단계>_PROVIDER·<단계>_MODEL). dev 에서 이야기·인물만
+      # Gemini 로 보려고 연 통로(2026-10-27). 비우면 NH_PROVIDER 와 단계 기본값을 따른다.
+      STORY_PROVIDER: ${STORY_PROVIDER:-}
+      STORY_MODEL: ${STORY_MODEL:-}
+      CAST_PROVIDER: ${CAST_PROVIDER:-}
+      CAST_MODEL: ${CAST_MODEL:-}
       # 하네스가 다 그린 그림을 올리고 비용을 적을 때 서버에 대는 한 마디
       # (lore.webtoon.internal-token · upload/s3_upload.py). 비우면 S3 에는 올라가도
       # 주소가 DB 에 안 적힌다.
@@ -168,6 +243,15 @@ services:
       # 플레이스홀더가 안 풀려 기동이 막힌다.
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
+      # 크레딧 충전 결제 — 페이앱(#155, common/docs/payment.md). 넷 중 하나라도 비면 충전 창이
+      # 「준비 중」으로 막힐 뿐 나머지는 그대로 뜬다. 테스트 환경이 없어서 값을 넣으면 실결제가 된다.
+      # SITE_URL 은 페이앱이 통보를 보낼 이 박스의 바깥 주소(https://dev.lorecomic.com).
+      PAYAPP_USERID: ${PAYAPP_USERID:-}
+      PAYAPP_LINKKEY: ${PAYAPP_LINKKEY:-}
+      PAYAPP_LINKVAL: ${PAYAPP_LINKVAL:-}
+      PAYAPP_SITE_URL: ${PAYAPP_SITE_URL:-}
       # http(노트북)에서는 Secure 쿠키가 저장 안 되므로 false. https(박스)는 .env 에서 true.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       # 공유 링크의 기준 주소. 안 넘기면 application.yml 기본값(http://localhost:3100/zzal/s)이라
@@ -184,6 +268,9 @@ services:
       # 이야기를 고르던 작업이 배포 뒤에 이어 갈 파일을 잃는다(#500·#503). 그림 원본은
       # S3 에 올린 뒤 RunFiles 가 치우고 글·JSON 만 남는다.
       - webtoonwork:/app/webtoon/ai/work
+      - zzalmetrics:/var/lib/lore/metrics-spool
+      # Frozen plans, provider receipts and failed work must survive app replacement.
+      - zzalcustom:/var/lib/lore/custom-bundles
 
   # ── 프론트엔드 (Next.js standalone) ──────────────────────────────
   web:
@@ -211,6 +298,8 @@ services:
       - "3100:3000"
 
 volumes:
+  zzalcustom:     # Private generation work; completed public assets are published to S3/MinIO.
+  zzalmetrics:    # Uncommitted metrics survive container replacement; never served as public assets.
   pgdata:
   miniodata:
   seeddata:        # 씨뿌리기용 내려받기 캐시 — 두 번째 기동부터는 다시 안 받는다

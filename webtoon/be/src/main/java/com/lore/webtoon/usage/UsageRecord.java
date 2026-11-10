@@ -77,6 +77,10 @@ public class UsageRecord {
     @Column(name = "output_tokens", nullable = false)
     private long outputTokens;
 
+    /** 입력 중 프롬프트 캐시로 처리된 토큰(#832). 값이 깎이는 몫이다. 옛 줄은 0(모름). */
+    @Column(name = "cached_tokens", nullable = false)
+    private long cachedTokens;
+
     /** 달러. 하네스가 <b>호출 시점에</b> 계산해 박아 둔 값을 그대로 옮긴다. */
     @Column(name = "cost_usd", nullable = false)
     private double costUsd;
@@ -104,7 +108,7 @@ public class UsageRecord {
     }
 
     private UsageRecord(String runId, int seq, String stage, String provider, String model,
-                        long inputTokens, long outputTokens, double costUsd, long costKrw,
+                        long inputTokens, long outputTokens, long cachedTokens, double costUsd, long costKrw,
                         String costBasis, String error, Instant calledAt) {
         this.runId = runId;
         this.seq = seq;
@@ -113,6 +117,7 @@ public class UsageRecord {
         this.model = model;
         this.inputTokens = inputTokens;
         this.outputTokens = outputTokens;
+        this.cachedTokens = cachedTokens;
         this.costUsd = costUsd;
         this.costKrw = costKrw;
         this.costBasis = costBasis;
@@ -123,8 +128,19 @@ public class UsageRecord {
     public static UsageRecord of(String runId, int seq, String stage, String provider, String model,
                                  long inputTokens, long outputTokens, double costUsd, long costKrw,
                                  String costBasis, String error, Instant calledAt) {
-        return new UsageRecord(runId, seq, stage, provider, model, inputTokens, outputTokens,
+        return of(runId, seq, stage, provider, model, inputTokens, outputTokens, 0L,
                 costUsd, costKrw, costBasis, error, calledAt);
+    }
+
+    public static UsageRecord of(String runId, int seq, String stage, String provider, String model,
+                                 long inputTokens, long outputTokens, long cachedTokens, double costUsd, long costKrw,
+                                 String costBasis, String error, Instant calledAt) {
+        return new UsageRecord(runId, seq, stage, provider, model, inputTokens, outputTokens, cachedTokens,
+                costUsd, costKrw, costBasis, error, calledAt);
+    }
+
+    public long getCachedTokens() {
+        return cachedTokens;
     }
 
     public Long getId() {

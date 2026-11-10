@@ -5,6 +5,7 @@
 // v1 에서 지운 것: MOVES(13종 옛 카탈로그) · FRIENDS(친구 목업) · MOVE_IMG(해금 그림 표).
 // 이미지 키는 서버(Motion.basicImageKey)가 준다 — 여기 그림 주소는 서버 값이 없을 때의 여울 폴백뿐이다.
 
+import { FLOOR_DIRT_ASSETS } from './floorDirtAssets';
 import type { MotionLayer } from '../lib/pet';
 
 /**
@@ -251,7 +252,7 @@ export const ASSET = {
   eggCrack: asset('egg_crack.webp', 'full', 1),
   eggHatch: asset('egg_hatch.webp', 'full', 1),
   /** 바닥 흔적 1~4단계(정본은 흔적 최대 4, 5단계 파일은 안 쓴다). 캐릭터 앞을 가린다. */
-  trash: [1, 2, 3, 4].map((n) => asset(`trash${n}.webp`, 'full', 1)),
+  trash: FLOOR_DIRT_ASSETS.map(src => ({ ...asset('', 'full', 1), src })),
   trashSweep: asset('trash_sweep.webp', 'full', 1),
   firework: asset('firework.webp', 'full', 1),
   zzz: asset('zzz.webp', 'head', 0.35, { dx: 0.2, dy: -0.1 }),

@@ -33,6 +33,9 @@ import java.util.stream.Collectors;
  */
 @Service
 public class FeedbackService {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.zzal.generation.client.PersistentProviderUsageRecorder metrics;
+
 
     private static final Logger log = LoggerFactory.getLogger(FeedbackService.class);
 
@@ -88,6 +91,7 @@ public class FeedbackService {
 
         // 지금은 NONE 이라 아무 일도 일어나지 않는다. 정해지면 설정값만 바꾸면 붙는다.
         rewardService.forFeedback(petId, now);
+        if(metrics!=null) metrics.outcome("feedback", "feedback-"+saved.getId(), userId, petId, null, "succeeded");
         return saved;
     }
 

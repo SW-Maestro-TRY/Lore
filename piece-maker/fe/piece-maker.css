@@ -94,10 +94,10 @@ body:has(.piece-maker-page) [role="dialog"][aria-modal="true"]:has(> [role="tabl
 .piece-maker-page .empty .btn { margin-top: 16px; }
 .piece-maker-page [hidden] { display: none !important; }
 
-/* 상단 안내와 두 작업 영역. 목록과 작성 본문은 각각 스크롤한다. */
-.piece-maker-page .app { height: calc(100dvh - var(--piece-maker-header-h, 0px)); padding: 0 24px 24px; }
+/* 작성 본문은 페이지를 따라 늘어나고, 데스크톱 카드 목록만 내부 스크롤한다. */
+.piece-maker-page .app { min-height: calc(100dvh - var(--piece-maker-header-h, 0px)); padding: 0 24px 24px; }
 .piece-maker-page .workspace {
-  max-width: 1248px; height: 100%; margin: 0 auto; min-width: 0; min-height: 0;
+  max-width: 1248px; margin: 0 auto; min-width: 0; min-height: 0;
   display: flex; flex-direction: column; gap: 16px;
 }
 .piece-maker-page .topbar {
@@ -120,7 +120,7 @@ body:has(.piece-maker-page) [role="dialog"][aria-modal="true"]:has(> [role="tabl
 .piece-maker-page .mobile-tabs { display: none; }
 .piece-maker-page .panes {
   display: grid; grid-template-columns: minmax(0, 710fr) minmax(0, 514fr); gap: 24px;
-  min-height: 0; flex: 1;
+  align-items: start;
 }
 .piece-maker-page .explore, .piece-maker-page .compose { min-width: 0; min-height: 0; }
 .piece-maker-page :is(.cards, .paper, dialog) { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
@@ -147,14 +147,14 @@ body:has(.piece-maker-page) [role="dialog"][aria-modal="true"]:has(> [role="tabl
   background: var(--paper); color: var(--ink); font-size: 12px; font-weight: 700;
 }
 .piece-maker-page .suggestions .chip:hover { background: var(--yellow); }
-.piece-maker-page .results-head { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
-.piece-maker-page .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.piece-maker-page .results-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
+.piece-maker-page .filters { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; min-width: 0; }
 .piece-maker-page .filter {
   min-height: 36px; padding: 6px 10px; border: 1.5px solid var(--ink); border-radius: var(--control-radius);
   font-size: 12px; font-weight: 700; color: var(--ink); background: var(--paper); white-space: nowrap;
 }
 .piece-maker-page .filter:hover, .piece-maker-page .filter[aria-pressed=true] { background: var(--yellow); }
-.piece-maker-page .result-count { font-size: 13px; color: var(--muted); font-weight: 700; }
+.piece-maker-page .result-count { font-size: 13px; color: var(--muted); font-weight: 700; display: flex; align-items: center; min-height: 36px; flex-shrink: 0; white-space: nowrap; }
 .piece-maker-page .cards { display: grid; gap: 16px; align-content: start; min-height: 0; flex: 1; overflow: auto; padding: 2px 6px 6px 2px; }
 .piece-maker-page .evidence {
   background: var(--paper); border: 1.5px solid var(--ink); border-radius: var(--radius);
@@ -167,15 +167,16 @@ body:has(.piece-maker-page) [role="dialog"][aria-modal="true"]:has(> [role="tabl
 .piece-maker-page .evidence .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .piece-maker-page .chapter-tag { font-size: 12px; color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
 .piece-maker-page .dot { width: 3px; height: 3px; background: var(--muted); border-radius: 50%; }
-.piece-maker-page .evidence .bottom { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 12px; }
-.piece-maker-page .card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.piece-maker-page .card-actions .btn { min-height: 40px; }
+.piece-maker-page .evidence .bottom { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.piece-maker-page .evidence .people { flex: 1; min-width: 0; }
+.piece-maker-page .evidence .person { overflow-wrap: anywhere; }
+.piece-maker-page .evidence .people > .person { padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--control-radius); background: var(--paper); }
 .piece-maker-page .people { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
 .piece-maker-page .person { font-weight: 700; }
 .piece-maker-page .add-btn {
   font-size: 13px; font-weight: 700; color: var(--ink); border: 1.5px solid var(--ink);
   border-radius: var(--control-radius); padding: 8px 12px; min-height: 40px; background: var(--yellow);
-  white-space: nowrap; display: flex; align-items: center; gap: 6px;
+  white-space: nowrap; display: flex; align-items: center; gap: 6px; flex-shrink: 0;
 }
 .piece-maker-page .add-btn svg { width: 16px; height: 16px; }
 .piece-maker-page .add-btn:hover { background: var(--tint); }
@@ -185,10 +186,10 @@ body:has(.piece-maker-page) [role="dialog"][aria-modal="true"]:has(> [role="tabl
 .piece-maker-page .no-result { padding: 32px 20px; text-align: center; background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--radius); }
 .piece-maker-page .no-result p { margin: 8px 0 18px; color: var(--muted); font-size: 14px; }
 
-/* 가설 본문은 접거나 생략하지 않는다. 판정의 추가 검토·원문만 details를 사용한다. */
+/* 가설 본문은 접거나 생략하지 않는다. */
 .piece-maker-page .compose {
   background: var(--paper); border: 1.5px solid var(--ink); border-radius: var(--radius);
-  display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; box-shadow: var(--shadow);
 }
 .piece-maker-page .compose-top { padding: 20px 20px 12px; flex-shrink: 0; }
 .piece-maker-page .compose-top .eyebrow { margin-bottom: 4px; }
@@ -200,12 +201,12 @@ body:has(.piece-maker-page) [role="dialog"][aria-modal="true"]:has(> [role="tabl
 .piece-maker-page .compose-status { flex-wrap: wrap; margin-top: 12px; }
 .piece-maker-page .saved-status { font-size: 12px; color: var(--muted); display: flex; gap: 5px; align-items: center; }
 .piece-maker-page .saved-status:before { content: ''; width: 5px; height: 5px; flex-shrink: 0; background: var(--sea); border-radius: 50%; }
-.piece-maker-page .paper { min-height: 0; flex: 1; overflow: auto; padding: 0 20px 20px; }
+.piece-maker-page .paper { flex: 0 0 auto; padding: 0 20px 20px; }
 .piece-maker-page .submitted-judgement { margin-bottom: 24px; }
 .piece-maker-page .paper-topline { font-size: 11px; color: var(--muted); padding-bottom: 12px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; }
 .piece-maker-page .paper-topline .ink-line { width: 28px; height: 3px; background: var(--primary); margin-top: 7px; }
 .piece-maker-page .title-label { margin-top: 16px; }
-.piece-maker-page .title-input { font-size: 14px; font-weight: 400; line-height: 23px; min-height: 70px; }
+.piece-maker-page .field.title-input { font-size: 23px; font-weight: 700; line-height: 34.5px; min-height: 70px; }
 .piece-maker-page .section-label { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 20px 0 12px; font-family: var(--heading-font); font-size: 19px; line-height: 27px; }
 .piece-maker-page .section-label .n { color: var(--primary); margin-right: 7px; }
 .piece-maker-page .section-label .count { padding: 5px 8px; border-radius: var(--control-radius); background: var(--yellow); color: var(--ink); font: 700 12px/20px var(--font); }
@@ -251,17 +252,16 @@ body:has(.piece-maker-page) [role="dialog"][aria-modal="true"]:has(> [role="tabl
 .piece-maker-page .judge-submitted { display: flex; align-items: stretch; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .piece-maker-page .judge-pending { display: flex; align-items: center; justify-content: center; gap: 8px; flex: 1; min-width: 0; min-height: 44px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: var(--control-radius); background: var(--hero); color: var(--ink); font-size: 13px; }
 .piece-maker-page .judge-submitted [data-action="new-draft"] { margin-left: auto; min-height: 44px; font-size: 13px; }
+/* D07에서 문구를 비운 두 줄의 기존 여백을 유지한다. */
+.piece-maker-page .judge-empty-line { height: 20px; }
+.piece-maker-page .compose[data-judgement-failed="true"] [data-part="frozen-tag"] { background: var(--primary); }
 .piece-maker-page .judge-spinner { width: 14px; height: 14px; flex: 0 0 14px; border: 2px solid var(--line); border-top-color: var(--primary); border-radius: 50%; animation: piece-maker-judge-spin 1s linear infinite; }
 @keyframes piece-maker-judge-spin { to { transform: rotate(360deg); } }
-.piece-maker-page .record-status { font-size: 12px; font-weight: 700; color: var(--muted); }
 .piece-maker-page .judge-edited { margin: 16px 0 24px; }
 .piece-maker-page .judge-headline { margin-bottom: 20px; font-size: 19px; line-height: 27px; overflow-wrap: anywhere; }
 .piece-maker-page .judge-section { margin: 18px 0; }
 .piece-maker-page .judge-section h4 { margin: 0 0 8px; font-family: var(--heading-font); font-size: 19px; font-weight: 400; line-height: 27px; }
 .piece-maker-page .judge-section p { margin: 0; line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; }
-.piece-maker-page .judge-detail { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 12px; }
-.piece-maker-page .judge-detail summary { cursor: pointer; font-size: 13px; font-weight: 700; line-height: 1.7; }
-.piece-maker-page .judge-original .judge-reason { margin-top: 12px; }
 .piece-maker-page .judge-editor-notice { margin: 14px 0 6px; }
 .piece-maker-page [data-part="judge-grade"] { padding: 5px 8px; border-radius: var(--control-radius); background: var(--yellow); font-size: 13px; }
 .piece-maker-page svg.credit-coin { width: 28px; height: 28px; flex: 0 0 28px; }
@@ -272,6 +272,7 @@ body:has(.piece-maker-page) [role="dialog"][aria-modal="true"]:has(> [role="tabl
 .piece-maker-page .judge-cost { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; white-space: nowrap; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .piece-maker-page .judge-cost svg.credit-coin { width: 24px; height: 24px; flex-basis: 24px; }
 .piece-maker-page .credit-feedback { color: var(--sea); font-size: 13px; }
+.piece-maker-page .compose[data-judgement-failed="true"] .credit-feedback { color: var(--primary); }
 .piece-maker-page .credit-feedback:empty { display: none; }
 .piece-maker-page .piece-maker-credit-history { margin: 0; padding: 0; list-style: none; }
 .piece-maker-page .piece-maker-credit-history li { display: flex; justify-content: space-between; gap: 16px; align-items: center; border-bottom: 1px solid var(--line); padding: 16px 0; }
@@ -299,9 +300,9 @@ body:has(.piece-maker-page) [role="dialog"][aria-modal="true"]:has(> [role="tabl
 .piece-maker-page .dialog-body { padding: 24px; }
 .piece-maker-page .dialog-body .row { flex-wrap: wrap; }
 .piece-maker-page .dialog-body .fact-box { padding: 16px; border: 1.5px solid var(--line); background: var(--canvas); border-radius: var(--control-radius); margin: 12px 0 18px; line-height: 1.85; }
-.piece-maker-page .dialog-body details { font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; margin-top: 20px; color: var(--muted); }
+.piece-maker-page .dialog-body :is(details, .card-source) { font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; margin-top: 20px; color: var(--muted); }
 .piece-maker-page .dialog-body summary { cursor: pointer; }
-.piece-maker-page .dialog-body details p { margin-top: 10px; word-break: normal; }
+.piece-maker-page .dialog-body :is(details, .card-source) p { margin-top: 10px; word-break: normal; }
 .piece-maker-page .dialog-body .source-path { font-family: monospace; font-size: 12px; }
 .piece-maker-page .dialog-foot { padding: 16px 24px; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--line); }
 .piece-maker-page .saved-entry { display: flex; gap: 12px; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
@@ -335,31 +336,32 @@ body:has(.piece-maker-page) [role="dialog"][aria-modal="true"]:has(> [role="tabl
 @keyframes piece-maker-notice { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 /* 공유 */
-.piece-maker-page dialog:has(.share-panel) { width: min(1100px, calc(100vw - 40px)); }
+.piece-maker-page dialog:has(.share-panel) { width: min(720px, calc(100vw - 40px)); }
 .piece-maker-page .share-intro { margin-bottom: 20px; color: var(--muted); font-size: 14px; }
-.piece-maker-page .share-layout { display: grid; grid-template-columns: minmax(0, .82fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.piece-maker-page .share-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
 .piece-maker-page .share-box { min-width: 0; border: 1.5px solid var(--ink); border-radius: var(--radius); background: var(--canvas); padding: 20px; }
+.piece-maker-page .share-box.share-destinations { border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; padding-bottom: 0; }
 .piece-maker-page .share-box h3 { display: flex; gap: 8px; align-items: center; font-size: 19px; margin-bottom: 16px; }
 .piece-maker-page .share-step { display: inline-grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: var(--control-radius); background: var(--yellow); color: var(--ink); font: 700 12px/20px var(--font); }
-.piece-maker-page .share-result-image { display: block; width: 100%; max-width: 360px; height: auto; margin: 0 auto; box-shadow: var(--shadow); }
-.piece-maker-page .share-image-placeholder { aspect-ratio: 4 / 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; border: 1.5px solid var(--line); border-radius: var(--control-radius); background: var(--paper); font-size: 14px; color: var(--muted); }
-.piece-maker-page .share-image-meta { text-align: center; font-size: 12px; color: var(--muted); margin: 16px 0 12px; }
 .piece-maker-page .share-full { width: 100%; }
 .piece-maker-page .share-controls { display: grid; gap: 20px; min-width: 0; }
-.piece-maker-page .share-caption { min-height: 245px; font-size: 14px; line-height: 1.85; background: var(--paper); }
+.piece-maker-page .share-caption { min-height: 245px; max-width: 100%; resize: none; overflow: hidden; white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 1.85; background: var(--paper); }
 .piece-maker-page .share-text-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; font-size: 12px; }
 .piece-maker-page .share-channel-help { color: var(--muted); font-size: 13px; line-height: 1.8; margin-bottom: 16px; }
-.piece-maker-page .share-channels { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.piece-maker-page .share-channels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .piece-maker-page .share-channel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px 4px; border: 1.5px solid var(--ink); border-radius: var(--control-radius); color: var(--ink); background: var(--paper); text-decoration: none; font-size: 12px; }
 .piece-maker-page .share-channel:hover { background: var(--yellow); }
-.piece-maker-page .share-channel > svg { width: 25px; height: 25px; color: var(--primary); }
-.piece-maker-page .share-channel-mark { display: block; font-size: 27px; font-weight: 800; line-height: 27px; height: 27px; }
-.piece-maker-page .share-channel-mark.facebook { color: #1877f2; }
-.piece-maker-page .share-channel-mark.x { font-size: 23px; }
+.piece-maker-page button.share-channel { border: 1.5px solid var(--ink); background: var(--paper); font-size: 12px; }
+.piece-maker-page button.share-channel:hover:not(:disabled) { background: var(--yellow); }
+.piece-maker-page .share-channel-mark { display: block; width: 24px; height: 24px; flex-shrink: 0; fill: currentColor; stroke: none; color: var(--ink); }
 .piece-maker-page [data-action=native-share] { margin-top: 16px; }
 .piece-maker-page .share-hint { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 12px; }
 .piece-maker-page .share-notice { min-height: 24px; color: var(--sea); font-size: 13px; margin-top: 16px; }
-.piece-maker-page .share-bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: 12px; }
+.piece-maker-page .share-bottom { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: 12px; }
+.piece-maker-page .share-facebook-dialog { width: min(480px, calc(100vw - 40px)); }
+.piece-maker-page .share-facebook-dialog .dialog-head h2 { font-size: 23px; line-height: 1.4; }
+.piece-maker-page .share-facebook-help { margin-top: 16px; line-height: 1.8; }
+.piece-maker-page .share-manual-copy { margin-top: 16px; min-height: 180px; resize: vertical; white-space: pre-wrap; word-break: break-word; }
 
 /* 비활성은 불투명도를 낮추지 않아 글자 대비를 유지한다. */
 .piece-maker-page button:disabled { cursor: default; background: var(--disabled); border-color: var(--line); color: var(--muted); opacity: 1; }
@@ -395,6 +397,17 @@ body:has(.piece-maker-page) [role="dialog"]:has(> [role="tablist"][aria-label="�
   .piece-maker-page .compose-footer { padding: 16px; }
 }
 
+/* 탐색은 헤더 아래에 남고, 작성·판정은 페이지 전체 높이를 쓴다. */
+@media (min-width: 901px) {
+  html:has(.piece-maker-page) { scroll-padding-bottom: 100px; }
+  .piece-maker-page .explore {
+    position: sticky; top: calc(var(--piece-maker-header-h, 0px) + 16px);
+    height: calc(100dvh - var(--piece-maker-header-h, 0px) - 32px);
+  }
+  .piece-maker-page .submitted-judgement { scroll-margin-top: calc(var(--piece-maker-header-h, 0px) + 16px); }
+  .piece-maker-page .compose-footer { position: sticky; bottom: 0; z-index: 4; border-radius: 0 0 var(--radius) var(--radius); }
+}
+
 /* 작은 노트북에서는 안내보다 카드와 작성 공간을 우선한다. */
 @media (min-width: 901px) and (max-height: 800px) {
   .piece-maker-page .sd-hero { min-height: 128px; padding: 16px 24px; }
@@ -420,6 +433,7 @@ body:has(.piece-maker-page) [role="dialog"]:has(> [role="tablist"][aria-label="�
   .piece-maker-page .top-actions > [data-action="saved"] { grid-column: 2; grid-row: 2; justify-self: end; }
   .piece-maker-page :is(.top-actions, .service-actions) > .btn { padding: 8px; font-size: 12px; gap: 4px; }
   .piece-maker-page :is(.top-actions, .service-actions) > .btn svg { display: none; }
+  .piece-maker-page .top-actions > [data-action="saved"] svg { display: block; }
   .piece-maker-page .sd-hero { min-height: 156px; padding: 16px; gap: 8px; }
   .piece-maker-page .sd-hero-copy { flex: 1; }
   .piece-maker-page .sd-hero-copy .sd-hero-eyebrow { font-size: 11px; }
@@ -427,7 +441,7 @@ body:has(.piece-maker-page) [role="dialog"]:has(> [role="tablist"][aria-label="�
   .piece-maker-page .sd-hero-description { display: none; }
   .piece-maker-page .sd-hero-art { width: 100px; height: 110px; flex-basis: 100px; }
   .piece-maker-page[data-view="compose"] .sd-hero { display: none; }
-  .piece-maker-page .mobile-tabs { display: flex; position: sticky; top: var(--piece-maker-header-h, 0px); z-index: 5; padding: 8px 0; margin-block: -8px; background: var(--canvas); gap: 8px; }
+  .piece-maker-page .mobile-tabs { display: flex; padding: 8px 0; margin-block: -8px; background: var(--canvas); gap: 8px; }
   .piece-maker-page .mobile-tabs button { flex: 1; min-height: 44px; padding: 8px; border: 1.5px solid var(--ink); border-radius: var(--control-radius); font-weight: 700; font-size: 13px; color: var(--ink); background: var(--paper); }
   .piece-maker-page .mobile-tabs button[aria-pressed=true] { background: var(--yellow); }
   .piece-maker-page .panes { display: block; }
@@ -440,6 +454,7 @@ body:has(.piece-maker-page) [role="dialog"]:has(> [role="tablist"][aria-label="�
   .piece-maker-page[data-view="compose"] .explore { display: none; }
   .piece-maker-page .compose-footer { position: sticky; bottom: 0; padding: 16px 20px; padding-bottom: max(16px, env(safe-area-inset-bottom)); z-index: 4; border-radius: 0 0 var(--radius) var(--radius); }
   .piece-maker-page .suggestions .chip, .piece-maker-page .filter { min-height: 40px; }
+  .piece-maker-page .result-count { min-height: 40px; }
   .piece-maker-page .searchbox input, .piece-maker-page .field, .piece-maker-page .interpret-wrap textarea { font-size: 16px; }
   .piece-maker-page .icon-btn { width: 44px; height: 44px; }
   .piece-maker-page .searchbox .icon-btn { width: 40px; height: 40px; }
@@ -452,7 +467,7 @@ body:has(.piece-maker-page) [role="dialog"]:has(> [role="tablist"][aria-label="�
 @media (max-width: 740px) {
   .piece-maker-page .share-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .piece-maker-page .share-box { padding: 16px; }
-  .piece-maker-page .share-channel { font-size: 11px; }
+  .piece-maker-page .share-channel, .piece-maker-page button.share-channel { font-size: 11px; }
   .piece-maker-page dialog:has(.share-panel) .dialog-body { padding: 16px; }
 }
 @media (max-width: 380px) {
@@ -464,7 +479,6 @@ body:has(.piece-maker-page) [role="dialog"]:has(> [role="tablist"][aria-label="�
   .piece-maker-page .sd-hero-art { width: 80px; flex-basis: 80px; }
   .piece-maker-page .sd-hero-copy h1 { font-size: 22px; line-height: 29px; }
   .piece-maker-page .selected-main, .piece-maker-page .interpret-wrap { padding-inline: 12px; }
-  .piece-maker-page .share-channels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .piece-maker-page .saved-entry { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -27,6 +27,8 @@ public class PythonMotionPostProcessor implements MotionPostProcessor {
 
     /** 스크립트가 만들어야 하는 결과물 이름. */
     private static final String OUTPUT = "motion.webp";
+    /** 같은 움직임의 저장·공유용 GIF — 스크립트가 webp 옆에 같이 낸다(#713). */
+    private static final String GIF_OUTPUT = "motion.gif";
 
     private final S3Storage storage;
     private final String pythonPath;
@@ -66,12 +68,26 @@ public class PythonMotionPostProcessor implements MotionPostProcessor {
             WebpSize.Size size = WebpSize.read(file);
             String key = "%s/%s".formatted(outputPrefix, OUTPUT);
             storage.upload(key, file, "image/webp");
+            uploadGif(out, outputPrefix);
             log.info("모션 후처리 완료 — {} → {} ({}x{}, 프로파일 {})",
                     gridImageKey, key, size.width(), size.height(), profile);
             return new Built(key, size.width(), size.height());
         } finally {
             deleteQuietly(work);
         }
+    }
+
+    /**
+     * 저장·공유용 GIF({@code motion.gif}, #713)를 webp 옆에 올린다. <b>없으면 경고만</b> —
+     * 화면은 webp 로 돌고 저장 버튼은 webp 로 폴백한다. 돈 쓴 선물을 GIF 때문에 실패로 돌리지 않는다.
+     */
+    private void uploadGif(Path out, String outputPrefix) {
+        Path gif = out.resolve(GIF_OUTPUT);
+        if (!Files.exists(gif)) {
+            log.warn("저장용 GIF 없음 — {}/{} (저장 버튼은 webp 로 폴백, 백필 대상)", outputPrefix, GIF_OUTPUT);
+            return;
+        }
+        storage.upload("%s/%s".formatted(outputPrefix, GIF_OUTPUT), gif, PythonPostProcessor.GIF_TYPE);
     }
 
     private void run(Path grid, Path out, String profile) throws IOException, InterruptedException {

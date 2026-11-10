@@ -1,11 +1,11 @@
 /* 만드는 중 동그라미(#507) — body 에 바로 뜨므로 .wt 의 색 변수를 못 쓴다. 같은 값을 여기 둔다. */
 .wt-bubble {
-  --b-ink: #0f333f;
-  --b-sea: #0e8fb5;
-  --b-sea-deep: #0a5f7a;
-  --b-water: #cfe9f0;
-  --b-gold: #a1732e;
-  --b-err: #a13a2e;
+  --b-ink: #f3f2ef;
+  --b-sea: #e6a393;
+  --b-sea-deep: #9dd2c0;
+  --b-water: #293849;
+  --b-gold: #d2b27c;
+  --b-err: #ef9f93;
 
   position: fixed; right: 20px; bottom: 24px; z-index: 50;
   display: flex; flex-direction: column; align-items: center;
@@ -28,7 +28,7 @@
 .wt-bubble-btn:focus-visible .wt-bubble-ring { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--b-sea); }
 
 .wt-bubble-ring {
-  position: relative; width: 68px; height: 68px; border-radius: 50%; background: #fff;
+  position: relative; width: 68px; height: 68px; border-radius: 50%; background: #101c2a;
   box-shadow: 0 10px 28px rgba(15, 51, 63, 0.22), 0 2px 6px rgba(15, 51, 63, 0.10);
   transition: transform 0.16s ease, box-shadow 0.16s ease;
 }
@@ -67,20 +67,20 @@
 
 .wt-bubble-label {
   max-width: 200px; padding: 4px 10px; border-radius: 999px;
-  background: var(--b-ink); color: #fff;
+  background: #101c2a; color: var(--b-ink);
   font-size: 12px; font-weight: 700; line-height: 1.35;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   box-shadow: 0 4px 12px rgba(15, 51, 63, 0.18);
 }
-.wt-bubble.asks .wt-bubble-label { background: var(--b-gold); }
-.wt-bubble.done .wt-bubble-label { background: var(--b-sea-deep); }
-.wt-bubble.failed .wt-bubble-label { background: var(--b-err); }
+.wt-bubble.asks .wt-bubble-label { color: var(--b-gold); }
+.wt-bubble.done .wt-bubble-label { color: var(--b-sea-deep); }
+.wt-bubble.failed .wt-bubble-label { color: var(--b-err); }
 
 .wt-bubble-x {
   position: absolute; top: -4px; left: calc(50% + 20px);
   width: 22px; height: 22px; border-radius: 50%; border: 0; padding: 0;
   display: grid; place-items: center; cursor: pointer;
-  background: #fff; color: var(--b-ink);
+  background: #101c2a; color: var(--b-ink);
   box-shadow: 0 2px 8px rgba(15, 51, 63, 0.25);
 }
 .wt-bubble-x:hover { background: var(--b-water); }
@@ -88,6 +88,16 @@
 @media (max-width: 767px) {
   /* 폰은 화면 아래에 단추 줄(.mfoot)이 붙는 화면이 있어 그 위로 띄운다 */
   .wt-bubble { right: 14px; bottom: 96px; }
+}
+/* 좁은 폰(360px 안팎)에서는 68px 동그라미와 이름표가 「캐릭터 만들어보기」 칸이나 단추를 가렸다.
+   크기만 줄인다 — 끌어서 옮기는 것은 그대로다. */
+@media (max-width: 420px) {
+  .wt-bubble-btn { gap: 4px; }
+  .wt-bubble-ring { width: 52px; height: 52px; }
+  .wt-bubble-num { padding-top: 17px; font-size: 14px; }
+  .wt-bubble.failed .wt-bubble-num { font-size: 20px; padding-top: 15px; }
+  .wt-bubble-label { max-width: 132px; padding: 3px 8px; font-size: 10.5px; }
+  .wt-bubble-x { left: calc(50% + 14px); }
 }
 
 @media (prefers-reduced-motion: reduce) {

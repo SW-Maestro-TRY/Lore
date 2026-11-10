@@ -16,6 +16,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -84,6 +86,31 @@ class PageStoreTest {
 
         assertThat(rows).hasSize(1);            // 줄이 늘지 않는다
         assertThat(store.urlOf("run-1", 2, 1080)).endsWith("/new.jpg");
+    }
+
+    @Test
+    @DisplayName("주소가 바뀌면 옛 그림을 버릴 대기열에 적는다 — 안 적으면 아무 데서도 안 가리켜 영영 남는다")
+    void 바뀐_옛_그림은_대기열로() {
+        ArtDiscards discards = mock(ArtDiscards.class);
+        store.setDiscards(discards);
+
+        store.record("run-1", List.of(up(2, 1080, "images/webtoon/old.jpg")));
+        verify(discards, never()).discard(anyString(), anyString(), any());   // 처음 적을 때는 버릴 것이 없다
+
+        store.record("run-1", List.of(up(2, 1080, "images/webtoon/new.jpg")));
+        verify(discards).discard("images/webtoon/old.jpg", ArtDiscards.REPLACED, FIXED.instant());
+    }
+
+    @Test
+    @DisplayName("같은 주소로 다시 적으면 아무것도 안 버린다 — 지금 쓰는 그림을 지우게 된다")
+    void 같은_주소면_안_버린다() {
+        ArtDiscards discards = mock(ArtDiscards.class);
+        store.setDiscards(discards);
+
+        store.record("run-1", List.of(up(2, 1080, "images/webtoon/same.jpg")));
+        store.record("run-1", List.of(up(2, 1080, "images/webtoon/same.jpg")));
+
+        verify(discards, never()).discard(anyString(), anyString(), any());
     }
 
     @Test
@@ -157,5 +184,31 @@ class PageStoreTest {
         assertThat(store.has("run-1")).isFalse();
         store.record("run-1", List.of(up(2, 1080, "images/webtoon/abc.jpg")));
         assertThat(store.has("run-1")).isTrue();
+    }
+
+    private static byte[] png(int w, int h) throws Exception {
+        var out = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB), "png", out);
+        return out.toByteArray();
+    }
+
+    @Test
+    @DisplayName("그림 크기는 주소가 아니라 키로 창고에서 앞부분만 읽어 구한다 — 운영 주소는 상대경로라 URL 로 못 연다 (#725)")
+    void 크기는_키로_읽는다() throws Exception {
+        when(art.readHead(org.mockito.ArgumentMatchers.eq("images/webtoon/a.png"), anyInt())).thenReturn(png(1080, 1920));
+
+        assertThat(store.dimensionsOf("images/webtoon/a.png")).containsExactly(1080, 1920);
+        org.mockito.Mockito.verify(art, org.mockito.Mockito.never()).read(anyString());
+    }
+
+    @Test
+    @DisplayName("앞부분으로 못 읽으면 한 번 전체를 받고, 그래도 없으면 0·0")
+    void 크기_못_읽으면() throws Exception {
+        when(art.readHead(anyString(), anyInt())).thenReturn(new byte[]{1, 2, 3});
+        when(art.read("images/webtoon/b.png")).thenReturn(png(800, 600));
+
+        assertThat(store.dimensionsOf("images/webtoon/b.png")).containsExactly(800, 600);
+        assertThat(store.dimensionsOf("images/webtoon/없음.png")).containsExactly(0, 0);
+        assertThat(store.dimensionsOf(null)).containsExactly(0, 0);
     }
 }

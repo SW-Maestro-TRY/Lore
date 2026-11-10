@@ -99,4 +99,29 @@ class JobServiceScenesTest {
         when(runner.scenesOf(any(), anyString())).thenReturn(List.of());
         assertThat(service.view("job-1").scenes()).isEmpty();
     }
+
+    @Test
+    @DisplayName("다음 화 작업은 이야기를 쓰기 전(작품 번호 없음)에도 연재 표의 화 번호가 실린다 — 「1화 만들기」로 뜨던 것")
+    void 다음_화_번호() {
+        WebtoonJob job = WebtoonJob.queued("job-2", 7L, "uid-a", null, "romance_fantasy",
+                WebtoonQuality.DEFAULT_QUALITY, "ko", false, "{}", Instant.now().minusSeconds(60));
+        job.moveTo(JobStatus.RUNNING, JobStage.STORY, Instant.now());
+        when(store.byPublicId("job-2")).thenReturn(job);
+        when(runner.episodeOf(Mockito.isNull())).thenReturn(1);
+        com.lore.webtoon.series.SeriesChapterRepository chapters = mock(com.lore.webtoon.series.SeriesChapterRepository.class);
+        when(chapters.episodeOf("job-2")).thenReturn(Optional.of(2));
+        service.setChapters(chapters);
+        assertThat(service.view("job-2").episode()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("연재가 아닌 작업은 예전처럼 작품 폴더 기준(없으면 1화)")
+    void 연재가_아니면_1화() {
+        작업이(JobStatus.RUNNING, JobStage.STORY, true);
+        when(runner.episodeOf("run-1")).thenReturn(1);
+        com.lore.webtoon.series.SeriesChapterRepository chapters = mock(com.lore.webtoon.series.SeriesChapterRepository.class);
+        when(chapters.episodeOf("job-1")).thenReturn(Optional.empty());
+        service.setChapters(chapters);
+        assertThat(service.view("job-1").episode()).isEqualTo(1);
+    }
 }

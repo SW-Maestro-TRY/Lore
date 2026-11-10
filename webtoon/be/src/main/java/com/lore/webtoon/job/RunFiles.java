@@ -94,8 +94,8 @@ public class RunFiles {
                 keep ? "결과를 모두 남깁니다(로컬)" : "S3 에 올린 그림과 끝까지 못 간 작품은 치웁니다(배포)");
     }
 
-    /** 창고 주소가 이 기계인가. 노트북의 MinIO 가 그렇다. */
-    static boolean onThisMachine(String endpoint) {
+    /** 창고 주소가 이 기계인가. 노트북의 MinIO 가 그렇다. 버린 그림 정리(ArtDiscardSweep)도 같은 규칙을 쓴다. */
+    public static boolean onThisMachine(String endpoint) {
         if (endpoint == null || endpoint.isBlank()) {
             return false;
         }

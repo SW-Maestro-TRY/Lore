@@ -32,7 +32,7 @@ export interface BabyCall {
 export const BABY_CALLS: readonly BabyCall[] = [
   { key: 'FEED', line: '배가 고픈가 봐요', want: 'feed', learns: '게이지·먹기' },
   { key: 'PET', line: '쓰다듬어 주세요', want: 'pet', learns: '교감' },
-  { key: 'CHAT', line: '뭐라고 말을 거네요', want: 'chat', learns: '갸웃 즉시 해금' },
+  { key: 'CHAT', line: '뭐라고 말을 거네요', want: 'chat', learns: '대화' },
   { key: 'PERSONALITY', line: '어떤 아이인가요', want: 'personality', learns: '채팅 톤' },
   { key: 'CLEAN', line: '바닥을 치워 주세요', want: 'clean', learns: '청결' },
   { key: 'GAME', line: '같이 놀아 볼까요', want: 'game', learns: '게임' },
@@ -71,6 +71,27 @@ export function remainingCalls(tutorial: Tutorial | null): DueCall[] {
 }
 
 const GROWN_KEY = (petId: number) => `zzal.grown.${petId}`;
+
+/**
+ * 졸업(구르기 안내) 판이 **곧 뜰 차례인가** — 읽기만 한다. 기록하지 않는다.
+ *
+ * ★ 후기 판의 `hold` 가 쓴다(2026-10-09 상훈님 *"튜토리얼이 끝나면 구르기 창이 뜨고 그 이후에
+ *   후기 창"*). 서버가 튜토리얼을 닫는 순간(`tutorial` null · `clockStartedAt` 생김)과 졸업 판이
+ *   실제로 뜨는 순간(`useYeoul` 의 효과가 `takeGrownLine` 을 부른 다음 그림) 사이에 **한 그림의 틈**이
+ *   있다. 자식(후기)의 효과가 부모(졸업 판)의 효과보다 먼저 돌기 때문에, 이 틈을 안 막으면 후기 판이
+ *   졸업 판과 **같은 순간에** 올라온다.
+ * ★ 판정은 `takeGrownLine` 과 같은 기준이다 — 서버가 "봤다" 를 기억하면 끝, 아니면 탭 기억.
+ *   저장소가 막힌 기기에서는 졸업 판도 안 뜨므로(→ `takeGrownLine` 이 false) 여기서도 false 다.
+ */
+export function grownLinePending(petId: number, pet: PetDetail): boolean {
+  if (pet.phase !== 'ALIVE' || !pet.clock?.clockStartedAt) return false;
+  if (pet.graduationSeenAt != null) return false;
+  try {
+    return window.sessionStorage.getItem(GROWN_KEY(petId)) !== '1';
+  } catch {
+    return false;
+  }
+}
 
 /**
  * 졸업 문구를 띄워야 하는가. 띄웠으면 true 를 한 번만 돌려주고 기록한다.

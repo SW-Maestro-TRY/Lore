@@ -1,0 +1,9 @@
+/* Same compact cream popover as the approved room; history remains the existing modal. */
+.focused-room .fr-menu-panel{inset:64px 14px auto auto;width:208px;max-width:calc(100% - 28px);max-height:calc(100% - 78px);display:block;overflow:auto;border:1px solid #D8CFC4;border-radius:16px;background:rgba(255,253,248,.97);color:#4A4038;box-shadow:0 8px 22px #4A40381F}
+.focused-room .fr-menu-panel .fr-menu-links{display:flex;flex-direction:column;gap:0;padding:6px 8px;overflow:visible;font-size:14px}
+.focused-room .fr-menu-panel .fr-menu-links button{width:100%;min-height:44px;text-align:right;border:0;border-radius:9px;background:transparent;padding:10px 12px;box-shadow:none;line-height:1.5}
+.focused-room .fr-menu-panel .fr-menu-links button:hover{background:#F3EADF}
+.focused-room .fr-menu-panel .fr-languages{display:flex;flex-wrap:nowrap;gap:3px;padding:8px;border-top:1px solid #E5DDD2}
+.focused-room .fr-menu-panel .fr-languages button{flex:1;min-width:0;min-height:44px;padding:7px 3px;font-size:11px;line-height:1.4;border:0;border-radius:8px;background:transparent}
+.focused-room .fr-menu-panel .fr-languages button[aria-pressed=true]{background:#F3EADF;color:#7C4232}
+@supports(backdrop-filter:blur(12px)){.focused-room .fr-menu-panel{background:rgba(255,253,248,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}}

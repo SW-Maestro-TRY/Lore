@@ -70,6 +70,7 @@ class WebtoonGuestAccessTest {
        가짜로 채운다. 가짜는 기본으로 null 을 주므로 문지기는 전부 통과로
        읽히고, 막는 쪽 동작은 SpendGuardTest·GuestGateTest 가 본다. */
     @MockitoBean JobService jobService;
+    @MockitoBean com.lore.webtoon.work.CommentedRunService commentedRuns;
     @MockitoBean JobQueue jobQueue;
     @MockitoBean RunArt runArt;
     @MockitoBean SpendGuard spendGuard;
@@ -94,6 +95,7 @@ class WebtoonGuestAccessTest {
     @MockitoBean com.lore.webtoon.job.NotifySettingService notifySettingService;
     @MockitoBean com.lore.webtoon.work.RunTrash runTrash;
     @MockitoBean com.lore.webtoon.character.CharacterOwner characterOwner;
+    @MockitoBean com.lore.common.user.UserRepository userRepository;   // 게스트 사진 올리기의 계정 확인(#930)
 
     @Test
     @DisplayName("「내」 것을 다루는 주소는 로그인이 있어야 한다")

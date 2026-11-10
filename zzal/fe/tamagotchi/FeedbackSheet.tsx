@@ -13,7 +13,7 @@
 // ★ 디자인은 상훈님이 직접 다듬으실 자리다. 여기서는 동작이 도는 것까지만 한다.
 //
 // ★★ 2026-09-14 — **두 시안이 같은 이 부품을 쓴다**(스크랩북 · 여울). 띄울지 말지를 정하는
-//    규칙(이미 냈는가 · 아기 시간표 중인가 · 받은 움직임이 있는가 · 다른 판이 덮고 있는가)은
+//    규칙(이미 냈는가 · 아기 시간표 중인가 · 다른 판이 덮고 있는가)은
 //    아래 훅 하나에만 있고, 스킨은 값을 넘기고 자리를 잡아 줄 뿐이다.
 //    갈라지는 것은 **결(tone)뿐**이다 — 스크랩북은 종이·테이프·펜글씨, 여울은 `yeoul/ui.ts` 의
 //    토큰(손글씨 Gaegu · C 팔레트 · 알약 버튼). 규칙까지 스킨에 복사하면 두 판이 서로 다른
@@ -22,6 +22,7 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { track } from '@common/analytics';
+import {useUiText} from '../lib/uiCopy';
 import { ApiError } from '../lib/api';
 import { getMyFeedback, submitFeedback, type FeedbackTag } from '../lib/feedback';
 import { C, C2, GAEGU as Y_GAEGU, TAP_MIN, gap, radius, sel, tapWrap, fz, ink, pad } from './yeoul/ui';
@@ -33,6 +34,14 @@ const SUB = '#7E7561';
 const RED = '#B4614C';
 const PAPER = '#FFFDF6';
 const EDGE = '#E0D7C0';
+
+/**
+ * 판 제목. **이 한 곳만 고치면 된다.**
+ * ★ 2026-10-09 — 후기 판이 이제 튜토리얼 직후(구르기를 아직 못 받은 때)에 뜨므로
+ *   "받은 움직임, 어땠어요?" 가 맞지 않는다.
+ * ★ 2026-10-10 확정 — 임시 문구 "오늘 함께한 첫날, 어땠어요?" 는 390폭에서 두 줄로 꺾여 줄였다.
+ */
+const FB_TITLE = '오늘 첫날, 어땠어요?';
 
 /** 자유 글 상한. 서버의 @Size(max = 500) 과 같은 값이다 — 다르면 화면이 통과시킨 글이 400 이 된다. */
 const MAX_TEXT = 500;
@@ -58,17 +67,15 @@ const CHIPS: { tag: FeedbackTag; label: string }[] = [
 export interface FeedbackSheetProps {
   /** 어느 아이에 대한 후기인가. 없으면(비로그인·아직 아이 없음) 아무것도 안 그린다. */
   petId: number | null;
-  /**
-   * **첫 심화 행동(16프레임)이 도착했는가.** 이것이 되기 전에는 저절로 안 올라온다.
-   *
-   * ★ 왜 하필 그때인가 — 상훈님이 2026-08-25 에 "첫 해금 직후 좋다" 로 확정하셨다.
-   *   결과물을 아직 못 본 사람에게 결과물의 후기를 물으면 답할 것이 없다.
-   * ★★ 2026-09-05 정정 — 기준이 "연 동작 수 1 이상" 이었는데, 정본판에서는 부화 즉시
-   *   1층 8종이 열려 **첫 화면에서 곧바로** 올라왔다. 그러면 처음 온 사람이 아직
-   *   아무것도 못 본 채로 후기를 요구받고, 판이 돌봄 버튼까지 덮었다(리뷰 결정).
-   *   "받은 움직임, 어땠어요?" 라고 묻는 판이니 **받은 움직임이 실제로 있을 때만** 묻는다.
-   */
-  advancedArrived: boolean;
+  /** Optional intro receipt: closing never requires submitting a review. */
+  onDismiss?: () => void;
+  // ★★ 2026-10-09 — `advancedArrived`(첫 심화 행동이 **실제로 공개**됐는가) 조건을 **없앴다.**
+  //   상훈님 원문: *"2번을 제거하자. 순수하게 튜토리얼이 끝나면 구르기 창이 뜨고 그 이후에 후기 창을
+  //   띄우는 걸로 하자."* 운영 진단(10/8)에서 튜토리얼을 끝낸 20계정 중 공개에 닿은 것이 4계정뿐이었다 —
+  //   구르기는 굽기·검수·기상 뒤 공개라 며칠이 걸리고, 그 사이 대부분이 후기 창을 한 번도 못 봤다.
+  //   이제 순서는 **튜토리얼 완료 → 구르기 안내(졸업) 판 → 그 판이 닫힌 뒤 후기 판(폼)** 이다.
+  //   구르기 결과물이 언제 오는지(생성·검수·revealed_at)는 그대로다 — 묻는 시점만 앞당겼다.
+  //   "졸업 판이 떠 있는 동안·뜨기 직전" 을 막는 것은 스킨이 넘기는 `hold` 다(yeoul/Room.tsx).
   /**
    * 아기 시간표가 도는 중인가. 도는 동안에는 **절대** 안 띄운다.
    *
@@ -82,6 +89,15 @@ export interface FeedbackSheetProps {
    *   그 순간을 가리면 안 된다 — 사용자가 축하를 닫은 뒤에 올라온다.
    */
   hold?: boolean;
+  /**
+   * 저절로 열린 판의 **계기**. 기록(`zzal_feedback_opened` 의 `reason`)에만 쓴다.
+   *
+   * ★ `reason` 은 서버 허용 키 목록(AnalyticsService.ALLOWED_PROP_KEYS)에 이미 있는 키다 —
+   *   목록을 늘리지 않고 갈래를 남긴다. 값은 정해진 낱말뿐이다(사람이 쓴 글이 안 들어간다).
+   *   · `after_gift_intro` — 이 화면에서 구르기 안내(졸업) 판을 닫은 직후
+   *   · `returning` — 졸업 판을 이미 지나온 사람이 다시 들어왔을 때
+   */
+  autoReason?: 'after_gift_intro' | 'returning';
   /**
    * 어느 시안의 결로 그릴 것인가. **모양만 바뀐다** — 뜨는 조건도, 보내는 값도 같다.
    *
@@ -133,7 +149,8 @@ function messageOf(e: unknown): string {
   return '보내지 못했습니다';
 }
 
-export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutorialActive, hold = false, tone = 'scrapbook', preview = false }: FeedbackSheetProps) {
+export default function FeedbackSheet({ petId: petIdProp, tutorialActive, hold = false, autoReason, tone = 'scrapbook', preview = false, onDismiss }: FeedbackSheetProps) {
+  const tr=useUiText();
   // 미리보기일 때는 실 아이 대신 가짜 id 를 쓴다 — 아래 판정·렌더는 이 하나만 보면 된다.
   const petId = preview ? PREVIEW_PET_ID : petIdProp;
   /** 서버가 아는 사실 — 이미 냈는가. null 이면 아직 못 물어봤다. */
@@ -149,13 +166,12 @@ export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutor
   const [error, setError] = useState<string | null>(null);
 
   /** 어디서 열렸나. 닫힘 기록에 같은 값을 실어 열림과 짝을 맞춘다. */
-  const from = useRef<'unlock' | 'dex'>('dex');
-  /**
-   * 저절로 올라온 것인가. ★ 저절로 올라온 것은 **화면을 덮지 않는 띠**로 그린다.
-   *   사람이 도감에서 직접 연 것만 판(모달)으로 띄운다 — 내가 연 판은 내가 닫으면 되지만,
-   *   저절로 뜬 판은 하려던 일을 가로막는다.
-   */
-  const [banner, setBanner] = useState(false);
+  //   'unlock' 은 옛 자동 띠가 쓰던 값이다(2026-10-09 전 기록). 지금 저절로 열리는 판은 'auto' 다.
+  const from = useRef<'auto' | 'dex'>('dex');
+  // ★★ 2026-10-09 — 저절로 뜨던 **띠(배너)를 없애고 판(폼)을 바로 연다.** 상훈님 원문:
+  //   *"후기 띠만 나오는 거야? 후기 창도 띄워줬으면 좋겠는데."* 예전에 띠로 바꾼 이유(판이 돌봄
+  //   버튼을 가로막는다)는 **뜨는 순간**으로 갚는다 — 졸업(구르기 안내) 판을 닫은 직후, 다른 시트·
+  //   판이 없을 때(hold)만, 펫당 한 번만(wasAsked) 연다. 닫으면 "후기 남기기" 링크만 남는다.
 
   // 이미 냈는지 물어본다. ★ 이 한 번이 "이미 낸 사람에게 또 띄우지 않는다" 를 지킨다.
   useEffect(() => {
@@ -188,20 +204,23 @@ export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutor
     setOpen(true);
   }, [preview]);
 
-  // 첫 심화 행동이 도착한 뒤 한 번. 축하 판이 떠 있는 동안·아기 시간표 중에는 안 띄운다.
+  // 튜토리얼이 끝난 뒤 한 번. 아기 시간표 중·전면 판(졸업·해금 축하)이 떠 있는 동안에는 안 띄운다.
+  // ★ 2026-10-09 — 받은 움직임(심화 공개) 여부는 더 이상 보지 않는다(위 props 머리말).
   useEffect(() => {
     if (preview) return; // 미리보기는 위 효과가 직접 연다 — 자동 띠 규칙을 타지 않는다.
-    if (petId == null || submitted !== false || open || banner || hold) return;
-    if (tutorialActive || !advancedArrived || wasAsked(petId)) return;
+    if (petId == null || submitted !== false || open || hold) return;
+    if (tutorialActive || wasAsked(petId)) return;
     markAsked(petId);
-    from.current = 'unlock';
-    setBanner(true);
-    track('zzal_feedback_opened', { from: 'unlock' });
-  }, [petId, submitted, open, banner, hold, tutorialActive, advancedArrived, preview]);
+    // ★ `from: 'auto'` — 옛 띠(`unlock`)와 값을 갈라 둔다. 닫힘 기록도 같은 값을 실어 짝이 맞는다.
+    //   계기(졸업 판 직후 / 재방문)는 `reason` 으로 남긴다 — 둘 다 서버 허용 키 안이다.
+    from.current = 'auto';
+    setOpen(true);
+    setError(null);
+    track('zzal_feedback_opened', autoReason ? { from: 'auto', reason: autoReason } : { from: 'auto' });
+  }, [petId, submitted, open, hold, tutorialActive, autoReason, preview]);
 
   const openFromDex = useCallback(() => {
     if (petId == null) return;
-    setBanner(false);
     // 손으로 연 것도 "물어봤다" 로 친다 — 닫고 새로고침했을 때 또 저절로 뜨면 성가시다.
     markAsked(petId);
     from.current = 'dex';
@@ -213,7 +232,8 @@ export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutor
   const close = useCallback(() => {
     setOpen(false);
     track('zzal_feedback_closed', { from: from.current });
-  }, []);
+    onDismiss?.();
+  }, [onDismiss]);
 
   const toggle = useCallback((tag: FeedbackTag) => {
     setTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
@@ -264,59 +284,45 @@ export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutor
 
   return (
     <>
-      {/* 작은 링크. 첫 판(띠)을 닫은 사람이 나중에 다시 찾을 유일한 길이다.
-          ★ 띠가 떠 있는 동안에는 안 그린다 — 같은 자리에 "한 장 남기기" 가 이미 있어서
-            같은 뜻의 손잡이가 두 줄로 겹친다(여울에서 실측). 띠를 닫으면 다시 나온다.
-          ★★ **받은 움직임이 있을 때만 그린다**(2026-09-22 상훈님 판정 E). 예전에는 이 링크만
-            `advancedArrived` 를 안 봐서, **아무것도 못 받은 첫날 튜토리얼 1칸부터** 떠 있었다
-            (dev 실측). 띠가 "받은 움직임이 실제로 있을 때만 묻는다" 로 참는 동안 링크가 먼저
-            물어보고 있었던 셈이다. 두 손잡이가 같은 기준을 본다.
+      {/* 작은 링크. 저절로 열린 판을 닫은 사람이 나중에 다시 찾을 유일한 길이다.
+          ★ 판이 열려 있는 동안에는 안 그린다.
+          ★★ **자동 판과 같은 기준을 본다**(2026-09-22 상훈님 판정 E — 예전에 이 링크만 기준이 달라
+            첫날 튜토리얼 1칸부터 떠 있었다). 2026-10-09 자동 기준이 "튜토리얼이 끝났고 전면 판이
+            없다" 로 바뀌어 링크도 같이 바뀌었다 — 튜토리얼 중·졸업 판이 덮고 있는 동안에는 안 그린다.
           ★ 곁들여 얻는 것 — 이 줄이 사라지면 **무대가 24px 돌아온다**(머리줄과 무대 사이에
             끼어 있던 16px + 여백). 아이가 커 보이던 문제의 실제 해결분이다. */}
-      {!submitted && !banner && !preview && advancedArrived && (
+      {!submitted && !open && !preview && !tutorialActive && !hold && (
         <button data-action="feedback-open" onClick={openFromDex} style={T.link}>
-          후기 남기기
+          {tr('후기 남기기')}
         </button>
-      )}
-
-      {/*
-        저절로 올라온 물음은 **띠**로만 그린다. 이 자리는 도감 구역이라 위쪽 돌봄 버튼을 덮지 않고,
-        덮개(dim)도 없어서 하려던 일을 가로막지 않는다. 판으로 여는 것은 사람이 "네" 를 누른 뒤.
-      */}
-      {banner && !open && (
-        <div data-part="feedback-banner" style={T.banner}>
-          <span style={T.bannerText}>받은 움직임, 어땠어요?</span>
-          <button data-action="feedback-banner-open" onClick={openFromDex} style={T.bannerYes}>한 장 남기기</button>
-          <button data-action="feedback-close" onClick={() => { setBanner(false); }} style={T.bannerNo}>나중에</button>
-        </div>
       )}
 
       {open && (
         <div style={T.overlay}>
           <div onClick={close} style={T.dim} />
-          <div style={T.card} role="dialog" aria-label="후기 남기기">
+          <div style={T.card} role="dialog" aria-label={tr('후기 남기기')}>
             {tone === 'scrapbook' && <span style={T.tape} />}
 
             {justSent ? (
               <div style={{ textAlign: 'center' }}>
-                <p style={T.thanksEyebrow}>고마워요</p>
+                <p style={T.thanksEyebrow}>{tr('고마워요')}</p>
                 {/* ★ 여기에 "무엇을 드립니다" 를 쓰지 않는다. 지금은 아무것도 안 나간다. */}
-                <p style={T.thanksBody}>잘 읽고 다음 아이에 반영할게요</p>
-                <button data-action="feedback-done" onClick={close} style={T.send(false)}>닫기</button>
+                <p style={T.thanksBody}>{tr('보내 주신 의견은 개선에 참고할게요.')}</p>
+                <button data-action="feedback-done" onClick={close} style={T.send(false)}>{tr('닫기')}</button>
               </div>
             ) : (
               <>
-                <p style={T.eyebrow}>한 장만</p>
-                <h3 style={T.h3}>받은 움직임, 어땠어요?</h3>
+                <p style={T.eyebrow}>{tr('한 장만')}</p>
+                <h3 style={T.h3}>{tr(FB_TITLE)}</h3>
 
-                <span style={T.label}>별점</span>
+                <span style={T.label}>{tr('별점')}</span>
                 <div style={{ display: 'flex', gap: gap.xs, margin: '6px 0 16px' }}>
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button
                       key={n}
                       data-action={`feedback-star-${n}`}
                       onClick={() => setRating(n)}
-                      aria-label={`별점 ${n}점`}
+                      aria-label={tr(`별점 ${n}점`)}
                       style={T.star(n <= rating)}
                     >
                       ★
@@ -325,7 +331,7 @@ export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutor
                 </div>
 
                 <span style={T.label}>
-                  이런 점은 어땠나요 <span style={T.labelHint}>(여러 개)</span>
+                  {tr('이런 점은 어땠나요')} <span style={T.labelHint}>{tr('(여러 개)')}</span>
                 </span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: gap.sm, margin: '8px 0 16px' }}>
                   {CHIPS.map((c) => (
@@ -340,26 +346,26 @@ export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutor
                       aria-pressed={tags.includes(c.tag)}
                       style={tapWrap(T.chipH)}
                     >
-                      <span style={T.chip(tags.includes(c.tag))}>{c.label}</span>
+                      <span style={T.chip(tags.includes(c.tag))}>{tr(c.label)}</span>
                     </button>
                   ))}
                 </div>
 
-                <span style={T.label}>하고 싶은 말 (선택)</span>
+                <span style={T.label}>{tr('하고 싶은 말 (선택)')}</span>
                 <textarea
                   data-action="feedback-text"
                   value={text}
                   onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT))}
                   rows={3}
-                  placeholder="어떤 점이 좋았는지, 뭐가 아쉬웠는지 편하게 적어주세요"
+                  placeholder={tr('어떤 점이 좋았는지, 뭐가 아쉬웠는지 편하게 적어주세요')}
                   style={T.textarea}
                 />
                 <span style={T.counter}>{text.length} / {MAX_TEXT}</span>
 
-                {error && <p style={T.error}>{error}</p>}
+                {error && <p style={T.error}>{tr(error)}</p>}
 
                 <div style={{ display: 'flex', gap: gap.sm, marginTop: 12 }}>
-                  <button data-action="feedback-close" onClick={close} style={T.ghost}>나중에</button>
+                  <button data-action="feedback-close" onClick={close} style={T.ghost}>{tr('나중에')}</button>
                   {/* 별점 없이는 보낼 수 없다. 누를 수 있을 때는 aria-disabled 를 아예 붙이지
                       않는다 — "false" 를 비활성으로 읽는 도구가 있다(스크랩북의 돌봄 버튼과 같은 규칙). */}
                   <button
@@ -369,7 +375,7 @@ export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutor
                     aria-disabled={busy || rating < 1 ? true : undefined}
                     style={T.send(busy || rating < 1)}
                   >
-                    {busy ? '보내는 중…' : '보내기'}
+                    {tr(busy ? '보내는 중…' : '보내기')}
                   </button>
                 </div>
               </>
@@ -386,7 +392,6 @@ export default function FeedbackSheet({ petId: petIdProp, advancedArrived, tutor
  * 그 시안에서만 조용히 스타일이 빠진다.
  */
 type Tone = {
-  banner: CSSProperties; bannerText: CSSProperties; bannerYes: CSSProperties; bannerNo: CSSProperties;
   link: CSSProperties; overlay: CSSProperties; dim: CSSProperties; card: CSSProperties; tape: CSSProperties;
   eyebrow: CSSProperties; h3: CSSProperties; thanksEyebrow: CSSProperties; thanksBody: CSSProperties;
   label: CSSProperties; labelHint: CSSProperties; textarea: CSSProperties; counter: CSSProperties;
@@ -400,21 +405,6 @@ type Tone = {
 
 /** 스크랩북 결 — 누런 종이 · 테이프 · 펜글씨. */
 const S: Tone = {
-  banner: {
-    display: 'flex', alignItems: 'center', gap: gap.sm, flexWrap: 'wrap',
-    margin: '12px 0 0', padding: '10px 12px',
-    background: '#FBEFA8', border: '1px solid ' + EDGE, borderRadius: 3,
-    boxShadow: '2px 3px 0 rgba(58,53,43,.14)',
-  } as CSSProperties,
-  bannerText: { flex: '1 1 auto', fontFamily: GAEGU, fontWeight: 700, fontSize: fz.lg, color: INK } as CSSProperties,
-  bannerYes: {
-    border: '1px solid ' + INK, background: PAPER, borderRadius: 3, padding: pad.tiny,
-    cursor: 'pointer', fontFamily: GAEGU, fontWeight: 700, fontSize: fz.md, color: INK,
-  } as CSSProperties,
-  bannerNo: {
-    border: 'none', background: 'none', padding: '5px 4px', cursor: 'pointer',
-    fontFamily: PEN, fontSize: fz.lg, color: SUB,
-  } as CSSProperties,
   link: {
     border: 'none', background: 'none', padding: 0, cursor: 'pointer',
     fontFamily: PEN, fontSize: fz.xl, color: SUB, textDecoration: 'underline',
@@ -497,24 +487,10 @@ const S: Tone = {
  *   `fixed` 로 덮으면 셸 바깥 바탕까지 어두워져 "앱 위에 뜬 판" 이 아니라 "페이지가 덮였다" 가 된다.
  *   방(`Room`)의 뿌리가 `position: relative` 라 `inset: 0` 이 곧 셸 안쪽이다.
  * ★ 층수 13 — 벽 9 · 액자 10 · 시트 11 · 전면 판 12 위다. 사람이 직접 연 판이므로 가장 위에 온다.
- * ★ 띠(`banner`)는 방의 세로 흐름에 **끼어드는 한 줄**이다(덮개 없음·자리 차지). 그래서
- *   무대만 그만큼 짧아지고 **아래 돌봄 타일은 한 번도 가려지지 않는다** — 예전 판이 돌봄 버튼을
- *   덮어 띠로 바꾼 그 이유를 여기서도 지킨다.
+ * ★ 2026-10-09 — 저절로 뜨던 띠(`banner`)는 없앴다. 저절로 여는 것도 이 판이다(위 `from` 머리말).
  */
 const Y: Tone = {
-  banner: {
-    display: 'flex', alignItems: 'center', gap: gap.sm, flexWrap: 'wrap',
-    flex: 'none', margin: '0 20px 9px', padding: pad.chip,
-    borderRadius: radius.md, background: C.accentSoft, border: `1px solid ${C.accentDim}`,
-    animation: 'yPop .26s ease',
-  },
-  bannerText: { flex: '1 1 auto', minWidth: 0, fontFamily: Y_GAEGU, fontWeight: 700, fontSize: fz.xl, lineHeight: 1.25, color: C.ink },
-  bannerYes: {
-    flex: 'none', border: 'none', background: C.accent, color: C.accentInk,
-    borderRadius: radius.pill, padding: '7px 14px', fontSize: fz.md, cursor: 'pointer',
-  },
-  bannerNo: { flex: 'none', border: 'none', background: 'none', padding: '7px 5px', fontSize: fz.sm, color: C.faint, cursor: 'pointer' },
-  // 띠를 닫은 사람이 나중에 다시 찾을 유일한 길. 방 화면에 늘 떠 있으므로 **가장 조용한 한 줄**이다.
+  // 판을 닫은 사람이 나중에 다시 찾을 유일한 길. 방 화면에 늘 떠 있으므로 **가장 조용한 한 줄**이다.
   link: {
     alignSelf: 'flex-end', flex: 'none', margin: '0 20px 8px',
     border: 'none', background: 'none', padding: 0, cursor: 'pointer',

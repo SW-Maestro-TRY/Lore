@@ -1,13 +1,19 @@
 package com.lore.webtoon.job;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Map;
 
 /**
- * 얼마나 촘촘히 그릴 것인가 — 사람이 고르는 셋.
+ * 얼마나 촘촘히 그릴 것인가 — 새 작품은 파도·너울 중에서 고른다.
  *
  * <h2>왜 고르게 하나 — 실측</h2>
  *
- * 같은 작품을 화질만 바꿔 세 번 그려 봤다(2026-09-13).
+ * 아래는 모델 변경 전, 같은 작품을 GPT Image 2 화질만 바꿔 그린 과거 기록이다(2026-09-13).
  *
  * <pre>
  *   물결(low)     출력 158토큰    한 장  77원   19.5초    6장   432원
@@ -53,34 +59,100 @@ public final class WebtoonQuality {
      * 한 편에 드는 크레딧.
      *
      * <b>물결과 파도가 같은 값인 것은 실수가 아니다.</b> 물결의 원가는 파도의
-     * 66%지만(702원 대 1,066원) 둘 다 크레딧 12로 남는 것이 넉넉하다. 값을
+     * 66%지만(702원 대 1,066원) 둘 다 크레딧 15로 남는 것이 넉넉하다. 값을
      * 가르면 "싼 것"이 생기고, 그러면 급하지도 않은데 돈 때문에 물결을 고르게
      * 된다. 물결은 <b>급할 때 고르는 것</b>이지 아낄 때 고르는 것이 아니다.
      *
      * 너울만 18이다 — 원가가 2,269원이라 12(1,980원)로는 <b>팔수록 289원씩
      * 손해</b>였다. 실제로 그렇게 한 달 가까이 돌았다.
      *
+     * 2026-10-25 운영 실측으로 다시 올렸다(#787). 1크레딧 200원에 파도 한 편
+     * 평균 원가가 약 2,280원(12 = 2,400원으로 본전), 너울은 약 4,200원(18 =
+     * 3,600원으로 한 편에 600원 손해)이었다. 부가세·결제 수수료를 빼고도
+     * 남도록 파도·물결 15, 너울 25.
+     *
+     * 2026-10-26 너울을 30 으로 올렸다. 외부 작품 너울 원가가 8~14장에 3,200~5,700원이라 25(5,000원)는
+     * 부가세·결제 수수료를 빼면 약 4,390원만 남아 장이 많은 편은 손해였다. 30(6,000원)이면 약 5,270원.
+     *
+     * 2026-11-02 파도·물결을 20 으로 올렸다. 70C 상품 기준 15(4,050원)는 수수료·부가세를 빼면 파도 원가
+     * 2,351원에 약 1,150원(결제액의 28%)이 남아, 가입 크레딧으로 나가는 첫 무료 한 편을 회수하려면 한 사람당
+     * 약 8,300원을 받아야 했다. 20(5,400원)이면 약 2,320원(43%)이 남고 그 금액이 약 5,500원으로 내려간다.
+     *
+     * 2026-11-06~15 오픈 세일은 파도 15, 너울 20. 위 계산은 할인 전 가격의 과거 근거다.
      * (크레딧 숫자 자체는 아직 검증 전 목업이다. 대외에 판매가로 말하지 않는다.)
      */
     private static final Map<String, Integer> CREDITS = Map.of(
-            "wave",  12,
-            "surf",  12,
-            "swell", 18);
+            "wave",  20,
+            "surf",  15,
+            "swell", 20);
+
+    /** 오픈 세일 전 가격. 세일 기간 뒤에는 실제 차감에도 쓴다. */
+    private static final Map<String, Integer> REGULAR_CREDITS = Map.of(
+            "surf", 20,
+            "swell", 30);
+
+    /** 2026 오픈 세일 기간. 종료일은 한국 시간 11월 15일 하루를 포함한다. */
+    private static final ZoneId SALE_ZONE = ZoneId.of("Asia/Seoul");
+    private static final LocalDate SALE_START = LocalDate.of(2026, 11, 6);
+    private static final LocalDate SALE_END_EXCLUSIVE = LocalDate.of(2026, 11, 16);
 
     /**
-     * 한 편에 실제로 나가는 <b>AI 원가(원)</b>. 2026-09-13 실측이다.
+     * 편집실에서 한 장을 다시 그리는 크레딧. 작품을 만든 화질을 따른다(#787).
+     *
+     * 너울은 한 장 원가가 640원까지 나와 3(600원)으로는 손해라 4다.
+     * 물결·파도는 3으로 남는다.
+     *
+     * 2026-10-27 너울을 6 으로 올렸다. 다시 그리기를 많이 하는 연재(멘토 34화)는 장당 원가가
+     * 1,324원이었는데 4(부가세·결제 수수료를 빼면 약 930원)로는 다시 그릴수록 손해였다.
+     * 6이면 약 1,400원이다. 편집실은 이 장만 낮은 화질로 다시 그리게 고를 수 있다({@link #regenChoices}).
+     */
+    private static final Map<String, Integer> REGEN_CREDITS = Map.of(
+            "wave",  3,
+            "surf",  3,
+            "swell", 6);
+
+    /**
+     * 한 편 값({@link #creditsOf})에 들어 있는 장 수 — 표지를 포함한다.
+     *
+     * 원가는 장 수에 거의 정비례한다(장마다 그림 · 장 검수 · 자동 재그림이 붙는다). 2026-10-26 운영
+     * 완성본 46편으로 재 보니 한 장에 너울 약 640원 · 파도 약 320원이었고, 너울 25(5,000원)는
+     * 8장까지 본전이었다. 길게 적은 내용은 장면이 많아져 20장을 넘기도 했다. 그래서 한 편 값은
+     * 8장까지이고, 그 뒤 장은 장마다 따로 받는다({@link #extraPageCreditsOf}). 크레딧이 모자라면
+     * 8장까지만 그려 완성하고, 나머지는 결과 화면에서 이어 그린다.
+     */
+    public static final int BASE_PAGES = 8;
+
+    /**
+     * 기본 장 수를 넘는 장 하나에 드는 크레딧. 한 장 원가에 부가세 · 결제 수수료를 얹어도 남게 잡았다
+     * (너울 약 640원 → 4 = 800원, 파도 약 320원 → 2 = 400원, 물결은 파도보다 싸서 같은 2).
+     * 2026-10-27 너울을 6 으로 올렸다 — 다시 그리기와 같은 이유(장이 많고 꼼꼼한 연재는 장당 1,324원).
+     */
+    private static final Map<String, Integer> EXTRA_PAGE_CREDITS = Map.of(
+            "wave",  2,
+            "surf",  2,
+            "swell", 6);
+
+    /** 이 화질로 만든 작품에서 기본 장 수를 넘는 장 하나에 드는 크레딧. */
+    public static int extraPageCreditsOf(String key) {
+        return EXTRA_PAGE_CREDITS.getOrDefault(normalize(key), EXTRA_PAGE_CREDITS.get(DEFAULT_QUALITY));
+    }
+
+    /**
+     * 한 편에 실제로 나가는 <b>AI 원가(원)</b>. 2026-10-26 운영 실측이다.
      *
      * 크레딧(받는 값)과 다르다 — 이것은 <b>우리가 내는 값</b>이고, 하루 지출
      * 상한을 지킬 때 쓴다({@code SpendGuard}). 아직 안 끝난 작업이 얼마를 쓸지
      * 미리 잡아 두려면 그 작업의 화질을 알아야 한다.
      *
-     * 파도는 세 편 평균으로 검산했다(1,183 · 1,043 · 1,108 → 평균 1,111원).
-     * 토큰 단가는 기계와 무관해서 <b>시간과 달리 잘 맞는다.</b>
+     * 10/13 이후 완성본으로 다시 쟀다(webtoon_usage). 파도 5편 평균 2,351원, 물결 1편 1,114원.
+     * 너울은 기본 장 수({@link #BASE_PAGES}) 8장 + 표지에 장당 약 640원을 곱하고 글 몫을 더했다.
+     * 9/13 값(물결 702 · 파도 1,111 · 너울 2,269)은 검수·나레이션 단계가 붙기 전이라 실제의
+     * 절반 아래였고, 그만큼 상한이 늦게 걸렸다. 다시 잴 때는 haeun/funnel-2026-10-26 의 쿼리를 쓴다.
      */
     private static final Map<String, Integer> KRW = Map.of(
-            "wave",   702,
-            "surf",  1111,
-            "swell", 2269);
+            "wave",  1200,
+            "surf",  2400,
+            "swell", 6000);
 
     /** 이 화질로 한 편 만들 때 우리가 내는 값(원). 상한을 지킬 때 쓴다. */
     public static int expectedKrw(String key) {
@@ -104,6 +176,22 @@ public final class WebtoonQuality {
         return HARNESS.getOrDefault(normalize(key), "medium");
     }
 
+    /** 본편 장 그림 모델. 물결은 새 선택지에서 빠졌지만 옛 작업에는 기존 모델을 쓴다. */
+    public static String pageImageModel(String key) {
+        return "surf".equals(normalize(key)) ? "gpt-image-2.5-flare" : "gpt-image-2";
+    }
+
+    /** 새 작품에는 모델을 기록한다. 표시가 없는 옛 작품은 기존 GPT Image 2로 이어 그린다. */
+    public static String pageImageModelOf(Path runDir) {
+        try {
+            String model = Files.readString(runDir.resolve("page_model.txt")).strip();
+            if (model.equals("gpt-image-2.5-flare") || model.equals("gpt-image-2")) return model;
+        } catch (IOException ignored) {
+            // 전환 전 작품에는 이 파일이 없다.
+        }
+        return "gpt-image-2";
+    }
+
     /** 사람에게 보일 딱지. */
     public static String labelOf(String key) {
         return LABEL.getOrDefault(normalize(key), "");
@@ -111,16 +199,65 @@ public final class WebtoonQuality {
 
     /** 이 화질로 한 편 만들 때 드는 크레딧. */
     public static int creditsOf(String key) {
-        return CREDITS.getOrDefault(normalize(key), CREDITS.get(DEFAULT_QUALITY));
+        return creditsOfAt(key, Instant.now());
+    }
+
+    static int creditsOfAt(String key, Instant now) {
+        String quality = normalize(key);
+        if (!saleActiveAt(now) && REGULAR_CREDITS.containsKey(quality)) {
+            return REGULAR_CREDITS.get(quality);
+        }
+        return CREDITS.getOrDefault(quality, CREDITS.get(DEFAULT_QUALITY));
+    }
+
+    static boolean saleActiveAt(Instant now) {
+        LocalDate date = now.atZone(SALE_ZONE).toLocalDate();
+        return !date.isBefore(SALE_START) && date.isBefore(SALE_END_EXCLUSIVE);
+    }
+
+    public static int playCreditsOf(String key) {
+        return creditsOf(key);
+    }
+
+    /** 이 화질로 만든 작품의 한 장을 다시 그릴 때 드는 크레딧. */
+    public static int regenCreditsOf(String key) {
+        return REGEN_CREDITS.getOrDefault(normalize(key), REGEN_CREDITS.get(DEFAULT_QUALITY));
+    }
+
+    /**
+     * 화면이 받은 화질 이름이 아는 것인가. {@link #normalize} 는 모르는 값을 기본으로 돌리는데,
+     * 다시 그리기에서는 「안 골랐다」와 「파도를 골랐다」를 갈라야 해서 따로 묻는다.
+     */
+    public static boolean isKnown(String key) {
+        return key != null && HARNESS.containsKey(key.trim().toLowerCase());
+    }
+
+    /** 편집실 다시 그리기 창의 화질 고르개. 화질마다 한 장 다시 그리는 값. 순서가 곧 화면 순서다. */
+    public static java.util.List<Map<String, Object>> regenChoices() {
+        return java.util.List.of("surf", "swell").stream()
+                .map(k -> Map.<String, Object>of(
+                        "key", k,
+                        "label", labelOf(k),
+                        "credits", regenCreditsOf(k)))
+                .toList();
     }
 
     /** 화면이 고르개를 그릴 때 쓰는 목록. 순서가 곧 화면 순서다. */
     public static java.util.List<Map<String, Object>> choices() {
-        return java.util.List.of("wave", "surf", "swell").stream()
+        Instant now = Instant.now();
+        return java.util.List.of("surf", "swell").stream()
                 .map(k -> Map.<String, Object>of(
                         "key", k,
                         "label", labelOf(k),
-                        "credits", creditsOf(k)))
+                        "credits", creditsOfAt(k, now),
+                        "regular_credits", REGULAR_CREDITS.get(k),
+                        "base_pages", BASE_PAGES,
+                        "extra_page_credits", extraPageCreditsOf(k)))
                 .toList();
+    }
+
+    /** 세계관 사건도 웹툰 만들기와 같은 오픈 세일 가격을 쓴다. */
+    public static java.util.List<Map<String, Object>> playChoices() {
+        return choices();
     }
 }

@@ -3,6 +3,31 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  "새로운 세계를 경험하기": { en: "experience a new world", ja: "新しい世界を体験する", zh: "体验新的世界" },
+  "세계와 사건을 고르고 내 캐릭터를 넣으면,": { en: "Pick a world and an event, add your character,", ja: "世界と事件を選んで自分のキャラを入れると、", zh: "选好世界和事件放入我的角色，" },
+  "캐릭터의 성격과 설정에 따라 이야기가 펼쳐져요.": { en: "and a story unfolds from its personality and settings.", ja: "キャラの性格と設定に沿って物語が広がります。", zh: "故事会按角色的性格和设定展开。" },
+  "캐릭터와 원하는 이야기를 입력하면,": { en: "Enter a character and the story you want,", ja: "キャラと作りたい物語を入力すると、", zh: "输入角色和想要的故事，" },
+  "내 캐릭터가 주인공인 웹툰 1화가 완성돼요.": { en: "and episode 1 starring your character is done.", ja: "自分のキャラが主人公のウェブトゥーン1話が完成します。", zh: "就会完成我的角色当主角的漫画第1话。" },
+  "사진이나 설정으로 캐릭터 등록": { en: "Add a character from a photo or settings", ja: "写真や設定でキャラを登録", zh: "用照片或设定登记角色" },
+  "만들고 싶은 이야기나 장면 입력": { en: "Enter the story or scene you want", ja: "作りたい物語や場面を入力", zh: "输入想做的故事或场景" },
+  "장면을 확인하고 수정한 뒤 웹툰 완성": { en: "Check and edit the scenes, then finish", ja: "場面を確認・修正してウェブトゥーン完成", zh: "确认并修改场景后完成漫画" },
+  "내 캐릭터를": { en: "Put your character", ja: "自分のキャラを", zh: "把我的角色" },
+  "다른 세계에 넣어 보기": { en: "into another world", ja: "別の世界に入れてみる", zh: "放进另一个世界" },
+  "세계와 사건을 고르고 캐릭터를 넣으면,": { en: "Pick a world and an event, add your character,", ja: "世界と事件を選んでキャラを入れると、", zh: "选好世界和事件放入角色，" },
+  "그 캐릭터가 겪는 장면이 만화로 나와요.": { en: "and see what they go through as a comic.", ja: "そのキャラが体験する場面がマンガになります。", zh: "角色经历的场景就会变成漫画。" },
+  "내 캐릭터로 할 수 있는 것": { en: "What you can do with your character", ja: "自分のキャラでできること", zh: "用我的角色可以做的事" },
+  "세계관 체험": { en: "World play", ja: "世界観体験", zh: "世界观体验" },
+  "내가 주인공인 웹툰": { en: "A webtoon starring you", ja: "自分が主人公のウェブトゥーン", zh: "我当主角的漫画" },
+  "세계 고르기": { en: "Pick a world", ja: "世界を選ぶ", zh: "选择世界" },
+  "사건 고르기": { en: "Pick an event", ja: "事件を選ぶ", zh: "选择事件" },
+  "내 캐릭터 넣기": { en: "Add my character", ja: "自分のキャラを入れる", zh: "放入我的角色" },
+  "LORE · AI 개인 IP 창작 플랫폼": { en: "LORE · AI personal IP creation platform", ja: "LORE · AI個人IP創作プラットフォーム", zh: "LORE · AI 个人 IP 创作平台" },
+  "내 캐릭터가": { en: "A story where", ja: "自分のキャラが", zh: "我的角色" },
+  "살아 움직이는 이야기": { en: "your character comes alive", ja: "生き生きと動く物語", zh: "活起来的故事" },
+  "내 캐릭터로 새로운 이야기를 경험하고, 웹툰을 만들어 보세요.": { en: "Experience new stories with your character, and make webtoons.", ja: "自分のキャラで新しい物語を体験し、ウェブトゥーンを作ってみましょう。", zh: "用我的角色体验新故事，并制作漫画。" },
+  "세계관 체험하기": { en: "Try a world", ja: "世界観を体験する", zh: "体验世界观" },
+  "내 캐릭터를 넣어 볼 세계": { en: "Worlds for your character", ja: "キャラを入れてみる世界", zh: "放入我的角色的世界" },
+  "전부 보기": { en: "See all", ja: "すべて見る", zh: "查看全部" },
   /* ---- 입구 — 만들고 싶은 내용이 있나요?(#548) ---- */
   "무엇을 만들고 싶나요?": { en: "What would you like to make?", ja: "何を作りたいですか？", zh: "想做什么？" },
   "아이디어부터 시작할게요": { en: "Start from an idea", ja: "アイデアから始める", zh: "从灵感开始" },
@@ -193,23 +218,10 @@ const dict: Dict = {
   },
 
   "마음에 들지 않으면 다시 만들 수 있나요?": { en: "Can I redo it if I don't like it?", ja: "気に入らなければ作り直せますか？", zh: "不满意可以重做吗？" },
-  "네. **「2번 확인하며」**를 고르면 캐릭터 시트와 이야기 단계에서 확인하고 다시 만들 수 있어요. 이야기를 다시 지을 때는 크레딧이 더 들지 않고, 원하는 방향을 메모로 적어 줄 수 있습니다. 완성한 뒤에는 편집실에서 마음에 안 드는 장면만 골라 다시 그릴 수 있어요(**한 장면 3크레딧**).": {
-    en: "Yes. If you choose **\"Check twice along the way\"**, you can review and redo the character sheet and story steps. Rewriting the story costs no extra credits, and you can leave a note about the direction you want. After it's finished, you can pick just the scenes you don't like and redraw them in the editing room (**3 credits per scene**).",
-    ja: "はい。**「2回確認しながら」**を選ぶと、キャラクターシートと物語の段階で確認して作り直せます。物語を作り直すときは追加のクレジットはかからず、希望の方向をメモで伝えられます。完成後は、気に入らない場面だけを選んで編集室で描き直せます（**1場面3クレジット**）。",
-    zh: "可以。选择**「确认两次」**的话，能在角色设定表和故事阶段确认后重做。重写故事不会额外扣积分，还能留言说明想要的方向。完成之后，可以在编辑室只挑不满意的场景重新绘制（**每个场景 3 积分**）。",
-  },
-
-  "크레딧은 무엇이고, 돈이 드나요?": { en: "What are credits, and does it cost money?", ja: "クレジットとは何ですか？お金はかかりますか？", zh: "积分是什么？需要付费吗？" },
-  "생성 기능을 쓸 때 줄어드는 서비스 안의 이용 단위예요. 가입할 때 **12크레딧**을 드리고, 로그인해 있으면 **날마다 20크레딧**이 자동으로 채워집니다. 웹툰 한 편은 **12크레딧**(가장 높은 화질 「너울」은 18), 컷 하나 다시 그리기는 **3크레딧**, 캐릭터 만들기는 **하루 3번까지 무료**이고 그 뒤로는 2크레딧이에요. 만들다가 취소하거나 도중에 실패하면 **자동으로 돌려드립니다.** **지금은 모든 기능이 무료**이고, 결제 수단을 넣는 곳도 없어요. 크레딧을 돈으로 사는 기능은 아직 준비 중입니다. 유료 기능이 생기면 미리 공지하고 안내해 드릴게요.": {
-    en: "They're the in-service unit that gets used up when you generate something. You get **12 credits** when you sign up, and while you're signed in, **20 credits are topped up every day** automatically. One episode costs **12 credits** (18 for the highest quality, \"Swell\"), redrawing one panel costs **3 credits**, and making a character is **free up to 3 times a day**, then 2 credits. If you cancel partway or it fails, the credits are **refunded automatically.** **Everything is free right now**, and there's nowhere to enter payment details. Buying credits isn't available yet. If paid features arrive, we'll announce them in advance.",
-    ja: "生成機能を使うと減る、サービス内の利用単位です。登録時に**12クレジット**を差し上げ、ログインしていれば**毎日20クレジット**が自動で補充されます。ウェブトゥーン1話は**12クレジット**（最高画質「うねり」は18）、コマ1枚の描き直しは**3クレジット**、キャラクター作成は**1日3回まで無料**で、それ以降は2クレジットです。途中でキャンセルしたり失敗した場合は**自動で返却されます。****現在はすべての機能が無料**で、支払い情報を入力する場所もありません。クレジットの購入はまだ準備中です。有料機能を始める際は、事前にお知らせします。",
-    zh: "这是使用生成功能时会消耗的服务内单位。注册时赠送**12 积分**，登录状态下**每天自动补充 20 积分**。一话漫画是**12 积分**（最高画质「涌浪」为 18），重画一格是**3 积分**，创建角色**每天前 3 次免费**，之后每次 2 积分。中途取消或失败会**自动退还。****目前所有功能都免费**，也没有输入付款信息的地方。积分购买功能还在准备中。如果将来推出付费功能，我们会提前公告。",
-  },
-  "크레딧은 무엇인가요?": { en: "What are credits?", ja: "クレジットとは何ですか？", zh: "积分是什么？" },
-  "생성 기능을 쓸 때 줄어드는 서비스 안의 이용 단위예요. 가입할 때 **12크레딧**을 드리고, 로그인해 있으면 **날마다 20크레딧**이 자동으로 채워집니다. 웹툰 한 편은 **12크레딧**(가장 높은 화질 「너울」은 18), 컷 하나 다시 그리기는 **3크레딧**, 캐릭터 만들기는 **하루 3번까지 무료**이고 그 뒤로는 2크레딧이에요. 만들다가 취소하거나 도중에 실패하면 **자동으로 돌려드립니다.**": {
-    en: "They're the in-service unit that gets used up when you generate something. You get **12 credits** when you sign up, and while you're signed in, **20 credits are topped up every day** automatically. One episode costs **12 credits** (18 for the highest quality, \"Swell\"), redrawing one panel costs **3 credits**, and making a character is **free up to 3 times a day**, then 2 credits. If you cancel partway or it fails, the credits are **refunded automatically.**",
-    ja: "生成機能を使うと減る、サービス内の利用単位です。登録時に**12クレジット**を差し上げ、ログインしていれば**毎日20クレジット**が自動で補充されます。ウェブトゥーン1話は**12クレジット**（最高画質「うねり」は18）、コマ1枚の描き直しは**3クレジット**、キャラクター作成は**1日3回まで無料**で、それ以降は2クレジットです。途中でキャンセルしたり失敗した場合は**自動で返却されます。**",
-    zh: "这是使用生成功能时会消耗的服务内单位。注册时赠送**12 积分**，登录状态下**每天自动补充 20 积分**。一话漫画是**12 积分**（最高画质「涌浪」为 18），重画一格是**3 积分**，创建角色**每天前 3 次免费**，之后每次 2 积分。中途取消或失败会**自动退还。**",
+  "네. **「2번 확인하며」**를 고르면 캐릭터 시트와 이야기 단계에서 확인하고 다시 만들 수 있어요. 이야기를 다시 지을 때는 크레딧이 더 들지 않고, 원하는 방향을 메모로 적어 줄 수 있습니다. 완성한 뒤에는 편집실에서 마음에 안 드는 장면만 골라 다시 그릴 수 있어요(**한 장면 3크레딧, 「너울」은 4크레딧**).": {
+    en: "Yes. If you choose **\"Check twice along the way\"**, you can review and redo the character sheet and story steps. Rewriting the story costs no extra credits, and you can leave a note about the direction you want. After it's finished, you can pick just the scenes you don't like and redraw them in the editing room (**3 credits per scene, 4 for Swell**).",
+    ja: "はい。**「2回確認しながら」**を選ぶと、キャラクターシートと物語の段階で確認して作り直せます。物語を作り直すときは追加のクレジットはかからず、希望の方向をメモで伝えられます。完成後は、気に入らない場面だけを選んで編集室で描き直せます（**1場面3クレジット、「うねり」は4**）。",
+    zh: "可以。选择**「确认两次」**的话，能在角色设定表和故事阶段确认后重做。重写故事不会额外扣积分，还能留言说明想要的方向。完成之后，可以在编辑室只挑不满意的场景重新绘制（**每个场景 3 积分，「涌浪」为 4**）。",
   },
 
   "돈을 내야 하나요?": { en: "Do I have to pay?", ja: "お金はかかりますか？", zh: "需要付费吗？" },
@@ -261,7 +273,121 @@ const dict: Dict = {
     zh: "请只上传**自己拍摄的、或有权使用的照片。**含有他人面孔的照片需要本人同意，漫画、动画、游戏角色等他人作品不可上传。因上传照片引起的问题由上传者承担责任。",
   },
 
+  /* ---- 자주 묻는 질문 본문 — GalleryHome 의 faqs (2026-10-26 개편 · 출석 #863) ---- */
+  "LORE는 무료로 이용할 수 있나요?": { en: "Can I use LORE for free?", ja: "LOREは無料で使えますか？", zh: "LORE 可以免费使用吗？" },
+  "네. 가입하면 웹툰 한 편을 만들 수 있는 20크레딧을 드리고, 출석하면 매일 2크레딧(4일째 5 · 7일째 10크레딧)을 더 드려요. 일주일 다 오면 25크레딧이에요. 가입하지 않아도 하루 2편까지 만들어 볼 수 있어요.": {
+    en: "Yes. When you sign up you get 20 credits, enough for one webtoon episode, and checking in gives you 2 more credits every day (5 on day 4 and 10 on day 7). Check in all week and that's 25 credits. Even without signing up, you can make up to 2 episodes a day.",
+    ja: "はい。登録するとウェブトゥーン1話を作れる20クレジットを差し上げ、出席すると毎日2クレジット（4日目は5・7日目は10クレジット）をさらに差し上げます。1週間すべて出席すると25クレジットです。登録しなくても1日2話まで作ってみられます。",
+    zh: "可以。注册即送可制作一话漫画的 20 积分，每天签到还能再领 2 积分（第 4 天 5 积分 · 第 7 天 10 积分）。一周全部签到共 25 积分。不注册也能每天最多制作 2 话。",
+  },
+
+  "웹툰 한 편을 만드는 데 얼마나 걸리나요?": { en: "How long does it take to make one episode?", ja: "ウェブトゥーン1話を作るのにどれくらいかかりますか？", zh: "制作一话漫画需要多久？" },
+  "고른 화질에 따라 약 6~15분 걸려요(물결 6분 · 파도 8분 · 너울 15분). 앞에 기다리는 작업이 있으면 조금 더 걸리고, 진행 화면에서 지금 단계와 대기 순번을 볼 수 있어요.": {
+    en: "About 6–15 minutes depending on the quality you choose (Ripple 6 min · Wave 8 min · Swell 15 min). It takes a little longer if other jobs are waiting ahead of yours, and the progress screen shows the current step and your place in line.",
+    ja: "選んだ画質によって約6〜15分かかります（さざ波6分・波8分・うねり15分）。先に待っている作業があると少し長くなり、進行画面で今の段階と待ち順を確認できます。",
+    zh: "根据所选画质大约需要 6~15 分钟（涟漪 6 分钟 · 波浪 8 分钟 · 涌浪 15 分钟）。如果前面有排队的任务会稍久一些，可以在进度画面查看当前步骤和排队顺序。",
+  },
+
+  "웹툰을 만들다가 나가도 괜찮나요?": { en: "Is it OK to leave while it's being made?", ja: "作っている途中で離れても大丈夫ですか？", zh: "制作途中离开也没关系吗？" },
+  "괜찮아요. 만드는 일은 서버에서 계속되니까 창을 닫거나 다른 화면으로 가도 멈추지 않아요. 로그인했거나 알림 받을 이메일을 남겨 두면 다 됐을 때 메일로 알려 드려요.": {
+    en: "Yes. The work keeps going on our server, so it won't stop if you close the window or go to another screen. If you're signed in or leave an email for notifications, we'll email you when it's done.",
+    ja: "大丈夫です。制作はサーバーで続くので、ウィンドウを閉じたり別の画面に移っても止まりません。ログインしているか、通知用のメールアドレスを残しておけば、完成したときにメールでお知らせします。",
+    zh: "没关系。制作在服务器上继续进行，关掉窗口或切到别的画面也不会停止。如果已登录或留下接收通知的邮箱，完成时会发邮件告诉你。",
+  },
+
+  "결과가 마음에 들지 않으면 어떻게 하나요?": { en: "What if I don't like the result?", ja: "結果が気に入らないときはどうすればいいですか？", zh: "对结果不满意怎么办？" },
+  "완성한 뒤 편집실에서 마음에 안 드는 장면만 골라 다시 그릴 수 있어요. 무엇이 아쉬운지 고르고 하고 싶은 말을 덧붙이면 돼요. 한 장면에 3크레딧이고, 너울로 만든 작품은 6크레딧이에요. 다시 그릴 때 화질을 파도나 물결로 낮추면 3크레딧이에요.": {
+    en: "Once it's finished, you can pick just the scenes you don't like and redraw them in the editing room. Choose what's off and add anything you want to say. It's 3 credits per scene, or 6 credits for episodes made in Swell. If you lower the quality to Wave or Ripple when redrawing, it's 3 credits.",
+    ja: "完成後、編集室で気に入らない場面だけを選んで描き直せます。何が気になるかを選び、伝えたいことを書き添えてください。1場面3クレジットで、うねりで作った作品は6クレジットです。描き直すときに画質を波やさざ波に下げると3クレジットです。",
+    zh: "完成后可以在编辑室只挑不满意的场景重新绘制。选出哪里不满意，再补充想说的话就行。每个场景 3 积分，用涌浪制作的作品为 6 积分。重画时把画质降到波浪或涟漪则为 3 积分。",
+  },
+
+  "크레딧은 언제 차감되나요?": { en: "When are credits deducted?", ja: "クレジットはいつ差し引かれますか？", zh: "积分什么时候扣除？" },
+  "웹툰 만들기를 시작할 때 차감돼요. 한 편에 20크레딧(너울은 30크레딧), 장면 다시 그리기는 3크레딧(너울은 6크레딧)이고, 8장을 넘는 장은 한 장에 2크레딧(너울은 6크레딧)이에요. 무료로 받은 크레딧부터 먼저 쓰여요.": {
+    en: "They're deducted when you start making a webtoon. One episode is 20 credits (30 for Swell), redrawing a scene is 3 credits (6 for Swell), and each page beyond 8 is 2 credits (6 for Swell). Free credits are used first.",
+    ja: "ウェブトゥーンの制作を始めたときに差し引かれます。1話20クレジット（うねりは30クレジット）、場面の描き直しは3クレジット（うねりは6クレジット）、8枚を超えるページは1枚2クレジット（うねりは6クレジット）です。無料でもらったクレジットから先に使われます。",
+    zh: "开始制作漫画时扣除。一话 20 积分（涌浪为 30 积分），重画一个场景 3 积分（涌浪为 6 积分），超过 8 页的部分每页 2 积分（涌浪为 6 积分）。会优先使用免费获得的积分。",
+  },
+
+  "생성에 실패하면 크레딧은 어떻게 되나요?": { en: "What happens to my credits if generation fails?", ja: "生成に失敗したらクレジットはどうなりますか？", zh: "生成失败的话积分怎么办？" },
+  "만들다가 취소하거나 오류로 실패하면 차감된 크레딧이 자동으로 돌아와요. 다만 정상적으로 완성된 뒤 결과가 마음에 들지 않는 경우는 돌려드리지 않아요.": {
+    en: "If you cancel partway or it fails because of an error, the deducted credits come back automatically. However, we don't refund credits when it finished normally and you just don't like the result.",
+    ja: "途中でキャンセルしたり、エラーで失敗した場合は、差し引かれたクレジットが自動で戻ります。ただし、正常に完成したあとで結果が気に入らない場合は返却しません。",
+    zh: "中途取消或因错误失败时，扣除的积分会自动退还。但正常完成后只是对结果不满意的情况，不予退还。",
+  },
+
+  "구매한 크레딧은 환불할 수 있나요?": { en: "Can I get a refund for credits I bought?", ja: "購入したクレジットは返金できますか？", zh: "购买的积分可以退款吗？" },
+  "결제하고 7일 안에 하나도 쓰지 않았다면 전액 환불돼요. 그 밖에는 남은 유료 크레딧만큼에서 수수료 10%를 뺀 금액을 돌려드려요. 이미 쓴 크레딧과 무료로 받은 크레딧은 환불되지 않아요.": {
+    en: "If you haven't used any of them within 7 days of paying, you get a full refund. Otherwise, we refund the value of your remaining paid credits minus a 10% fee. Credits already used and free credits can't be refunded.",
+    ja: "決済から7日以内に1つも使っていなければ全額返金されます。それ以外の場合は、残っている有料クレジット分から手数料10%を引いた金額をお返しします。すでに使ったクレジットと無料でもらったクレジットは返金されません。",
+    zh: "付款后 7 天内一点都没用的话可全额退款。其他情况下，按剩余付费积分扣除 10% 手续费后退还。已使用的积分和免费获得的积分不予退款。",
+  },
+
+  "구매한 크레딧에 유효기간이 있나요?": { en: "Do purchased credits expire?", ja: "購入したクレジットに有効期限はありますか？", zh: "购买的积分有有效期吗？" },
+  "유료 크레딧은 결제한 날부터 5년 동안 쓸 수 있어요. 무료로 받은 크레딧은 따로 유효기간이 없어요. 탈퇴하면 남은 크레딧은 모두 사라지니, 남은 유료 크레딧이 있으면 먼저 환불을 신청해 주세요.": {
+    en: "Paid credits can be used for 5 years from the date of payment. Free credits don't have a separate expiry date. All remaining credits disappear when you delete your account, so if you have paid credits left, please request a refund first.",
+    ja: "有料クレジットは決済日から5年間使えます。無料でもらったクレジットには特に有効期限はありません。退会すると残りのクレジットはすべて消えるので、有料クレジットが残っている場合は先に返金を申請してください。",
+    zh: "付费积分自付款之日起 5 年内可用。免费获得的积分没有单独的有效期。注销账号后剩余积分会全部清空，如果还有付费积分，请先申请退款。",
+  },
+
+  "마이페이지의 「내 웹툰」에 그동안 만든 작품이 모두 모여요. 알림 메일을 받았다면 메일 속 링크로도 열 수 있어요. 가입하지 않고 만든 작품은 만든 브라우저에서만 다시 찾을 수 있으니, 방문 기록을 지우기 전에 가입하거나 알림 이메일을 남겨 두세요.": {
+    en: "Everything you've made is collected in \"My webtoons\" on My page. If you got a notification email, you can also open it from the link in the email. Works made without signing up can only be found again in the browser you made them in, so sign up or leave a notification email before clearing your browsing data.",
+    ja: "マイページの「マイウェブトゥーン」にこれまで作った作品がすべて集まります。通知メールを受け取っていれば、メール内のリンクからも開けます。登録せずに作った作品は作ったブラウザでしか見つけられないので、閲覧履歴を消す前に登録するか、通知用のメールアドレスを残しておいてください。",
+    zh: "你做过的所有作品都会集中在我的页面的「我的漫画」里。如果收到了通知邮件，也可以通过邮件里的链接打开。未注册时做的作品只能在制作时用的浏览器里找到，清除浏览记录前请先注册或留下通知邮箱。",
+  },
+
+  "다른 사람도 내 작품을 볼 수 있나요?": { en: "Can other people see my work?", ja: "ほかの人も私の作品を見られますか？", zh: "别人也能看到我的作品吗？" },
+  "완성한 작품은 기본으로 둘러보기에 공개돼요. 로그인해서 만든 작품은 마이페이지에서 언제든 비공개로 바꿀 수 있어요. 로그인 없이 만든 작품은 공개 설정을 바꿀 수 없으니, 남에게 보이면 곤란한 내용은 로그인한 뒤 만들어 주세요.": {
+    en: "Finished works are public in Browse by default. Works you made while signed in can be made private anytime from My page. The visibility of works made without signing in can't be changed, so please sign in before making anything you wouldn't want others to see.",
+    ja: "完成した作品は、基本的に「見て回る」に公開されます。ログインして作った作品は、マイページからいつでも非公開に変更できます。ログインせずに作った作品は公開設定を変更できないので、人に見られると困る内容はログインしてから作ってください。",
+    zh: "完成的作品默认会公开在「浏览」中。登录后制作的作品可以随时在我的页面改为不公开。未登录制作的作品无法更改公开设置，不想让别人看到的内容请登录后再制作。",
+  },
+
+  "만든 웹툰을 SNS에 올리거나 상업적으로 이용해도 되나요?": { en: "Can I post my webtoon on social media or use it commercially?", ja: "作ったウェブトゥーンをSNSに載せたり、商用利用してもいいですか？", zh: "做好的漫画可以发到社交平台或用于商业用途吗？" },
+  "개인 SNS · 커뮤니티 · 메신저에 공유하는 건 자유예요. 판매하거나 굿즈 · 광고 같은 영리 목적으로 쓰려면 미리 동의를 받아야 해요. 자세한 범위는 이용약관 제11조에 있어요.": {
+    en: "You're free to share it on your personal social media, communities, and messengers. To sell it or use it for profit, such as merchandise or ads, you need our consent in advance. The details are in Article 11 of the Terms of Service.",
+    ja: "個人のSNS・コミュニティ・メッセンジャーで共有するのは自由です。販売やグッズ・広告などの営利目的で使う場合は、事前に同意を得る必要があります。詳しい範囲は利用規約第11条にあります。",
+    zh: "在个人社交平台 · 社区 · 聊天软件上分享是自由的。如果要销售或用于周边 · 广告等营利目的，需要事先取得同意。具体范围请见用户协议第 11 条。",
+  },
+
+  "이용하다 문제가 생기면 어디로 문의하나요?": { en: "Where do I go if I run into a problem?", ja: "利用中に問題が起きたらどこに問い合わせればいいですか？", zh: "使用中遇到问题该去哪里咨询？" },
+  "마이페이지의 「1:1 문의하기」에서 이메일로 보내 주시거나, lore@lorecomic.com 으로 바로 메일을 주세요. 화면을 찍은 사진을 같이 보내 주시면 더 빨리 확인할 수 있어요.": {
+    en: "Send us an email from \"Contact us\" on My page, or write directly to lore@lorecomic.com. If you attach a screenshot, we can look into it faster.",
+    ja: "マイページの「1:1お問い合わせ」からメールで送るか、lore@lorecomic.com に直接メールしてください。画面のスクリーンショットを一緒に送っていただくと、より早く確認できます。",
+    zh: "请在我的页面的「1:1 咨询」里通过邮件发送，或直接发邮件到 lore@lorecomic.com。附上屏幕截图的话，我们能更快确认。",
+  },
+
   /* ---- 푸터 ---- */
+  /* ---- 푸터 네 칸 · 자주 묻는 질문 분류 (2026-10-26) ---- */
+  "내 캐릭터가 주인공인 웹툰을 만드는 곳": { en: "Where your character becomes the lead of a webtoon", ja: "自分のキャラクターが主人公のウェブトゥーンを作る場所", zh: "让你的角色成为漫画主角的地方" },
+  "서비스": { en: "Service", ja: "サービス", zh: "服务" },
+  "둘러보기": { en: "Browse", ja: "見て回る", zh: "浏览" },
+  "내 웹툰": { en: "My webtoons", ja: "マイウェブトゥーン", zh: "我的漫画" },
+  "자주 묻는 질문": { en: "FAQ", ja: "よくある質問", zh: "常见问题" },
+  "법적 고지": { en: "Legal", ja: "法的情報", zh: "法律信息" },
+  "고객지원": { en: "Support", ja: "サポート", zh: "客户支持" },
+  "대표": { en: "CEO", ja: "代表", zh: "负责人" },
+  "주소": { en: "Address", ja: "住所", zh: "地址" },
+  "전화": { en: "Phone", ja: "電話", zh: "电话" },
+  "이메일": { en: "Email", ja: "メール", zh: "邮箱" },
+  "통신판매업": { en: "Mail-order reg.", ja: "通信販売業", zh: "通信销售业" },
+  "© 2026 LORE · TRY팀. All rights reserved.": { en: "© 2026 LORE · Team TRY. All rights reserved.", ja: "© 2026 LORE · TRYチーム. All rights reserved.", zh: "© 2026 LORE · TRY 团队. All rights reserved." },
+  "LORE는 AI 창작 도구를 제공해요. 올린 사진·그림과 만든 작품의 저작권 관련 책임은 이용자에게 있어요.": {
+    en: "LORE provides AI creative tools. Users are responsible for copyright matters concerning the photos and drawings they upload and the works they make.",
+    ja: "LOREはAI創作ツールを提供します。アップロードした写真・絵と作った作品の著作権に関する責任は利用者にあります。",
+    zh: "LORE 提供 AI 创作工具。上传的照片、图片以及所做作品的著作权相关责任由用户承担。",
+  },
+  "주요": { en: "Top", ja: "主な質問", zh: "主要" },
+  "이용 안내": { en: "Using LORE", ja: "ご利用案内", zh: "使用指南" },
+  "크레딧·결제": { en: "Credits & payment", ja: "クレジット・決済", zh: "积分与支付" },
+  "작품 관리": { en: "Your works", ja: "作品の管理", zh: "作品管理" },
+
+  /* ---- 캐릭터 일관성 — 시트 머리줄 · 구역 이름 ---- */
+  "전신 · 다섯 방향": { en: "Full body · 5 angles", ja: "全身・5方向", zh: "全身 · 五个角度" },
+  "얼굴 각도": { en: "Face angles", ja: "顔の角度", zh: "脸部角度" },
+  "표정": { en: "Expressions", ja: "表情", zh: "表情" },
+  "디테일": { en: "Details", ja: "ディテール", zh: "细节" },
+
   "LORE 웹툰 스튜디오": { en: "LORE Webtoon Studio", ja: "LORE ウェブトゥーンスタジオ", zh: "LORE 漫画工作室" },
   "이용약관": { en: "Terms of Service", ja: "利用規約", zh: "服务条款" },
   "개인정보처리방침": { en: "Privacy Policy", ja: "プライバシーポリシー", zh: "隐私政策" },
@@ -295,6 +421,7 @@ const dict: Dict = {
   },
   "바로 웹툰을 만들고 싶어요": { en: "I want to make a webtoon right away", ja: "すぐウェブトゥーンを作りたい", zh: "我想直接做漫画" },
   "남은 무료 {n}": { en: "{n} free left", ja: "無料残り {n}", zh: "剩余免费 {n}" },
+  "무료": { en: "Free", ja: "無料", zh: "免费" },
   "내가 가진 캐릭터, 최애, 이미지, 설정으로 바로 웹툰을 만들어요.": {
     en: "Start from a character you already have: a fave, an image, or a bit of lore.",
     ja: "手持ちのキャラクター、推し、画像、設定から、すぐにウェブトゥーンを作ります。",
@@ -326,6 +453,36 @@ const dict: Dict = {
   },
   "몽이": { en: "Mongi", ja: "モンイ", zh: "蒙伊" },
   "세이엘": { en: "Seiel", ja: "セイエル", zh: "赛伊尔" },
+  /* ---- 빠졌던 번역 ---- */
+  "AI 웹툰 스튜디오": { en: "AI webtoon studio", ja: "AIウェブトゥーンスタジオ", zh: "AI 漫画工作室" },
+  "같은 얼굴,": { en: "Same face,", ja: "同じ顔のまま、", zh: "同一张脸，" },
+  "그리기 전에": { en: "Before drawing,", ja: "描く前に", zh: "绘制之前，" },
+  "내 캐릭터로": { en: "With my character,", ja: "自分のキャラクターで", zh: "用我的角色" },
+  "다른 장르의 웹툰": { en: "Webtoons in other genres", ja: "ほかのジャンルのウェブトゥーン", zh: "其他题材的漫画" },
+  "다시 그려요": { en: "get redrawn", ja: "描き直します", zh: "重新绘制" },
+  "마지막 컷까지": { en: "to the last panel", ja: "最後のコマまで", zh: "直到最后一格" },
+  "선택한 장면": { en: "Selected scene", ja: "選んだ場面", zh: "选中的场景" },
+  "아쉬운 장면만": { en: "Only the scenes you don't like", ja: "気に入らない場面だけ", zh: "只把不满意的场景" },
+  "원래 컷 보기": { en: "See original panel", ja: "元のコマを見る", zh: "查看原画格" },
+  "웹툰 둘러보기": { en: "Browse webtoons", ja: "ウェブトゥーンを見て回る", zh: "浏览漫画" },
+  "웹툰 속 캐릭터": { en: "Characters in the webtoons", ja: "ウェブトゥーンのキャラクター", zh: "漫画里的角色" },
+  "장면 {n}": { en: "Scene {n}", ja: "場面 {n}", zh: "场景 {n}" },
+  "장면과 대사": { en: "Scenes and dialogue", ja: "場面とセリフ", zh: "场景与台词" },
+  "장면부터 확인": { en: "check the scenes first", ja: "まず場面を確認", zh: "先确认场景" },
+  "캐릭터 일관성": { en: "Character consistency", ja: "キャラクターの一貫性", zh: "角色一致性" },
+  "캐릭터를 넣으면, 그 캐릭터가 주인공인 웹툰이 나와요.": { en: "Add a character, and you get a webtoon starring that character.", ja: "キャラクターを入れると、そのキャラクターが主人公のウェブトゥーンができます。", zh: "放入角色，就会生成以该角色为主角的漫画。" },
+  "1화를 시작하세요": { en: "start episode 1", ja: "第1話を始めましょう", zh: "开始第 1 话" },
+  "당신의 캐릭터로": { en: "With your character,", ja: "あなたのキャラクターで", zh: "用你的角色" },
+  "LORE 웹툰": { en: "LORE Webtoon", ja: "LOREウェブトゥーン", zh: "LORE 漫画" },
+  "그 캐릭터로 그린 웹툰이 나와요.": { en: "you get a webtoon drawn with that character.", ja: "そのキャラクターで描いたウェブトゥーンができます。", zh: "就会生成用该角色画的漫画。" },
+  "그리기 전에 장면을 고칠 수 있어요": { en: "You can edit scenes before drawing", ja: "描く前に場面を直せます", zh: "绘制前可以修改场景" },
+  "내 캐릭터가 주인공인": { en: "Starring my character:", ja: "自分のキャラクターが主人公の", zh: "以我的角色为主角的" },
+  "사진이나 설정, 내가 만든 캐릭터": { en: "A photo, details, or a character you made", ja: "写真や設定、自分で作ったキャラクター", zh: "照片、设定或自己创作的角色" },
+  "이야기 적기": { en: "Write the story", ja: "ストーリーを書く", zh: "写故事" },
+  "장면 확인하고 그리기": { en: "Check scenes, then draw", ja: "場面を確認して描く", zh: "确认场景后绘制" },
+  "캐릭터 넣기": { en: "Add a character", ja: "キャラクターを入れる", zh: "放入角色" },
+  "캐릭터와 하고 싶은 이야기를 넣으면,": { en: "Add a character and the story you want,", ja: "キャラクターと描きたいストーリーを入れると、", zh: "放入角色和想讲的故事，" },
+  "하고 싶은 장면이나 줄거리": { en: "Scenes or a plot you have in mind", ja: "描きたい場面やあらすじ", zh: "想要的场景或剧情" },
 };
 
 registerDict(dict);

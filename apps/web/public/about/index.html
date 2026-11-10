@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LORE 웹툰 — 서비스 소개</title>
+<meta name="description" content="내 캐릭터, 내 IP로 한 편의 웹툰을 만드는 AI 웹툰 스튜디오 LORE의 서비스 소개입니다.">
+<meta name="robots" content="noindex, nofollow">
+<meta property="og:title" content="LORE 웹툰 — 서비스 소개">
+<meta property="og:description" content="내 캐릭터가 이야기 속에서 살아 움직이는 순간.">
+<link rel="icon" href="/favicon.ico">
+<meta name="description" content="내 캐릭터, 내 IP로 한 편의 웹툰을 만드는 AI 웹툰 스튜디오 LORE의 기획서">
+<style>
+@font-face{font-family:"Gmarket";src:url(/about/fonts/GmarketSansBold.woff2) format("woff2");font-weight:700;font-display:swap}
+@font-face{font-family:"SUIT";src:url(/about/fonts/SUIT-Regular.woff2) format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"SUIT";src:url(/about/fonts/SUIT-Medium.woff2) format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"SUIT";src:url(/about/fonts/SUIT-SemiBold.woff2) format("woff2");font-weight:600;font-display:swap}
+@font-face{font-family:"SUIT";src:url(/about/fonts/SUIT-Bold.woff2) format("woff2");font-weight:700;font-display:swap}
+
+:root{
+  --bg:#0b1220; --bg2:#101a2c; --panel:#152038; --line:rgba(255,255,255,.09);
+  --ink:#f3f1ea; --ink2:#b9bfcc; --ink3:#98a1b3;
+  --coral:#f08a74; --coral2:#ffb39f; --lav:#b9a8ff; --gold:#f2cf7a;
+  --radius:18px; --max:1120px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"SUIT","Noto Sans KR",system-ui,sans-serif;font-size:17px;line-height:1.7;word-break:keep-all;-webkit-font-smoothing:antialiased}
+img{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+h1,h2,h3{font-family:"Gmarket","SUIT",sans-serif;line-height:1.25;margin:0;letter-spacing:-.01em}
+h2{font-size:clamp(28px,4vw,42px)}
+h3{font-size:20px}
+p{margin:0}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 20px}
+section{padding:96px 0}
+@media(max-width:720px){section{padding:64px 0}}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:13px;letter-spacing:.14em;color:var(--coral);text-transform:uppercase;margin-bottom:18px}
+.eyebrow::before{content:"";width:28px;height:3px;background:var(--coral);border-radius:2px}
+.lead{font-size:clamp(17px,1.5vw,20px);color:var(--ink2);max-width:640px;margin-top:18px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:14px 24px;border-radius:999px;font-weight:700;font-size:16px;transition:transform .15s,background .15s}
+.btn:hover{transform:translateY(-1px)}
+.btn-p{background:var(--coral);color:#1a0f0c}
+.btn-p:hover{background:var(--coral2)}
+.btn-g{border:1px solid rgba(255,255,255,.22);color:var(--ink)}
+.btn-g:hover{background:rgba(255,255,255,.06)}
+
+/* nav */
+nav{position:sticky;top:0;z-index:20;background:rgba(11,18,32,.82);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:64px}
+.logo{font-family:"Gmarket";font-size:22px;letter-spacing:.06em}
+.logo b{color:var(--coral)}
+nav ul{display:flex;gap:26px;list-style:none;margin:0;padding:0;font-size:15px;color:var(--ink2)}
+nav ul a:hover{color:var(--ink)}
+nav .btn{padding:10px 18px;font-size:14px}
+@media(max-width:860px){nav ul{display:none}}
+
+/* hero */
+.hero{padding:88px 0 72px;overflow:hidden;position:relative}
+.hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;align-items:center}
+.hero h1{font-size:clamp(38px,5.4vw,66px)}
+.hero h1 em{font-style:normal;color:var(--coral)}
+.hero .cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:34px}
+.hero .def{margin-top:28px;padding:18px 22px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--ink2);font-size:16px}
+.hero .def b{color:var(--ink)}
+.stack{position:relative;height:560px}
+.stack img{position:absolute;width:52%;aspect-ratio:2/3;object-fit:cover;border-radius:14px;box-shadow:0 30px 60px rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.08)}
+.stack img:nth-child(1){left:0;top:40px;transform:rotate(-6deg)}
+.stack img:nth-child(2){left:30%;top:0;z-index:2;width:56%}
+.stack img:nth-child(3){right:0;top:70px;transform:rotate(6deg)}
+@media(max-width:860px){.hero .wrap{grid-template-columns:1fr}.stack{height:420px;margin-top:10px}}
+
+
+/* value: input → scene */
+.pairs{display:grid;gap:22px;margin-top:48px}
+.pair{display:grid;grid-template-columns:1fr auto 1.1fr;gap:22px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px}
+.pair .in{padding:8px 4px}
+.pair .tag{font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--lav);margin-bottom:10px}
+.pair .q{font-family:"Gmarket";font-size:clamp(19px,1.9vw,24px);line-height:1.45}
+.pair .arrow{font-size:30px;color:var(--coral);font-weight:700}
+.pair figure{margin:0;position:relative}
+.pair img{border-radius:12px;width:100%}
+.pair figcaption{position:absolute;left:12px;bottom:12px;background:rgba(11,18,32,.78);padding:6px 12px;border-radius:999px;font-size:13px;color:var(--ink2);backdrop-filter:blur(6px)}
+@media(max-width:720px){.pair{grid-template-columns:1fr}.pair .arrow{transform:rotate(90deg);text-align:center}}
+.claim{margin-top:56px;text-align:center}
+.claim h3{font-size:clamp(22px,3vw,32px)}
+.claim h3 s{text-decoration:line-through;color:var(--ink3);text-decoration-color:var(--coral)}
+
+/* why */
+.why{background:var(--bg2)}
+.why .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:44px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:28px 26px}
+.card .n{font-family:"Gmarket";color:var(--coral);font-size:14px;letter-spacing:.1em;margin-bottom:14px}
+.card h3{margin-bottom:12px}
+.card p{color:var(--ink2);font-size:16px}
+@media(max-width:860px){.why .grid{grid-template-columns:1fr}}
+.need{margin-top:44px;padding:36px;border-radius:var(--radius);background:linear-gradient(135deg,rgba(240,138,116,.16),rgba(185,168,255,.12));border:1px solid rgba(255,255,255,.12);text-align:center}
+.need .q{font-family:"Gmarket";font-size:clamp(22px,3vw,34px)}
+.need p{color:var(--ink2);margin-top:12px}
+
+/* who */
+.who .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:44px}
+.who .card h3{font-size:24px}
+.who .card .sub{color:var(--coral);font-weight:700;font-size:13px;letter-spacing:.12em;margin-bottom:12px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.chip{font-size:14px;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--ink2)}
+.who .path{margin-top:14px;font-size:14px;color:var(--ink3)}
+.who .path b{color:var(--ink2)}
+@media(max-width:860px){.who .grid{grid-template-columns:1fr}}
+
+/* how */
+.how{background:var(--bg2)}
+.flow{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:28px;font-family:"Gmarket";font-size:clamp(18px,2.4vw,26px)}
+.flow span{padding:10px 22px;border-radius:999px;border:1px solid rgba(255,255,255,.18)}
+.flow span.on{background:var(--coral);color:#1a0f0c;border-color:transparent}
+.flow i{color:var(--coral);font-style:normal}
+.steps{display:grid;gap:26px;margin-top:56px}
+.step{display:grid;grid-template-columns:.8fr 1.2fr;gap:30px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:26px;overflow:hidden}
+.step:nth-child(even){grid-template-columns:1.2fr .8fr}
+.step:nth-child(even) .txt{order:2}
+.step .n{font-family:"Gmarket";color:var(--coral);font-size:14px;letter-spacing:.12em;margin-bottom:12px}
+.step h3{font-size:clamp(22px,2.4vw,28px);margin-bottom:12px}
+.step p{color:var(--ink2);font-size:16px}
+.step img{border-radius:12px;border:1px solid var(--line);width:100%}
+.step .fact{display:inline-block;margin-top:16px;font-size:13px;color:var(--ink3);border:1px solid var(--line);border-radius:999px;padding:5px 12px}
+@media(max-width:860px){.step,.step:nth-child(even){grid-template-columns:1fr}.step:nth-child(even) .txt{order:0}}
+.promise{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:56px}
+.promise .card h3{font-size:22px;color:var(--gold)}
+@media(max-width:860px){.promise{grid-template-columns:1fr}}
+
+/* works */
+.w-wrap{display:grid;grid-template-columns:360px 1fr;gap:48px;margin-top:44px;align-items:start}
+.phone{width:320px;margin:0 auto;border-radius:38px;padding:12px;background:#1a2235;border:1px solid rgba(255,255,255,.14);box-shadow:0 40px 80px rgba(0,0,0,.5),inset 0 0 0 1px rgba(0,0,0,.6)}
+.phone .scr{border-radius:28px;overflow:hidden;background:#000;height:600px;overflow-y:auto;scrollbar-width:none;position:relative}
+.phone .scr::-webkit-scrollbar{display:none}
+.phone .scr img{width:100%}
+.phone .bar{height:44px;padding:0 16px;background:#0b1220;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--ink2);position:sticky;top:0;z-index:1;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.w-list{display:grid;grid-template-columns:1fr 1fr;gap:10px 22px}
+.w-list button{all:unset;cursor:pointer;display:grid;grid-template-columns:72px 1fr;gap:16px;align-items:center;padding:12px 14px;border-radius:14px;border:1px solid transparent;transition:background .15s,border-color .15s}
+.w-list button:hover{background:rgba(255,255,255,.04);border-color:var(--line)}
+.w-list button:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
+.w-list img{border-radius:8px;aspect-ratio:2/3;object-fit:cover;width:72px}
+.w-list .t{font-weight:700;font-size:17px;line-height:1.35}
+.w-list .t small{display:block;font-weight:500;font-size:13px;color:var(--ink3);margin-top:4px}
+.w-list button.on{background:rgba(240,138,116,.1);border-color:rgba(240,138,116,.45)}
+.w-list button.on .t small{color:var(--coral)}
+@media(max-width:860px){.w-wrap{grid-template-columns:1fr}.phone{width:min(320px,100%)}.w-list{grid-template-columns:1fr}}
+/* plan */
+.plan{background:var(--bg2)}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:44px}
+.col{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:26px}
+.col .when{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.12em;padding:5px 12px;border-radius:999px;margin-bottom:16px}
+.col:nth-child(1) .when{background:rgba(240,138,116,.18);color:var(--coral2)}
+.col:nth-child(2) .when{background:rgba(242,207,122,.16);color:var(--gold)}
+.col:nth-child(3) .when{background:rgba(185,168,255,.16);color:var(--lav)}
+.col h3{margin-bottom:14px}
+.col ul{margin:0;padding:0;list-style:none}
+.col li{padding:10px 0;border-top:1px solid var(--line);font-size:15.5px;color:var(--ink2)}
+.col li b{color:var(--ink);display:block;font-weight:600}
+@media(max-width:860px){.cols{grid-template-columns:1fr}}
+.measure{margin-top:56px;display:grid;grid-template-columns:1.1fr .9fr;gap:30px;align-items:start}
+.measure .q{font-family:"Gmarket";font-size:clamp(22px,2.6vw,30px);line-height:1.4}
+.measure .q em{font-style:normal;color:var(--coral)}
+.measure table{width:100%;border-collapse:collapse;font-size:15px}
+.measure td{padding:12px 8px;border-top:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+.measure td:first-child{color:var(--ink);font-weight:600;width:42%}
+@media(max-width:860px){.measure{grid-template-columns:1fr}}
+.rules{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:56px}
+.rule{padding:22px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.03)}
+.rule b{display:block;font-family:"Gmarket";font-size:18px;margin-bottom:8px}
+.rule p{font-size:14.5px;color:var(--ink2)}
+@media(max-width:860px){.rules{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.rules{grid-template-columns:1fr}}
+
+/* team */
+.team .grid{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:44px;align-items:start}
+.quote{padding:30px;border-radius:var(--radius);background:var(--panel);border:1px solid var(--line)}
+.quote .t{font-family:"Gmarket";font-size:clamp(20px,2.2vw,26px);line-height:1.5}
+.quote .t::before{content:"“";color:var(--coral)}
+.quote .t::after{content:"”";color:var(--coral)}
+.quote .by{margin-top:16px;color:var(--ink3);font-size:14px}
+.facts{display:grid;gap:0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.facts div{display:grid;grid-template-columns:110px 1fr;padding:16px 20px;border-top:1px solid var(--line);font-size:15.5px}
+.facts div:first-child{border-top:0}
+.facts span{color:var(--ink3)}
+.team .view{margin-top:26px;padding-left:0;list-style:none;color:var(--ink2);font-size:16px}
+.team .view li{padding:8px 0 8px 22px;position:relative}
+.team .view li::before{content:"";position:absolute;left:0;top:18px;width:10px;height:10px;border-radius:50%;background:var(--coral)}
+@media(max-width:860px){.team .grid{grid-template-columns:1fr}}
+
+/* final */
+.final{text-align:center;padding:110px 0;background:radial-gradient(60% 80% at 50% 100%,rgba(240,138,116,.18),transparent)}
+.final h2{font-size:clamp(30px,4.6vw,50px)}
+.final .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:34px}
+footer{border-top:1px solid var(--line);padding:36px 0;color:var(--ink3);font-size:14px}
+footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="logo" href="#top">LORE<b>.</b></a>
+    <ul>
+      <li><a href="#value">핵심 가치</a></li>
+      <li><a href="#why">왜</a></li>
+      <li><a href="#who">누구에게</a></li>
+      <li><a href="#how">어떻게</a></li>
+      <li><a href="#works">실제 작품</a></li>
+      <li><a href="#plan">계획</a></li>
+      <li><a href="#team">팀</a></li>
+      <li><a href="/partners">기업 협업</a></li>
+    </ul>
+    <a class="btn btn-p" href="/webtoon">지금 만들어 보기</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">웹툰 스튜디오, LORE</div>
+      <h1>내 캐릭터가<br>이야기 속에서<br><em>살아 움직이는 순간.</em></h1>
+      <p class="lead">내 캐릭터, 내 IP로 한 편의 웹툰을 만드는 AI 웹툰 스튜디오입니다.<br>캐릭터를 넣으면 그 캐릭터가 주인공인 1화가 나옵니다.</p>
+      <div class="cta">
+        <a class="btn btn-p" href="/webtoon">내 캐릭터로 1화 만들기</a>
+        <a class="btn btn-g" href="#works">실제 작품 보기</a>
+      </div>
+      <div class="def"><b>LORE</b>는 내가 가진 캐릭터와 이야기를 바탕으로 한 편의 웹툰을 만들어 주는 AI 웹툰 스튜디오입니다. 웹툰으로, 사용자의 창작물을 시각적인 이야기로 바꿔 줍니다.</div>
+    </div>
+    <div class="stack">
+      <img src="/about/img/cover-reschet.jpg" alt="가면을 쓰고 온 옛 약혼자 표지">
+      <img src="/about/img/cover-jia.jpg" alt="황궁에 떨어진 진실 변수 표지">
+      <img src="/about/img/cover-heukseol.jpg" alt="마왕성 공략 라이브, 한 번뿐인 시청자 표지">
+    </div>
+  </div>
+</header>
+
+<!-- 핵심 가치 -->
+<section id="value">
+  <div class="wrap">
+    <div class="eyebrow">핵심 가치</div>
+    <h2>내가 넣은 설정이,<br>이야기 속 장면이 됩니다.</h2>
+    <p class="lead">윤지아 「황궁에 떨어진 진실 변수」 1화</p>
+
+    <div class="pairs">
+      <div class="pair">
+        <div class="in"><div class="tag">이야기 한 줄</div><div class="q">눈을 떠 보니 로판 속 황궁,<br>내일 황태자와 약혼식.</div></div>
+        <div class="arrow">→</div>
+        <figure><img src="/about/img/panel-palace.jpg" alt="「황태자? 약혼식이요? 제가요?!」 장면"><figcaption>1화 2장</figcaption></figure>
+      </div>
+      <div class="pair">
+        <div class="in"><div class="tag">캐릭터 설명</div><div class="q">거짓말을 못 해서<br>속마음이 얼굴에 다 드러난다.</div></div>
+        <div class="arrow">→</div>
+        <figure><img src="/about/img/panel-lie.jpg" alt="「거짓말을 하려니까, 목이 뜨거워져서요.」 장면"><figcaption>1화 5장</figcaption></figure>
+      </div>
+      <div class="pair">
+        <div class="in"><div class="tag">캐릭터 설명</div><div class="q">거짓말을 못 해서<br>속마음이 얼굴에 다 드러난다.</div></div>
+        <div class="arrow">→</div>
+        <figure><img src="/about/img/panel-face.jpg" alt="「그래도… 안 죽었으면 좋겠어요.」 장면"><figcaption>1화 6장</figcaption></figure>
+      </div>
+    </div>
+
+    <div class="claim">
+      <h3><s>캐릭터를 웹툰으로</s> 캐릭터의 이야기를 웹툰으로.</h3>
+    </div>
+  </div>
+</section>
+
+<!-- 왜 -->
+<section id="why" class="why">
+  <div class="wrap">
+    <div class="eyebrow">왜 필요한가</div>
+    <h2>캐릭터와 이야기는 있는데,<br>실제 모습으로 만나기는 어렵습니다.</h2>
+    <div class="grid">
+      <div class="card"><div class="n">01</div><h3>설정은 있지만 장면이 없다</h3><p>성격, 세계관, 관계, 상상한 이야기는 글과 머릿속에만 있습니다. 그 캐릭터가 행동하고 말하는 모습을 직접 보기는 어렵습니다.</p></div>
+      <div class="card"><div class="n">02</div><h3>이야기를 그리려면 일이 너무 많다</h3><p>여러 장면에서 같은 모습을 지키며 행동과 관계를 그리는 일은 그림 한 장보다 훨씬 어렵습니다.</p></div>
+      <div class="card"><div class="n">03</div><h3>그림 한 장으로는 이야기가 안 된다</h3><p>캐릭터의 모습을 보여 주는 것과, 그 캐릭터가 이야기 속에서 움직이는 것을 보여 주는 것은 다릅니다.</p></div>
+    </div>
+    <div class="need">
+      <div class="q">“내가 만든 캐릭터와 이야기가 실제로 살아가는 모습을 보고 싶다.”</div>
+    </div>
+  </div>
+</section>
+
+<!-- 누구 -->
+<section id="who" class="who">
+  <div class="wrap">
+    <div class="eyebrow">누구를 위한 서비스인가</div>
+    <h2>자기 캐릭터가 있는 사람에게,<br>그리고 최애가 있는 사람에게.</h2>
+    <div class="grid">
+      <div class="card">
+        <div class="sub">메인 타겟</div>
+        <h3>내 캐릭터가 살아 움직이는 걸 보고 싶은 창작자</h3>
+        <p style="margin-top:12px">자신이 만든 캐릭터와 세계관, 즉 자기 IP가 있는 사람. 설정과 이야기를 많이 적어 넣을수록 나온 1화에 내가 적은 것이 그대로 보입니다.</p>
+        <div class="chips"><span class="chip">자캐</span><span class="chip">세계관</span><span class="chip">직접 쓴 이야기</span><span class="chip">설정집</span></div>
+        <div class="path"><b>쓰는 길</b> · 「만들고 싶은 내용이 있어요」 → 내가 적은 설정·이야기가 출발점</div>
+      </div>
+      <div class="card">
+        <div class="sub">유입 타겟</div>
+        <h3>좋아하는 대상을 새 이야기에 넣어 보고 싶은 사람</h3>
+        <p style="margin-top:12px">“이거 해 보면 재밌겠다”로 들어옵니다. 만들어 본 뒤에 “내가 넣은 대상이 진짜 이야기 속에 들어갔네”를 경험합니다.</p>
+        <div class="chips"><span class="chip">내 최애가 마법학교에 간다면?</span><span class="chip">우리 강아지가 로판 여주라면?</span><span class="chip">내가 악역 영애가 된다면?</span><span class="chip">내 캐릭터가 현대물에 떨어진다면?</span></div>
+        <div class="path"><b>쓰는 길</b> · 「아이디어부터 시작할게요」 → AI가 이야기 후보를 짓고 내가 고름</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 어떻게 -->
+<section id="how" class="how">
+  <div class="wrap">
+    <div class="eyebrow">어떻게 만들어지나</div>
+    <h2>캐릭터에서 시작해, 이야기를 거쳐, 웹툰으로.</h2>
+    <div class="flow"><span class="on">캐릭터</span><i>→</i><span class="on">이야기</span><i>→</i><span class="on">웹툰</span><i>→</i><span>다음 화</span></div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="txt"><div class="n">01 캐릭터</div><h3>사진을 넣어도, 설명을 적어도, 아무것도 없이 시작해도.</h3><p>캐릭터 카드에 역할, 반전 한 줄, 대사가 붙습니다. 넣은 대상은 그 모습 그대로 이야기 속으로 갑니다. 강아지는 강아지로, 고양이는 고양이로.</p><span class="fact">캐릭터 하나에 1분 안쪽</span></div>
+        <img src="/about/img/wizard.jpg" alt="웹툰 만들기 화면 — 누가 주인공인가요">
+      </div>
+      <div class="step">
+        <div class="txt"><div class="n">02 이야기</div><h3>결과만 받는 게 아니라, 이야기 방향을 내가 고릅니다.</h3><p>장르 14종과 그림체 6종을 고르고, 「확인하고 만들기」를 고르면 그리기 전에 이야기 후보와 장면을 먼저 봅니다. 대사와 연출을 고치고, 장면 하나만 다시 뽑을 수 있습니다.</p><span class="fact">이야기 후보 4개 중 고르기 · 메모로 다시 짓기</span></div>
+        <img src="/about/img/story.jpg" alt="그림체와 그리기 방식을 고르는 화면">
+      </div>
+      <div class="step">
+        <div class="txt"><div class="n">03 캐릭터 시트</div><h3>첫 장면의 캐릭터가 마지막 장면까지 같은 캐릭터로.</h3><p>본문을 그리기 전에 전신 5방향, 표정 6개, 소품, 색 6개를 담은 시트를 먼저 만들고, 모든 장이 이 시트를 참조합니다.</p><span class="fact">한 편 6장 안팎 · 표지 포함</span></div>
+        <img src="/about/img/sheet-jia.jpg" alt="윤지아 캐릭터 시트">
+      </div>
+      <div class="step">
+        <div class="txt"><div class="n">04 편집실</div><h3>마음에 드는 장면만 남깁니다.</h3><p>말풍선과 스티커를 얹고, 아쉬운 장은 그 장만 다시 그립니다. 이전 판으로 되돌릴 수 있어서 처음부터 전부 다시 만들 필요가 없습니다.</p><span class="fact">장 단위 다시 그리기 · 이전 판 되돌리기 · 이미지로 뽑기</span></div>
+        <img src="/about/img/editor.jpg" alt="편집실 화면">
+      </div>
+      <div class="step">
+        <div class="txt"><div class="n">05 다음 화</div><h3>한 번 뽑고 버리는 게 아니라, 같은 캐릭터로 이어 갑니다.</h3><p>앞 화에서 일어난 일과 인물, 세계의 설정이 남아 다음 화의 바탕이 됩니다. 완성한 작품은 둘러보기에 공개되고 링크로 공유합니다.</p><span class="fact">회차 목록 · 공개 · 공유 · 찜</span></div>
+        <img src="/about/img/chapters.jpg" alt="회차 목록 화면">
+      </div>
+    </div>
+
+    <div class="promise">
+      <div class="card"><h3>머릿속 이야기를, 장면으로 먼저</h3><p>이야기를 적으면 AI가 장면과 대사로 나눠 보여 줘요. 직접 고쳐 본 뒤 웹툰으로 만들 수 있어요.</p></div>
+      <div class="card"><h3>같은 얼굴, 마지막 컷까지</h3><p>설정만 있던 캐릭터가 이야기 속에서 말하고 움직여요. 캐릭터를 넣으면 그 캐릭터가 주인공인 웹툰이 나옵니다.</p></div>
+      <div class="card"><h3>마음에 드는 장면만 남기기</h3><p>아쉬운 장면이 있다면 그 장면만 다시 그려요. 처음부터 전부 다시 만들 필요 없어요.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 실제 작품 -->
+<section id="works" class="works">
+  <div class="wrap">
+    <div class="eyebrow">실제 작품</div>
+    <h2>LORE에서 만든 웹툰</h2>
+    <div class="w-wrap">
+      <div class="phone"><div class="scr" id="scr">
+        <div class="bar" id="bar">황궁에 떨어진 진실 변수 · 1화</div>
+        <div id="pg"><img src="/about/img/jia-p02.jpg" alt="2장"><img src="/about/img/jia-p03.jpg" alt="3장"><img src="/about/img/jia-p04.jpg" alt="4장"><img src="/about/img/jia-p05.jpg" alt="5장"><img src="/about/img/jia-p06.jpg" alt="6장"><img src="/about/img/jia-p07.jpg" alt="7장"></div>
+      </div></div>
+      <div>
+        <div class="w-list" id="wlist">
+        <button type="button" data-w="jia" data-title="황궁에 떨어진 진실 변수" class="on"><img src="/about/img/cover-jia.jpg" alt=""><div class="t">황궁에 떨어진 진실 변수<small>지금 보는 작품</small></div></button>
+        <button type="button" data-w="heukseol" data-title="마왕성 공략 라이브, 한 번뿐인 시청자"><img src="/about/img/cover-heukseol.jpg" alt=""><div class="t">마왕성 공략 라이브, 한 번뿐인 시청자<small>1화 보기</small></div></button>
+        <button type="button" data-w="hangyeol" data-title="남은 빵은 너 줄게"><img src="/about/img/cover-hangyeol.jpg" alt=""><div class="t">남은 빵은 너 줄게<small>1화 보기</small></div></button>
+        <button type="button" data-w="reschet" data-title="가면을 쓰고 온 옛 약혼자"><img src="/about/img/cover-reschet.jpg" alt=""><div class="t">가면을 쓰고 온 옛 약혼자<small>1화 보기</small></div></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<script>
+(function(){
+  var list=document.getElementById('wlist'),scr=document.getElementById('scr'),bar=document.getElementById('bar'),pg=document.getElementById('pg');
+  list.addEventListener('click',function(e){
+    var b=e.target.closest('button');if(!b||b.classList.contains('on'))return;
+    list.querySelectorAll('button').forEach(function(x){x.classList.remove('on');x.querySelector('small').textContent='1화 보기'});
+    b.classList.add('on');b.querySelector('small').textContent='지금 보는 작품';
+    bar.textContent=b.dataset.title+' · 1화';
+    var h='';for(var i=2;i<=7;i++)h+='<img src="/about/img/'+b.dataset.w+'-p0'+i+'.jpg" alt="'+i+'장">';
+    pg.innerHTML=h;scr.scrollTop=0;hold=60;
+  });
+  var hold=60,paused=false,last=0;
+  scr.addEventListener('mouseenter',function(){paused=true});
+  scr.addEventListener('mouseleave',function(){paused=false});
+  function tick(ts){
+    var dt=last?Math.min(ts-last,50):16;last=ts;
+    if(!paused){
+      if(hold>0){hold-=dt/16}
+      else{
+        var max=scr.scrollHeight-scr.clientHeight;
+        if(scr.scrollTop>=max-1){hold=90;scr.scrollTop=0}
+        else scr.scrollTop+=dt*0.045;
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+
+<!-- 계획 -->
+<section id="plan" class="plan">
+  <div class="wrap">
+    <div class="eyebrow">어떻게 할 계획인가</div>
+    <h2>한 편에서 시작해,<br>쌓이고 이어지는 창작으로.</h2>
+    <div class="cols">
+      <div class="col">
+        <span class="when">지금 되는 것</span>
+        <h3>한 편을 끝까지</h3>
+        <ul>
+          <li><b>캐릭터 만들기</b>사진·설명·세계관, 아무것도 없이도</li>
+          <li><b>내 내용으로 만들기</b>적은 설정·이야기가 출발점, 그리기 전에 장면 확인</li>
+          <li><b>캐릭터 시트</b>모든 장이 같은 시트를 참조</li>
+          <li><b>편집실</b>말풍선·스티커, 장 다시 그리기·되돌리기</li>
+          <li><b>다음 화 이어 만들기</b>앞 화의 사건과 인물을 바탕으로</li>
+          <li><b>공개·공유</b>둘러보기, 카카오톡·X·LINE·링크, 찜, 다운로드</li>
+        </ul>
+      </div>
+      <div class="col">
+        <span class="when">만드는 중</span>
+        <h3>쌓이는 설정집, 이어지는 연재</h3>
+        <ul>
+          <li><b>설정집</b>인물·세계·관계를 항목으로 두고, 이름이 나오는 화마다 그대로 참고</li>
+          <li><b>진행 상태</b>화가 끝날 때 일어난 일·남은 일을 정리해 다음 화로 넘김</li>
+          <li><b>독자 반응</b>댓글과 작품 구독</li>
+          <li><b>결제</b>크레딧 충전</li>
+          <li><b>캐릭터 키우기와 잇기</b>같은 캐릭터가 곁에서 하루를 살고, 그 애로 웹툰을 만듦 (베타)</li>
+        </ul>
+      </div>
+      <div class="col">
+        <span class="when">그 다음</span>
+        <h3>읽히고, 함께 만들고</h3>
+        <ul>
+          <li><b>읽는 사람의 자리</b>둘러보기를 작품을 발견하고 따라가는 곳으로</li>
+          <li><b>여러 화에 걸친 이야기</b>긴 이야기를 회차로 나눠 연재</li>
+          <li><b>기업과의 파일럿</b>캐릭터 AI·인터랙티브 스토리의 캐릭터를 사용자가 직접 웹툰으로</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="measure">
+      <div>
+        <div class="eyebrow" style="margin-bottom:12px">검증의 중심 질문</div>
+        <div class="q">사용자가 <em>자기 이야기라고 느끼는</em> 웹툰을 완성하고,<br>이어서 창작하고 싶은가?</div>
+      </div>
+      <table>
+        <tr><td>한 편을 완성하는가</td><td>시작한 사람 중 한 편 이상 완성한 비율, 중단한 단계와 이유</td></tr>
+        <tr><td>내 의도가 담겼는가</td><td>설정 반영 만족도, 직접 고친 부분</td></tr>
+        <tr><td>공유하고 계속 만드는가</td><td>완성한 사람 중 공유한 비율, 다음 화를 시작한 비율</td></tr>
+      </table>
+    </div>
+
+    <div class="rules">
+      <div class="rule"><b>내 캐릭터 그대로</b><p>적은 성격을 뒤집지 않고, 설명에 없는 모습을 지어내지 않습니다.</p></div>
+      <div class="rule"><b>내가 고른다</b><p>이야기 방향과 장면을 내가 확인하고 고칩니다.</p></div>
+      <div class="rule"><b>쌓인다</b><p>한 번 쓰고 버리는 생산기가 아니라, 내 캐릭터와 이야기가 계속 쌓이는 서비스입니다.</p></div>
+      <div class="rule"><b>내 것</b><p>올린 사진은 캐릭터를 만드는 데만 쓰고 AI 학습에 쓰지 않습니다. 요청하면 지웁니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 팀 -->
+<section id="team" class="team">
+  <div class="wrap">
+    <div class="eyebrow">우리는 누구인가</div>
+    <h2>TRY팀</h2>
+    <p class="lead">TRY팀은 개인 창작자의 캐릭터와 이야기를 시각적인 작품으로 만드는 AI 창작 서비스 LORE를 만들고 있습니다. 사용자가 자신의 세계를 웹툰으로 표현하고, 직접 다듬고 공유하며, 다음 이야기까지 이어 갈 수 있도록 창작 경험을 개발합니다.</p>
+    <div class="grid">
+      <div>
+        <div class="quote">
+          <div class="t">캐릭터를 그림으로 만드는 것이 아니라, 캐릭터가 실제로 행동하는 장면을 만드는 것.</div>
+          <div class="by">박하은 · 팀장 · 웹툰</div>
+        </div>
+        <ul class="view">
+          <li>캐릭터와 이야기를 가진 사람이 자기 세계를 실제 콘텐츠로 표현하도록 돕습니다.</li>
+          <li>창작자가 선택하고 수정할 수 있는 지점을 중요하게 봅니다.</li>
+          <li>구현한 기능과 사용자가 원하는 경험을 구분하고, 실제 반응과 결과물로 확인합니다.</li>
+        </ul>
+      </div>
+      <div class="facts">
+        <div><span>팀</span><b>TRY팀 · 팀장 박하은</b></div>
+        <div><span>팀장</span>백엔드 개발자 · AI 서비스 제작자</div>
+        <div><span>프로젝트</span>AI·SW마에스트로 17기</div>
+        <div><span>서비스</span><a href="/webtoon">lorecomic.com/webtoon</a></div>
+        <div><span>문의</span><a href="mailto:lore@lorecomic.com">lore@lorecomic.com</a></div>
+        <div><span>기업 협업</span><a href="/partners">협업 안내와 문의</a></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <div class="wrap">
+    <h2>당신의 캐릭터는<br>어떤 이야기를 살게 될까요?</h2>
+    <p class="lead" style="margin:18px auto 0">사진을 넣어도, 이야기를 적어도, 아무것도 없이 시작해도 좋아요.</p>
+    <div class="cta">
+      <a class="btn btn-p" href="/webtoon">내 캐릭터로 1화 만들기</a>
+      <a class="btn btn-g" href="/partners#contact">협업 문의하기</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div><span class="logo" style="font-size:16px">LORE<b style="color:var(--coral)">.</b></span> &nbsp;내 캐릭터가 이야기 속에서 살아 움직이는 순간</div>
+    <div>© 2026 LORE · TRY팀</div>
+  </div>
+</footer>
+
+</body>
+</html>

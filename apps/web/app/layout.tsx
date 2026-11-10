@@ -1,13 +1,19 @@
 // 앱 전체 공통 레이아웃. 여기는 "연결 파일"이라 화면 로직을 넣지 않는다.
 //
-// 하는 일 2가지:
+// 하는 일 3가지:
 //   1) 폰트 로드 → CSS 변수로 노출 (common/fe/styles/tokens.css 가 이 변수를 받아 쓴다)
 //   2) 전역 스타일 로드
+//   3) 구글 측정 태그(gtag.js) 로드 — NEXT_PUBLIC_GOOGLE_ADS_ID(광고)·NEXT_PUBLIC_GA4_ID(GA4) 중 하나라도 있을 때만
+//   4) Microsoft Clarity 로드 — NEXT_PUBLIC_CLARITY_ID 가 있을 때만
+//   ★ 셋 다 없으면 렌더 결과가 이 태그들을 넣기 전과 한 글자도 다르지 않다.
 //
 // 공용 헤더(SiteHeader)는 여기가 아니라 랜딩(LandingPage)과 app/(domains)/layout.tsx 가 각자 붙인다.
 // 랜딩은 헤더 아래 자체 푸터까지 갖는 한 장짜리 화면이라 구성이 달라서다.
 import type { Metadata, Viewport } from "next";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { cookies } from "next/headers";
+import Script from "next/script";
 // 폰트는 npm 패키지(@fontsource)에서 온다. next/font/google 은 next build 도중
 // Google Fonts 에서 파일을 받는데, dev 서버에서 그 요청이 자주 끊겨 배포가 복불복으로
 // 실패했다 — 한국어 폰트가 글자 범위별로 백 수십 조각이라 하나만 못 받아도 빌드가 죽는다.
@@ -29,6 +35,9 @@ export const metadata: Metadata = {
   title: "Lore — 우리만의 캐릭터로 노는 만화 플랫폼",
   description:
     "사진 한 장에서 캐릭터를 뽑고, 그 캐릭터로 4컷 · 예고편 · 웹툰까지 이어서 만듭니다.",
+  // AdSense 사이트 소유권 확인용 공개 식별자. 광고 스크립트나 자동 광고를 켜지 않고
+  // <meta name="google-adsense-account" ...>만 각 페이지의 <head>에 출력한다.
+  other: { "google-adsense-account": "ca-pub-8534472857343524" },
   // 홈 화면 바로가기(#599). manifest 는 app/manifest.ts, 아이폰 홈 화면 아이콘은
   // app/apple-icon.png 가 맡는다. appleWebApp 이 있어야 아이폰에서 주소창 없는 앱으로
   // 열리고, 그래야 웹푸시를 받을 수 있다.
@@ -48,14 +57,88 @@ async function locale(): Promise<string> {
   return v === "en" || v === "ja" ? v : "ko";
 }
 
+// 헤더의 Piece Maker 탭을 잠시 숨기는 스위치. 서버의 표시 파일 하나로 켜고 끈다.
+// 파일이 있으면 숨기고, 지우면 다시 보인다. 재배포·재시작 없이 다음 페이지 요청부터 바뀐다.
+// 이 레이아웃은 쿠키를 읽어 이미 요청마다 그려지므로 확인 비용은 파일 존재 검사 한 번이다.
+// /piece-maker 주소 자체는 그대로 열린다. 헤더 입구만 감춘다.
+// 켜고 끄는 명령은 webtoon/tools/piece-maker-tab.sh 이다.
+const SITE_FLAGS_DIR = process.env.LORE_SITE_FLAGS_DIR || "/opt/lore/flags";
+
+function pieceMakerTabHidden(): boolean {
+  try {
+    return existsSync(path.join(SITE_FLAGS_DIR, "hide-piece-maker"));
+  } catch {
+    return false;
+  }
+}
+
+// 구글 광고 측정 태그(AW-XXXXXXXX). 환경변수가 있을 때만 로드한다 —
+// 로컬·개발 서버에선 보통 비워 두므로 자동으로 꺼진다.
+// strategy="afterInteractive" — 첫 그림이 뜬 뒤 로드돼서 LCP 를 늦추지 않는다.
+const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
+// GA4(G-XXXXXXX) — 광고 태그와 **같은 gtag.js 한 벌**을 쓴다. 광고 ID 없이 GA4 만 있어도 로드된다.
+// common/fe/analytics.ts 의 track() 이 window.gtag 가 있으면 같은 이벤트를 한 번 더 보낸다.
+// ★ 운영 기본값(2026-10-07) — 측정 ID 는 페이지 소스에 그대로 노출되는 공개 값이라 코드에 둔다.
+//   환경변수가 없을 때만 쓰이고, 그때는 아래 인라인 스크립트가 **호스트가 lorecomic.com 일 때만** 켠다
+//   (dev·staging 빌드가 운영 통계를 더럽히지 않게). 환경변수로 주면 호스트와 무관하게 켠다.
+const PROD_HOSTS = ['lorecomic.com', 'www.lorecomic.com'];
+const PROD_GA4_ID = 'G-YTH2YN6019';
+const PROD_CLARITY_ID: string | undefined = 'ytlgmr0e9m';
+const GA4_FROM_ENV = safeId(process.env.NEXT_PUBLIC_GA4_ID);
+const GA4_ID = GA4_FROM_ENV ?? PROD_GA4_ID;
+// Microsoft Clarity(세션 녹화·히트맵). 프로젝트 ID 가 있을 때만.
+const CLARITY_FROM_ENV = safeId(process.env.NEXT_PUBLIC_CLARITY_ID);
+const CLARITY_ID = CLARITY_FROM_ENV ?? PROD_CLARITY_ID;
+// 인라인 스크립트에 박는 호스트 판정. 환경변수로 받은 ID 는 어디서든 켠다(스테이징 검증용).
+const HOST_GATE = `var h=location.hostname,prod=${JSON.stringify(PROD_HOSTS)}.indexOf(h)>=0;`;
+const GTAG_ID = GOOGLE_ADS_ID || GA4_ID;
+
+// 스크립트 문자열에 그대로 들어가는 값이라 영숫자·하이픈만 받는다(설정 실수로 따옴표가 섞여도 깨지지 않게).
+function safeId(v: string | undefined): string | undefined {
+  return v && /^[A-Za-z0-9-]+$/.test(v) ? v : undefined;
+}
+
+const gtagTags = GTAG_ID && (
+  <>
+    <Script
+      src={`https://www.googletagmanager.com/gtag/js?id=${GTAG_ID}`}
+      strategy="afterInteractive"
+    />
+    <Script id="google-ads-init" strategy="afterInteractive">
+      {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+${HOST_GATE}` +
+        (GOOGLE_ADS_ID ? `
+gtag('config', '${GOOGLE_ADS_ID}');` : '') +
+        (GA4_ID ? `
+if(prod||${GA4_FROM_ENV ? 'true' : 'false'}){gtag('config', '${GA4_ID}');}` : '')}
+    </Script>
+  </>
+);
+
+const clarityTag = CLARITY_ID && (
+  <Script id="ms-clarity" strategy="afterInteractive">
+    {`${HOST_GATE}if(prod||${CLARITY_FROM_ENV ? 'true' : 'false'}){(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+})(window, document, "clarity", "script", "${CLARITY_ID}");}`}
+  </Script>
+);
+
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang={await locale()}>
-      <body>{children}</body>
+    <html lang={await locale()} data-hide-piece-maker={pieceMakerTabHidden() ? "" : undefined}>
+      <body>
+        {/* ★ 클래리티가 없으면 예전과 **같은 한 자리**에 gtag 묶음만 놓는다. 자리를 하나 더 만들면
+            보이는 HTML 은 같아도 RSC 페이로드에 `$undefined` 가 한 칸 늘어 출력이 달라진다. */}
+        {clarityTag ? <>{gtagTags}{clarityTag}</> : gtagTags}
+        {children}
+      </body>
     </html>
   );
 }

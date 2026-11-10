@@ -54,7 +54,7 @@ public class CreditGate {
 
     @Autowired
     public CreditGate(CreditService credits,
-                      @Value("${lore.credit.cost-per-episode:12}") int cost,
+                      @Value("${lore.credit.cost-per-episode:20}") int cost,
                       @Value("${lore.credit.cost-per-regen:3}") int regenCost) {
         this.credits = credits;
         this.cost = cost;
@@ -69,6 +69,15 @@ public class CreditGate {
     /** 이 사람의 잔액. 로그인 안 했으면 0 — 게스트는 크레딧으로 안 센다. */
     public int balanceOf(Long userId) {
         return userId == null ? 0 : credits.balance(userId);
+    }
+
+    /**
+     * 오늘 몫(가입 · 매일 지급)을 먼저 채우고 본 잔액. 남은 장 이어 그리기처럼 「다음 날 와서 이어 한다」는
+     * 일이 이걸 본다 — 매일 지급은 잔액을 물을 때 채워지므로, 머리 잔액을 아직 안 읽은 채 단추를 누르면
+     * 오늘 몫이 빠진 잔액으로 「모자라요」가 뜬다.
+     */
+    public int balanceToday(Long userId) {
+        return userId == null ? 0 : credits.balanceWithDaily(userId);
     }
 
     /** 지금 로그인한 사람. 안 했으면 {@code null}. */
@@ -92,7 +101,7 @@ public class CreditGate {
     }
 
     /**
-     * 값을 지정해서 묻는다 — 웹툰 한 편(12) · 캐릭터 한 장(2) · 장 다시 그리기(3)는
+     * 값을 지정해서 묻는다 — 웹툰 한 편(파도 20) · 캐릭터 한 장(2) · 장 다시 그리기(3, 너울 6)는
      * 값이 다르다.
      */
     public String whyBlocked(Long userId, int need) {
@@ -161,12 +170,19 @@ public class CreditGate {
      *         아니라 돌려줬는지를 말해야 한다
      */
     public int refund(Long userId, String jobId) {
+        return refund(userId, jobId, "만들기를 시작하지 못했습니다");
+    }
+
+    /**
+     * 내역에 남길 한 줄을 지정해서 돌려준다. 장 하나를 못 그려 돌려줄 때 「만들기를 시작하지 못했습니다」로 적히면,
+     * 받은 사람은 무엇을 돌려받았는지 모른다(2026-11-04 문의).
+     */
+    public int refund(Long userId, String jobId, String memo) {
         if (userId == null || jobId == null || jobId.isBlank()) {
             return 0;
         }
         try {
-            return credits.refund(userId, CreditDomain.WEBTOON, jobId,
-                                  "만들기를 시작하지 못했습니다");
+            return credits.refund(userId, CreditDomain.WEBTOON, jobId, memo);
         } catch (RuntimeException e) {
             log.error("크레딧을 못 돌려줬습니다 (user={}, job={})", userId, jobId, e);
             return 0;

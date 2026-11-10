@@ -107,25 +107,79 @@ public class JobQueue {
         if (job == null || job.getStatus() != JobStatus.QUEUED) {
             return null;                        // 이미 내 차례이거나 끝났다
         }
-        List<WebtoonJob> line = new java.util.ArrayList<>(jobs.findByStatusInOrderByCreatedAtAsc(IN_LINE));
-        line.sort(java.util.Comparator
-                .comparing((WebtoonJob one) -> one.getStatus() == JobStatus.RUNNING ? 0 : 1)
-                .thenComparing(WebtoonJob::getUpdatedAt));
-
-        Instant now = Instant.now();
+        List<WebtoonJob> line = lineNow();
         int ahead = 0;
-        long work = 0;
         for (WebtoonJob one : line) {
             if (one.getId().equals(job.getId())) {
                 break;
             }
             ahead++;
-            work += remainingOf(one, now);
         }
-        /* **나란히 도는 수로 나눈다.** 앞에 둘이 있어도 둘이 같이 돌면 내
-           차례는 한 편 뒤다. 안 나누면 기다리는 사람에게 실제의 두 배를
-           적어 주게 되고, 그건 더 빨리 나가게 만든다. */
-        return new Spot(ahead, work / Math.max(1, runner.workers()));
+        /* **줄을 미리 굴려 본다**(#836). 앞사람 수로 어림하면 걸음마다 줄 끝에 다시 서는 규칙(#509) 때문에
+           몰릴 때 실제보다 짧게 나오고, 그림 자리를 앞사람마다 나눠 세면 숫자가 튀었다. JobLineSim 이 일꾼·그림
+           자리·다시 서기를 그대로 흉내 내서 「내 다음 걸음이 언제 시작하나」와 「언제 끝나나」를 같이 준다. */
+        Instant at = Instant.now();
+        List<JobLineSim.Item> items = items(line, at);
+        JobLineSim.When when = JobLineSim.run(items, runner.workers(), runner.pageWorkers()).get(job.getId());
+        if (when == null) {
+            return new Spot(ahead, 0);
+        }
+        /* 화면의 「예상 대기」는 기다리는 몫만 — 끝나는 때에서 혼자 만들 때 걸리는 시간을 뺀다. 끝나는 때는
+           「약 N분 남았어요」(etaOf)로 따로 나간다. */
+        JobLineSim.Item mine = items.stream().filter(one -> one.id() == job.getId()).findFirst().orElseThrow();
+        long alone = JobLineSim.run(List.of(mine), runner.workers(), runner.pageWorkers()).get(job.getId()).finish();
+        return new Spot(ahead, Math.max(0, when.finish() - alone), when.finish());
+    }
+
+    /** 줄 순서 — 도는 것 다음에, 줄에 선 때({@code updatedAt}) 순. */
+    private List<WebtoonJob> lineNow() {
+        List<WebtoonJob> line = new java.util.ArrayList<>(jobs.findByStatusInOrderByCreatedAtAsc(IN_LINE));
+        line.sort(java.util.Comparator
+                .comparing((WebtoonJob one) -> one.getStatus() == JobStatus.RUNNING ? 0 : 1)
+                .thenComparing(WebtoonJob::getUpdatedAt));
+        return line;
+    }
+
+    /** 지금 줄을 {@link JobLineSim} 에 넣어 굴린다. */
+    private java.util.Map<Long, JobLineSim.When> simulate(List<WebtoonJob> line, Instant now) {
+        return JobLineSim.run(items(line, now), runner.workers(), runner.pageWorkers());
+    }
+
+    /** 지금 줄을 {@link JobLineSim} 에 넣을 모양으로. */
+    private List<JobLineSim.Item> items(List<WebtoonJob> line, Instant now) {
+        List<JobLineSim.Item> items = new java.util.ArrayList<>();
+        for (WebtoonJob one : line) {
+            JobProgress.Snapshot snap = progress.of(one.getId());
+            boolean running = one.getStatus() == JobStatus.RUNNING;
+            double f = JobEta.factor(one);
+            long inStage = running && one.getStageAt() != null
+                    ? Math.max(0, java.time.Duration.between(one.getStageAt(), now).getSeconds()) : 0;
+            long sinceMade = one.getCreatedAt() == null ? 0
+                    : Math.max(0, java.time.Duration.between(one.getCreatedAt(), now).getSeconds());
+            JobStage stage = one.getStage() == null ? JobStage.STORY : one.getStage();
+            long sheetLeft = stage.order() <= JobStage.SHEET.order()
+                    ? Math.max(0, Math.round(JobEta.SHEET * f) - sinceMade) : 0;
+            JobLineSim.Phase phase;
+            long left;
+            int pagesLeft = 0;
+            switch (stage) {
+                case STORY -> { phase = JobLineSim.Phase.STORY; left = JobEta.STORY - inStage; }
+                case SHEET -> { phase = JobLineSim.Phase.PICK; left = sheetLeft; }
+                case PAGES -> {
+                    if (snap.total() <= 0) {
+                        phase = JobLineSim.Phase.SCENES;
+                        left = JobEta.SCENES - inStage;
+                    } else {
+                        phase = JobLineSim.Phase.PAGES;
+                        left = 0;
+                        pagesLeft = Math.max(0, snap.total() - snap.done());
+                    }
+                }
+                default -> { phase = JobLineSim.Phase.TAIL; left = JobEta.REVIEW + JobEta.FINISH - inStage; }
+            }
+            items.add(new JobLineSim.Item(one.getId(), phase, running, Math.max(1, left), pagesLeft, f, sheetLeft));
+        }
+        return items;
     }
 
     /**
@@ -138,7 +192,18 @@ public class JobQueue {
      */
     @Transactional(readOnly = true)
     public JobEta.Eta etaOf(WebtoonJob job, JobProgress.Snapshot now, Spot spot) {
-        return JobEta.of(job, now, slotsFor(job), spot == null ? 0 : spot.seconds(), Instant.now());
+        Instant at = Instant.now();
+        /* 줄에 있는 편(도는 중 · 줄에 선 것)은 줄을 굴린 「끝나는 때」를 쓴다(#836) — 도는 중인 편도 다음 걸음에서
+           다시 줄을 서므로 제 걸음만 세면 몰릴 때 짧게 나온다. 사람을 기다리는 편은 예전 계산 그대로다. */
+        if (job != null && IN_LINE.contains(job.getStatus())) {
+            long finish = spot != null && spot.finish() >= 0 ? spot.finish()
+                    : java.util.Optional.ofNullable(simulate(lineNow(), at).get(job.getId()))
+                            .map(JobLineSim.When::finish).orElse(-1L);
+            if (finish >= 0) {
+                return new JobEta.Eta(JobEta.work(job, at), finish, false);
+            }
+        }
+        return JobEta.of(job, now, slotsFor(job), spot == null ? 0 : spot.seconds(), at);
     }
 
     /**
@@ -156,20 +221,21 @@ public class JobQueue {
         return (int) Math.max(1, runner.pageWorkers() / sharing);
     }
 
-    /** 앞사람 한 편이 <b>앞으로</b> 얼마나 더 걸릴까(초). 예상을 넘겼으면 마무리 몫만 센다. */
-    private long remainingOf(WebtoonJob one, Instant now) {
-        JobEta.Eta eta = JobEta.of(one, progress.of(one.getId()), slotsFor(one), 0, now);
-        return eta.left() < 0 ? JobEta.FINISH : eta.left();
-    }
 
     /**
      * 줄에서의 자리.
      *
      * @param ahead   앞에 몇 개
-     * @param seconds 내 차례가 오기까지 예상 초. <b>줄에 선 것만 센 값</b>이라
+     * @param finish  끝나기까지 예상 초(줄을 굴린 값, #836). 모르면 -1
+     * @param seconds 기다리는 몫(끝나는 때 − 혼자 만들 때 걸리는 시간). <b>줄에 선 것만 센 값</b>이라
      *                사람이 시트 앞에서 멈춘 것이 돌아오면 더 길어질 수 있다
      */
-    public record Spot(int ahead, long seconds) {
+    public record Spot(int ahead, long seconds, long finish) {
+
+        /** 끝나는 때를 모를 때(-1). */
+        public Spot(int ahead, long seconds) {
+            this(ahead, seconds, -1);
+        }
 
         /** 화면이 그대로 쓰는 한 줄. 앞이 비었으면 빈 문자열 — 적을 것이 없다. */
         public String line() {

@@ -7,7 +7,7 @@ import { readCharacter, readSharedCard, type Character } from "../../lib/api";
 import { useLang, useT } from "../../lib/i18n";
 import { ErrLine, errText } from "../../ui/CreditShort";
 import type { Go } from "../../lib/nav";
-import { copyLink, kakaoAvailable, shareKakao, shareNative } from "../../lib/share";
+import { copyLink, kakaoAvailable, shareKakao, shareNative, withShareUtm } from "../../lib/share";
 import { IconClose, IconDownload, IconRetry, IconShare } from "../../ui/Icons";
 import { MobileTop } from "../../ui/TopNav";
 import { LimitView } from "./Photo";
@@ -98,13 +98,15 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
     track("swap_survey", { character: id, result });
     setSurvey("thanks");
   };
-  const url = typeof window === "undefined" ? "" : `${window.location.origin}/webtoon?card=${encodeURIComponent(id)}`;
+  /* 공유칸마다 다른 주소 — 어디로 보낸 링크로 들어왔는지 센다(share.ts withShareUtm). */
+  const urlVia = (via: string) => typeof window === "undefined" ? ""
+    : withShareUtm(`${window.location.origin}/webtoon?card=${encodeURIComponent(id)}`, via, "card");
   const title = card?.twist || ch?.name || t("캐릭터 카드");
 
   const onShare = async () => {
     /* 폰 공유 글 — 카드 문장 한 줄 뒤에 무엇을 하는 곳인지와 가 보라는 말을 붙인다. 링크 미리보기
        (apps/web 의 /webtoon 메타데이터)의 설명 줄과 같은 말이다. */
-    const native = await shareNative(url, t("{title} - 내 캐릭터를 살아 움직이게. 개인 IP를 위한 AI 창작 서비스, LORE. 나도 만들러 가기 -->", { title }));
+    const native = await shareNative(urlVia("native"), t("{title} - 내 캐릭터를 살아 움직이게. 개인 IP를 위한 AI 창작 서비스, LORE. 나도 만들러 가기 -->", { title }));
     track("card_share", { character: id, target: native ? "native" : "menu" });
     if (native) return;
     setMenu((v) => !v);
@@ -112,7 +114,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
   const onCopy = async () => {
     track("card_share", { character: id, target: "copy" });
     setMenu(false);
-    if (await copyLink(url)) {
+    if (await copyLink(urlVia("copy"))) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     }
@@ -120,7 +122,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
   const onKakao = async () => {
     track("card_share", { character: id, target: "kakao" });
     setMenu(false);
-    if (!(await shareKakao(url))) void onCopy();
+    if (!(await shareKakao(urlVia("kakao")))) void onCopy();
   };
 
   /* 만들기 위저드로 보낸다. 예전에는 여기서 곧장 만들기를 시작했는데, 이야기·장르·
@@ -142,7 +144,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
       ? draft
       : { name: ch.name, description: ch.description, world: card?.world || "", photo: draft?.photo };
     try {
-      const c = await runTry(d, lang);
+      const c = await runTry(d, lang, authenticated);
       go("card", { id: c.id });
     } catch (e) {
       if (isLimitError(e)) {
@@ -338,7 +340,7 @@ export default function PhotoResult({ id, shared, go, authenticated }: { id: str
           <div className="modal-box wt-ch-survey-box" role="dialog" aria-modal="true"
                aria-labelledby="wt-ch-survey-title" onClick={(e) => e.stopPropagation()}>
             <button type="button" className="icon-btn wt-ch-survey-x" aria-label={t("닫기")}
-                    onClick={() => setSurvey(null)}><IconClose size={18} /></button>
+                    onClick={() => setSurvey(null)}><IconClose size={22} /></button>
             {survey === "ask" ? (
               <>
                 <h2 id="wt-ch-survey-title">{t("캐릭터가 다른 종으로 나와서 당황하셨나요?")}</h2>

@@ -1,3 +1,5 @@
+import type {StageSpeechView} from './tutorialStageSpeech';
+import type { FirstIntro, FirstIntroKey, IntroTopic } from '../tamagotchi/yeoul/firstIntro';
 // 펫 API v2. zzal/be 의 v2 PetController(`/api/zzal/v1/me/pets`)와 짝이다.
 //
 // ★ 이 파일의 타입은 서버의 PetResponses.Detail(v2)을 그대로 옮긴 것이다. 화면이 쓰기 편하게
@@ -15,7 +17,7 @@
 //   - 게이지 4칸 · 밥 3개 · 돌봄 6종 · 재우기/깨우기 창 · 낮잠 · 함께한 날 · 친밀도 · 채팅 3슬롯 ·
 //     2층 즉시 해금(`justUnlocked`) · 아침 도착(`learnedToday`) · 기능 열림(`features`).
 
-import { request } from './api';
+import { API_BASE, request } from './api';
 import type { components, operations } from './api-schema';
 
 /** 지금 어느 단계인가. 프론트의 'none'(아직 아무도 없음)은 서버에 없다 — 그건 행이 없는 것. */
@@ -46,7 +48,7 @@ export type SleepKind = 'NIGHT' | 'NAP';
 export type Mood = 'SICK' | 'HUNGRY' | 'SAD' | 'DIRTY' | 'NORMAL';
 
 /** 채팅 부름 슬롯. BABY 는 아기 8분 부름이고 하루 3회에 안 든다(정본 12장·16장). */
-export type ChatSlot = 'BABY' | 'MORNING' | 'NOON' | 'EVENING';
+export type ChatSlot = 'CONTINUOUS' | 'BABY' | 'MORNING' | 'NOON' | 'EVENING';
 
 /** 동작이 어느 층인가. GIFT 는 카탈로그 밖 선물(구르기·뒤로 넘어짐, seq 101·102). */
 export type MotionLayer = 'BASIC_1' | 'BASIC_2' | 'GIFT';
@@ -270,6 +272,10 @@ export interface ChatReply {
   line: string;
   /** 반응 동작 키(Motion.key). */
   reactionKey: string;
+  /** 답한 뒤의 판 상태(#704). 옛 서버면 없다. */
+  session?: ChatSession | null;
+  /** 이번에 생긴 두 턴 — 내 말, 아이의 다음 말. */
+  turns?: ChatTurn[];
 }
 
 /** 기능 열림(정본 6장 "기능 해금"). 프론트는 이 값만 보고 버튼을 켠다. */
@@ -339,7 +345,24 @@ export interface Shared {
   pet: PetDetail;
 }
 
+/** Server-filtered GRANTED inventory; IDs are opaque. */
+export interface OwnedCustomMotion {
+ id:string; setId:number; order:number; title:string; description:string;
+ semantic:'base'|'eat'|'joy'|'sad'|'sick'|'pet'|'hello'|'sleep'|null;
+ planVersion?:'CUSTOM_MOTION_PLAN_V1'|'CUSTOM_MOTION_PLAN_V2'; situations?:CareAction[];
+ albumOnly:boolean; imageKey:string; anchorsKey:string|null; anchorPoseKey:string;
+ baseReferenceRound:number|null; embeddedProps:boolean; suppressRoomProps:boolean; sourceKind:'CUSTOM';
+}
+/** A successful care response's one selection, separate from chat reactionKey. */
+export interface CareMotionPlayback {
+ situationKey:string; motionId:string; basicSemantic:string; sourceKind:'BASIC'|'CUSTOM';
+ resource:OwnedCustomMotion|null;
+}
+export interface CareReceipt { requestId:string;action:CareAction;status:'APPLIED'|'REPLAYED'|'NO_OP' }
 export interface PetDetail {
+  careReceipt?: CareReceipt | null;
+ motionPlayback?:CareMotionPlayback|null;
+ customMotions?: OwnedCustomMotion[]|null;
   petId: number;
   name: string;
   note: string | null;
@@ -359,6 +382,17 @@ export interface PetDetail {
 
   /** ★ 항상 온다. 프론트 시계의 유일한 기준. */
   serverNow: string;
+
+  /**
+   * 이 아이의 시간대(IANA, 예 `America/Los_Angeles`). 날짜·시각을 **보여 줄 때** 쓴다(lib/kst.ts formatInZone).
+   * 아직 관측 못 했으면 서버가 `Asia/Seoul` 을 준다. 옛 서버(칸 없음)면 undefined → 서울.
+   */
+  timeZone?: string;
+  /**
+   * 서버가 창(19·23·07·10시, 부름 10/14/19시)을 재는 시간대. 1단계 서버는 늘 `Asia/Seoul`.
+   * timeZone 과 다르면 창 시각을 timeZone 으로 **바꿔서** 보여 준다(lib/kst.ts ruleHourLabel).
+   */
+  rulesTimeZone?: string;
 
   /**
    * 이 아이의 **자세별 소품 앵커** 파일 키(예: `images/zzal/pets/23/sets/7/anchors.json`).
@@ -412,10 +446,13 @@ export interface PetDetail {
   world: string | null;
   /** 배경 키(constants.BACKGROUNDS). 기본 'room'. */
   background: string | null;
+  attendanceRewards?: AttendanceRewards | null;
   features: Features | null;
   leaving: Leaving | null;
   trip: Trip | null;
   tutorial: Tutorial | null;
+  firstIntro?: FirstIntro | null;
+  firstNightChatGrace?: { eligible: boolean; active: boolean; deadlineAt: string | null; endedAt: string | null; willSleepAtEnd: boolean } | null;
   /**
    * **첫날 축하 판을 본 시각**(ISO) — 안 봤으면 `null`. 떠난 아이에게도 남는다.
    *
@@ -432,6 +469,12 @@ export interface PetDetail {
    *   조이지 않으면 위 `!= null` 판정이 타입상 죽은 가지로 읽힌다.
    */
   graduationSeenAt?: components['schemas']['Detail']['graduationSeenAt'] | null;
+  /** 출석 선물 화면을 마지막으로 연 뒤 지급된 선물 수 — 0보다 크면 메뉴·「출석」에 빨간 점. 배포 전 서버면 안 온다(=0). */
+  newRewardCount?: components['schemas']['Detail']['newRewardCount'];
+  /** 안 읽은 일지 수 — 0보다 크면 「앨범」·「일지」에 빨간 점. 배포 전 서버면 안 온다(=0). */
+  unreadDiaryCount?: components['schemas']['Detail']['unreadDiaryCount'];
+  /** 아직 안 본 운영팀 답장 수(계정 기준) — 0보다 크면 메뉴·「문의하기」에 점. 배포 전 서버면 안 온다(=0). 손으로 쓴 칸(api-schema 미갱신). */
+  unreadInquiryReplyCount?: number;
 }
 
 /** 펫 생성 결과. 부화는 뒤에서 계속 돌고, 진행 상황은 상태 조회로 본다. */
@@ -458,11 +501,30 @@ export interface Drafted {
  *   전부 **대사와 말투**에만 쓰인다. 이 주석을 믿고 "그림을 바꾸려면 `note` 를 고치라" 고
  *   안내하면 그대로 거짓말이 된다.
  */
+export interface AuthoredPersona {
+  /** Source schema version, independent of the legacy personality enum. */
+  version: 1;
+  fields: Array<{
+    fieldId: 'world' | 'job' | 'persona' | 'likes' | 'dislikes' | 'extra';
+    chips: string[];
+    rawText: string;
+    skipped: boolean;
+  }>;
+}
+
 export interface CharacterInput {
+  /** Unabridged authored source. Legacy fields below are compatibility projections. */
+  authoredPersona?: AuthoredPersona;
   /** 12자 이하(정본 15장). */
   name: string;
-  /** 성격. 대사 톤에 쓰인다. 선택 */
+  /** 성격 하나(옛 칸). `personalities` 를 보내면 서버는 그쪽을 쓴다. 선택 */
   personality?: Personality;
+  /** 고른 성격 전부. 맨 앞이 대표. 선택 */
+  personalities?: Personality[];
+  /** 말투 — 고른 칩과 직접 쓴 말을 ` · ` 로 합쳐 `CHAR_TEXT_MAX.tone` 자 이하. 선택 */
+  tone?: string;
+  /** 장르 — 말투와 같은 방식, `CHAR_TEXT_MAX.genre` 자 이하. 선택 */
+  genre?: string;
   /** 세계관·설정. **고른 칩까지 합쳐** `CHAR_TEXT_MAX.world` 자 이하. 선택 */
   world?: string;
   /** 그 밖에 알려 주고 싶은 것. `CHAR_TEXT_MAX.extra` 자 이하. 선택. ★ **그림이 아니라 대사에 쓰인다**(위 머리말). */
@@ -483,8 +545,7 @@ export interface CharacterInput {
  *
  * ★ `world` 는 서버 **한 칸**에 고른 칩과 직접 쓴 말이 ` · ` 로 이어져 함께 담긴다.
  *   그래서 입력칸 자체의 상한은 이 숫자가 아니라 **칩이 먹고 남은 자리**다(화면이 계산한다).
- * ★ `persona` 는 아직 보내는 자리가 없다(위 `CharacterInput`). 화면에만 남아 잘릴 일이 없으므로
- *   넉넉히 두고, 보내기 시작할 때 서버 칸과 다시 맞춘다.
+ * ★ `persona` 의 **자유 입력**은 아직 보내는 자리가 없다(서버 칸이 없다). 칩은 `personalities` 로 간다.
  */
 export const CHAR_TEXT_MAX: Record<string, number> = {
   persona: 200,
@@ -526,14 +587,66 @@ export interface ChatCall {
   reactionKey: string | null;
 }
 
+/**
+ * 대화 한 판(#704). 부름 하나가 판이 되고, 펫·사용자 턴이 최대 `maxRounds` 왕복 오간다.
+ * `closed` 면 더 못 답한다(상한에 닿아 아이가 닫았거나 · 시각이 지났거나 · 답하다 말았거나).
+ */
+export interface ChatSession {
+  id: number;
+  slot: ChatSlot;
+  /** BABY · FIRST_MEET · DAILY · LONG_ABSENCE */
+  kind: string;
+  /** 이번 판에서 사용자가 답한 횟수. */
+  round: number;
+  maxRounds: number | null;
+  closed: boolean;
+  /** CLOSED · EXPIRED · ABANDONED. 열려 있으면 null. */
+  closeReason: string | null;
+}
+
+/** 대화의 한 마디. 펫 턴의 `type`·`generator`·`filteredReason` 은 계측용(화면에 안 띄운다). */
+export interface ChatTurn {
+  idx: number;
+  speaker: 'PET' | 'USER';
+  /** 펫 턴 종류 — FIRST_MEET · GREETING · REUNION · CONTINUE · CLOSE. 사용자 턴은 null. */
+  type: string | null;
+  line: string;
+  motion: string | null;
+  /** template · llm */
+  generator: string | null;
+  /** LLM 이 걸려 폴백했으면 그 사유. */
+  filteredReason: string | null;
+}
+
+/** Persisted tutorial delivery, never inferred from ordinary CONTINUE turns. */
+export interface TutorialAnswerReceipt {
+  requestId: string;
+  sessionId: number;
+  expectedRound: number;
+  step: 'FEED' | 'GAME';
+  answerType: 'SUGGESTED' | 'FREE_TEXT';
+  text: string;
+  chatReply: { line: string; reactionKey: string | null };
+  turns: ChatTurn[];
+}
+
 /** GET /chat 의 응답. */
 export interface ChatState {
+  /** Present only when the backend supports explicit, stored-only stage preparation. */
+  stageSpeeches?: StageSpeechView[];
+  tutorialAnswers?: TutorialAnswerReceipt[];
+  /** Server-authoritative, unconsumed proactive speech; absent on legacy servers. */
+  stageSpeech?: { turnIdx: number; line: string } | null;
   /** 지금 답할 수 있는 슬롯. 없으면 null. */
   openSlot: ChatSlot | null;
   /** 오늘 도래한 부름들(BABY 포함). */
   calls: ChatCall[];
   /** 기억(최근 답 5개, 오래된 것부터). */
   memories: string[];
+  /** 지금의 판(열린 판, 없으면 오늘 마지막 판). 옛 서버면 없다. */
+  session?: ChatSession | null;
+  /** 그 판의 턴들(차례대로). */
+  turns?: ChatTurn[];
 }
 
 export interface Postcard {
@@ -546,6 +659,7 @@ export interface Postcard {
 
 /** 앨범. 첫 심화 행동이 열리기 전엔 ZZAL_FEATURE_LOCKED. */
 export interface Album {
+ customMotions?: OwnedCustomMotion[]|null;
   motions: Motion[];
   postcards: Postcard[];
   scenes: SceneRecipe[];
@@ -598,6 +712,39 @@ export function setCharacter(petId: number, input: CharacterInput): Promise<PetC
   return request<PetCreated>(`${PET_BASE}/draft/${petId}/character`, { method: 'POST', body: input });
 }
 
+/**
+ * 사용자 정보 6문항 중 **보낸 칸만** 저장한다(`PATCH /api/zzal/v1/me/profile`).
+ * 대사에 쓰이는 것은 호칭(`callMe`)뿐이다 — 나머지는 분석용이라 대사 지시문에 들어가지 않는다.
+ */
+export interface ProfilePatch {
+  callMe?: string;
+  visitTime?: string;
+  relation?: string;
+  draws?: string;
+  ageBand?: string;
+  cameFrom?: string;
+}
+
+/**
+ * ★ 공통 `request` 는 PATCH 를 안 받는다(GET·POST·PUT·DELETE). 공통 코드를 건드리지 않으려고
+ *   여기서만 맨 `fetch` 로 부른다 — 쿠키 인증(`credentials: 'include'`)은 같고, 401 자동 갱신은 없다.
+ *   설문 저장은 곁다리라 갱신 없이 실패해도 괜찮다(부르는 쪽이 오류를 삼킨다).
+ */
+export async function patchProfile(patch: ProfilePatch): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/zzal/v1/me/profile`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`profile ${res.status}`);
+}
+
+/** 여울 설문의 문항 키 → 서버 칸 이름. 화면 키(`USER_Q.key`)와 서버 칸이 이름이 달라 한 곳에 둔다. */
+export const PROFILE_FIELD_OF: Record<string, keyof ProfilePatch> = {
+  nick: 'callMe', when: 'visitTime', whose: 'relation', draw: 'draws', from: 'cameFrom', age: 'ageBand',
+};
+
 /** 부화 진행. 알 화면이 몇 초마다 되풀이해 부른다 — 가벼운 응답이다. */
 export function getHatchProgress(petId: number, signal?: AbortSignal): Promise<HatchProgress> {
   return request<HatchProgress>(`${PET_BASE}/${petId}/hatch`, { signal });
@@ -619,18 +766,29 @@ export function getPet(petId: number, signal?: AbortSignal): Promise<PetDetail> 
  * 실패 코드 — ZZAL_CARE_NOT_NEEDED · ZZAL_NO_FOOD · ZZAL_BATH_DONE_TODAY · ZZAL_SICK_REFUSES ·
  * ZZAL_PET_SLEEPING · ZZAL_TRAVELING(409).
  */
-export function care(petId: number, action: CareAction): Promise<PetDetail> {
-  return request<PetDetail>(`${PET_BASE}/${petId}/care`, { method: 'POST', body: { action } });
+export function care(petId: number, action: CareAction, firstIntroStep?: FirstIntroKey, requestId?:string, signal?:AbortSignal): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/care`, { method: 'POST', signal, body: { action, ...(firstIntroStep ? {firstIntroStep} : {}), ...(requestId?{requestId}:{}) } });
 }
 
 /** 재우기(19~23시, 아기 중엔 낮잠). 창 밖이면 ZZAL_NOT_SLEEP_TIME. */
-export function sleep(petId: number): Promise<PetDetail> {
-  return request<PetDetail>(`${PET_BASE}/${petId}/sleep`, { method: 'POST' });
+export function sleep(petId: number, firstIntroStep?: FirstIntroKey): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/sleep`, { method: 'POST', ...(firstIntroStep ? {body: {firstIntroStep}} : {}) });
 }
 
 /** 깨우기(07~10시, 낮잠은 5분 뒤). 창 밖이면 ZZAL_NOT_WAKE_TIME. */
-export function wake(petId: number): Promise<PetDetail> {
-  return request<PetDetail>(`${PET_BASE}/${petId}/wake`, { method: 'POST' });
+export function wake(petId: number, firstIntroStep?: FirstIntroKey): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/wake`, { method: 'POST', ...(firstIntroStep ? {body: {firstIntroStep}} : {}) });
+}
+
+/**
+ * 부르기(재회) — 여행 중인 아이를 데려온다. 여행 중 모인 엽서가 이때 앨범으로 전달된다.
+ *
+ * ★ 응답이 곧 돌아온 아이의 상태다(게이지 2칸 · `trip` null). 엽서 장수는 앨범을 다시 읽어 센다 —
+ *   서버가 부르는 순간 밀린 엽서를 채우므로 부르기 전의 `trip.postcards` 보다 많을 수 있다.
+ * 실패 코드 — ZZAL_NOT_TRAVELING(409, 이미 돌아왔음) · ZZAL_PET_NOT_ALIVE(409) · ZZAL_PET_NOT_FOUND(404).
+ */
+export function callBack(petId: number): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/call-back`, { method: 'POST' });
 }
 
 /**
@@ -654,8 +812,8 @@ export function tutorialDone(petId: number): Promise<PetDetail> {
  *   **첫 흔적이 이 칸을 넘길 때 생기므로** 바닥이 깨끗해 5칸에서 또 막힌다(서버 주석).
  * ★ 지금 칸이 4칸이 아니면 409 `ZZAL_TUTORIAL_STEP_MISMATCH`.
  */
-export function tutorialSeen(petId: number): Promise<PetDetail> {
-  return request<PetDetail>(`${PET_BASE}/${petId}/tutorial/seen`, { method: 'POST' });
+export function tutorialSeen(petId: number, topic?: IntroTopic): Promise<PetDetail> {
+  return request<PetDetail>(`${PET_BASE}/${petId}/tutorial/seen`, { method: 'POST', ...(topic ? { body: { topic } } : {}) });
 }
 
 /**
@@ -677,6 +835,16 @@ export function graduationSeen(
   petId: operations['graduationSeen']['parameters']['path']['petId'],
 ): Promise<void> {
   return request<void>(`${PET_BASE}/${petId}/graduation-seen`, { method: 'POST' });
+}
+
+/**
+ * 출석 선물 화면을 열었다고 남긴다 — 그 뒤 상태 조회의 `newRewardCount` 가 0이 된다.
+ * ★ 졸업 축하(`graduationSeen`)와 같은 모양 — 본문 없는 204, 멱등, 응답을 파싱하지 않는다.
+ */
+export function rewardsSeen(
+  petId: operations['rewardsSeen']['parameters']['path']['petId'],
+): Promise<void> {
+  return request<void>(`${PET_BASE}/${petId}/rewards/seen`, { method: 'POST' });
 }
 
 /** 성격·세계관. 언제든 바꿀 수 있다(정본 0장 6). */
@@ -706,6 +874,18 @@ export function getChat(petId: number, signal?: AbortSignal): Promise<ChatState>
   return request<ChatState>(`${PET_BASE}/${petId}/chat`, { signal });
 }
 
+/** 원문 이력은 최근 문맥과 별개로 전체 커서 조회한다. */
+export interface ChatHistoryTurn { id: number; sessionId: number; idx: number; speaker: 'PET' | 'USER'; line: string; at: string }
+export interface ChatHistoryPage { turns: ChatHistoryTurn[]; nextBeforeId: number | null }
+export interface LegacyChatHistoryCall { id: number; slot: string; petLine: string; calledAt: string; userLine: string | null; answeredAt: string | null; replyLine: string | null }
+export interface LegacyChatHistoryPage { calls: LegacyChatHistoryCall[]; nextBeforeId: number | null }
+export function getChatHistory(petId: number, beforeId?: number, signal?: AbortSignal): Promise<ChatHistoryPage> {
+  return request<ChatHistoryPage>(`${PET_BASE}/${petId}/chat/history?limit=40${beforeId == null ? '' : `&beforeId=${beforeId}`}`, { signal });
+}
+export function getLegacyChatHistory(petId: number, beforeId?: number, signal?: AbortSignal): Promise<LegacyChatHistoryPage> {
+  return request<LegacyChatHistoryPage>(`${PET_BASE}/${petId}/chat/history/legacy?limit=40${beforeId == null ? '' : `&beforeId=${beforeId}`}`, { signal });
+}
+
 /**
  * 부름에 답한다. 40자. 닫힌 슬롯이면 ZZAL_CHAT_SLOT_CLOSED.
  *
@@ -714,12 +894,23 @@ export function getChat(petId: number, signal?: AbortSignal): Promise<ChatState>
  *   훅과 목 서버는 끝까지 "행동 응답 = PetDetail" 하나만 알면 되게 한다.
  *   (풀지 않으면 훅이 받는 객체에 `petId` 조차 없어 화면이 조용히 빈다 — 실서버 왕복에서 확인.)
  */
-export async function answerChat(petId: number, slot: ChatSlot, text: string): Promise<PetDetail> {
-  const res = await request<{ pet: PetDetail; chatReply: ChatReply | null }>(
+/** 응답을 다시 확인할 때도 이 값을 바꾸지 않는다. 옛 스킨은 메타 없이 호환. */
+export interface TutorialAnswerMeta { step: 'FEED'|'GAME'; answerType: 'SUGGESTED'|'FREE_TEXT' }
+export interface ChatAnswerIdentity {
+  tutorial?: TutorialAnswerMeta;
+  sessionId: number;
+  expectedRound: number;
+  requestId: string;
+}
+
+export async function answerChat(petId: number, slot: ChatSlot, text: string, identity?: ChatAnswerIdentity, signal?: AbortSignal): Promise<PetDetail> {
+  const res = await request<{ pet: PetDetail; chatReply: ChatReply | null; session?: ChatSession | null; turns?: ChatTurn[] }>(
     `${PET_BASE}/${petId}/chat/${slot}/answer`,
-    { method: 'POST', body: { text } },
+    { method: 'POST', body: { text, ...identity }, signal },
   );
-  return { ...res.pet, chatReply: res.chatReply };
+  // ★ 판 상태와 이번 두 턴도 `chatReply` 안으로 옮긴다(위와 같은 이유 — 훅은 PetDetail 하나만 안다).
+  const chatReply = res.chatReply ? { ...res.chatReply, session: res.session ?? null, turns: res.turns ?? [] } : null;
+  return { ...res.pet, chatReply };
 }
 
 /** "배워왔어요" 확인. learnedToday 에서 빠진다. */
@@ -732,3 +923,42 @@ export function getAlbum(petId: number, signal?: AbortSignal): Promise<Album> {
   return request<Album>(`${PET_BASE}/${petId}/album`, { signal });
 }
 
+
+/** Authored source is owned by this pet; null means legacy source was never stored. */
+export function getAuthoredPersona(petId: number): Promise<PersonaSource> {
+  return request(`${PET_BASE}/${petId}/persona`);
+}
+
+export interface LegacyPersonaSource { world: string | null; note: string | null; personalities: string[]; tone: string | null; genre: string | null }
+export interface PersonaSource { legacySource?: LegacyPersonaSource | null; authoredPersona: AuthoredPersona | null; callMe: string | null; addressStatus: string; personaSourceHash: string }
+export interface PersonaUpdate { authoredPersona?: AuthoredPersona; callMe?: string; expectedPersonaHash: string }
+export function updatePersonaSource(petId: number, input: PersonaUpdate): Promise<PetDetail> {
+ return request(`${PET_BASE}/${petId}/personality`, { method: 'POST', body: input });
+}
+
+/**
+ * 캐릭터 이름 바꾸기(`PATCH /api/zzal/v1/me/pets/{petId}/name`). 응답은 다른 쓰기와 같은 PetDetail 전체.
+ * 400 `INVALID_INPUT`(빈칸·12자 초과) · 404 `ZZAL_PET_NOT_FOUND` · 409 `ZZAL_PET_NOT_ALIVE` · 409 `ZZAL_TRAVELING`.
+ * ★ 이름은 설정 해시에 안 들어가므로 `expectedPersonaHash`를 보내지 않는다.
+ */
+export function renamePet(petId: number, name: string): Promise<PetDetail> {
+  const body: components['schemas']['PetRename'] = { name };
+  return request<PetDetail>(`${PET_BASE}/${petId}/name`, { method: 'PATCH', body });
+}
+
+export interface AttendanceRewards {
+  programVersion: string;
+  attendanceDay: number;
+  firstBundleState: 'NONE' | 'PENDING' | 'CLAIMED' | 'GENERATED' | 'FAILED';
+  eligibleUnfulfilledCount: number;
+  ownedRewards: { slotKey: string; kind: 'BACKGROUND' | 'MOTION'; assetKey: string; url: string; motionOrder: number | null }[];
+  background: { selectedKey: string; owned: { key: string; url: string }[]; preview?: { key: string; url: string } | null };
+}
+export interface DiaryEntry { id: number; writtenAt: string; body: string; preview: string; language: string; readAt: string | null; kind: 'CHARACTER_DIARY' }
+export interface DiaryPage { entries: DiaryEntry[]; nextBeforeId: number | null; unreadCount: number; pending: boolean }
+export function getDiary(petId: number, beforeId?: number, signal?: AbortSignal): Promise<DiaryPage> {
+  return request(`${PET_BASE}/${petId}/diary?limit=20${beforeId == null ? '' : `&beforeId=${beforeId}`}`, { signal });
+}
+export function readDiary(petId: number, id: number): Promise<DiaryEntry> {
+  return request(`${PET_BASE}/${petId}/diary/${id}/read`, { method: 'POST' });
+}

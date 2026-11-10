@@ -92,4 +92,22 @@ public final class MotionImageKeys {
     public static String advanced(long petId, long motionId, int round) {
         return advancedPrefix(petId, motionId, round) + "/motion.webp";
     }
+
+    /**
+     * 저장·공유용 GIF 의 키 — webp 키의 <b>확장자만</b> 바꾼다(#713).
+     *
+     * <h3>★ 칸을 따로 두지 않는 이유</h3>
+     * 화면은 webp 를 재생하고, 휴대폰에 받는 파일만 GIF 다(갤러리가 애니메이션 webp 를 첫 장만 보여 준다).
+     * 후처리가 webp 옆 같은 자리에 GIF 를 함께 굽고, 프론트({@code gifUrlOf})·백필
+     * ({@code backfill_gif.py})도 같은 규칙으로 찾는다 — DB 에 키를 하나 더 적으면 셋이 어긋날 길이 생긴다.
+     * GIF 가 없는 옛 그림은 프론트가 webp 로 폴백한다.
+     *
+     * @return webp 가 아니면 {@code null}
+     */
+    public static String gifOf(String webpKey) {
+        if (webpKey == null || !webpKey.endsWith(".webp")) {
+            return null;
+        }
+        return webpKey.substring(0, webpKey.length() - ".webp".length()) + ".gif";
+    }
 }

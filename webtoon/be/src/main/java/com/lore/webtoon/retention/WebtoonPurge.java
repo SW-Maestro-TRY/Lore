@@ -36,6 +36,9 @@ import java.util.Set;
  */
 @Component
 public class WebtoonPurge implements UserDataPurge {
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.lore.webtoon.community.CommunityCleanup communityCleanup;
+
 
     private final WebtoonPurgeRepository rows;
     private final RunLikeRepository likes;
@@ -63,6 +66,7 @@ public class WebtoonPurge implements UserDataPurge {
         if (!runIds.isEmpty()) {
             keys.addAll(rows.pageKeys(runIds));
             keys.addAll(rows.bakedKeys(runIds));
+            keys.addAll(rows.castSheetKeys(runIds));
         }
         if (hasBucket && !keys.isEmpty()) {
             storage.delete(keys);
@@ -70,9 +74,14 @@ public class WebtoonPurge implements UserDataPurge {
 
         // 2. 작품에 딸린 것.
         int n = 0;
+        if(communityCleanup!=null) {
+            for(String run:runIds) n+=communityCleanup.run(run);
+            n+=communityCleanup.user(userId);
+        }
         if (!runIds.isEmpty()) {
             n += rows.deletePages(runIds);
             n += rows.deleteBakedPages(runIds);
+            n += rows.deleteCastSheets(runIds);   // 만들기 기록(3번에서 지움)의 번호로 찾으므로 그보다 먼저
             n += rows.deleteOverlays(runIds);
             n += rows.deleteRegens(runIds);
             n += rows.deleteStories(runIds);
@@ -81,12 +90,22 @@ public class WebtoonPurge implements UserDataPurge {
         }
 
         // 3. 작품·기록·사람에 직접 달린 것.
+        n += rows.deleteLoreExtractions(userId);
+        n += rows.deletePrivateLorebooks(userId);
+        n += rows.deleteLoreQuota(userId);
+        n += rows.deleteSeriesDrafts(userId);
+        n += rows.deleteSeriesChapters(userId);
         n += rows.deleteWorks(userId);
         n += rows.deleteJobs(userId);
         n += rows.deleteCharacters(userId);
         n += rows.deleteBrowserLinks(userId);
         n += rows.deleteNotifySettings(userId);
         n += rows.deletePushSubscriptions(userId);
+        n += rows.deleteAppWaitlist(userId);    // 앱 출시 알림 신청 이메일(#981)
+        n += rows.deleteAttendReminds(userId);
+        n += rows.deleteInvites(userId);        // 초대한 줄·초대받은 줄 둘 다. 받은 크레딧은 장부에 그대로(돈에 준하는 기록)
+        n += rows.deleteInviteCode(userId);
+        n += rows.deleteApiLogs(userId);        // API 호출 기록 — 요청 본문에 이 사람이 적은 글이 있다
         return n;
     }
 

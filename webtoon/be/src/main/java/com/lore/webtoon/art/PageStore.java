@@ -41,6 +41,14 @@ public class PageStore {
         this.baked = baked;
     }
 
+    /* 새 그림으로 바뀐 옛 그림을 적어 둘 대기열 — 7일 뒤 ArtDiscardSweep 이 지운다. 세터인 이유는 위와 같다. */
+    private ArtDiscards discards;
+
+    @Autowired(required = false)
+    void setDiscards(ArtDiscards discards) {
+        this.discards = discards;
+    }
+
     @Autowired
     public PageStore(WebtoonPageRepository pages, PrivateArt art,
                      @Value("${lore.webtoon.presign-locally:false}") boolean presignLocally) {
@@ -58,6 +66,10 @@ public class PageStore {
     /**
      * 올린 것을 적는다. 같은 자리(작품·장·폭)가 이미 있으면 주소만 바꾼다 —
      * 다시 구운 그림이 올라온 것이므로 옛 주소를 들고 있으면 안 된다.
+     *
+     * 바뀐 옛 그림은 대기열에 적는다. 그림은 올릴 때마다 새 이름을 받으므로, 여기서 옛
+     * 이름을 놓치면 그 그림을 가리키는 곳이 어디에도 안 남는다 — 작품을 지워도, 탈퇴해도
+     * 안 지워진다. 다시 그리기는 한 장만 고쳐도 그 작품의 장 전부를 다시 올리므로 쌓이는 양이 크다.
      *
      * @return 이번에 새로 적은 줄 수 (바꾼 것은 안 센다)
      */
@@ -84,8 +96,12 @@ public class PageStore {
             }
             var found = pages.findByRunIdAndPageNoAndWidth(runId, one.pageNo(), one.width());
             if (found.isPresent()) {
+                String old = found.get().getS3Key();
                 found.get().movedTo(one.key(), one.bytes(), now);
                 pages.save(found.get());
+                if (discards != null && old != null && !old.equals(one.key())) {
+                    discards.discard(old, ArtDiscards.REPLACED, now);
+                }
             } else {
                 pages.save(WebtoonPage.of(runId, one.pageNo(), one.width(),
                                           one.key(), one.bytes(), now));
@@ -252,6 +268,55 @@ public class PageStore {
             return null;
         }
         return PrivateArt.isPrivate(key) ? art.temporaryUrl(key) : url(key);
+    }
+
+    /** 크기를 읽으려고 먼저 받아 보는 앞부분. PNG 는 24바이트면 되고 JPEG 는 머리 뒤에 EXIF 가 붙을 수 있다. */
+    static final int HEAD_BYTES = 256 * 1024;
+
+    /**
+     * 그림의 가로·세로를 <b>키로</b> 읽는다. 없거나 못 읽으면 {0, 0}.
+     *
+     * 주소로 열지 않는다 — 운영의 주소는 도메인 없는 상대경로(`/images/…`)라
+     * URL 로 열 수 없고(2026-10-12, 편집실을 열 때마다 `URI is not absolute` 로
+     * 크기를 0으로 넘기고 있었다), 로컬·비공개만 절대 주소가 와서 우연히 됐다.
+     * 창고에서 앞부분만 받아 머리에서 크기를 읽고, 그걸로 안 되면 한 번 전체를
+     * 받는다.
+     */
+    public int[] dimensionsOf(String key) {
+        if (key == null || key.isBlank()) {
+            return new int[]{0, 0};
+        }
+        int[] got = dimensionsIn(art.readHead(key, HEAD_BYTES));
+        if (got == null) {
+            got = dimensionsIn(art.read(key));
+        }
+        if (got == null) {
+            log.warn("그림 크기를 못 읽었습니다 (key={})", key);
+            return new int[]{0, 0};
+        }
+        return got;
+    }
+
+    /** 바이트에서 크기. 못 읽으면 {@code null}. */
+    static int[] dimensionsIn(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) {
+            return null;
+        }
+        try (var in = javax.imageio.ImageIO.createImageInputStream(new java.io.ByteArrayInputStream(bytes))) {
+            var readers = javax.imageio.ImageIO.getImageReaders(in);
+            if (!readers.hasNext()) {
+                return null;
+            }
+            var reader = readers.next();
+            try {
+                reader.setInput(in);
+                return new int[]{reader.getWidth(0), reader.getHeight(0)};
+            } finally {
+                reader.dispose();
+            }
+        } catch (Exception e) {          // noqa: 앞부분이 모자라면 전체로 다시 읽는다
+            return null;
+        }
     }
 
     /** 장 번호 -> 가진 것 중 가장 큰 폭. 구운 것을 같은 폭으로 적을 때 쓴다. */

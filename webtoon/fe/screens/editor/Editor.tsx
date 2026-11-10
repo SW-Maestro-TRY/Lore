@@ -11,8 +11,10 @@ import { track } from "../../lib/track";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconEdit, IconMenu } from "../../ui/Icons";
 import ShareMenu from "../result/ShareMenu";
+import AuthModal from "@common/auth/AuthModal";
 import "./i18n";
 import "./Editor.css";
+import "./EditorFinal.css";
 
 /* 편집실 — 캔버스 Editor(PC). 폰은 같은 구성을 세로로 무너뜨린다.
  *
@@ -21,7 +23,7 @@ import "./Editor.css";
  * 기대하는 대로 두고 겉모습만 Editor.css 로 캔버스에 맞춘다.
  *
  * 엔진이 직접 그리는 것: #worksList(작품 목록) · #scenes(장 카드 전부, 세로) ·
- * #edEpTabs(회차) · #dockGrid(말풍선·스티커·효과음) · #regenAsk(다시 그리기 창) ·
+ * #edEpTabs(회차) · #dockGrid(말풍선·스티커·효과음·그리기 도구) · #paintBar(그리기 모드 줄) · #regenAsk(다시 그리기 창) ·
  * #bakeResult(구운 결과) · 지난 판(.page-versions) · 여백 막대(.scene-gap).
  * React 가 더 그리는 것: 왼쪽 페이지 썸네일, 오른쪽 「다시 그리기」 단(활성 장의
  * 장면 한 줄 + 단추 — 누르면 엔진의 그 장 다시 그리기 단추를 대신 누른다),
@@ -54,6 +56,7 @@ export default function Editor({ runId, go, authStatus = "loading" }:
   /* 양쪽 단 폭(#548) — 경계를 끌어 넓히고 좁힌다. 두 번 누르면 기본 폭. 이 기기에 기억한다. */
   const SIDE_DEFAULT = { left: 260, right: 260 };
   const [sideW, setSideW] = useState(SIDE_DEFAULT);
+  const [authOpen, setAuthOpen] = useState(false);
   useEffect(() => {
     try {
       const got = JSON.parse(localStorage.getItem("lore_editor_sides") || "null");
@@ -182,11 +185,12 @@ export default function Editor({ runId, go, authStatus = "loading" }:
     return (
       <div className="wt-wrap wt-page wt-ed-gate">
         <h2>{t("편집실은 로그인하고 쓸 수 있어요")}</h2>
-        <p className="muted">{t("로그인하면 이 브라우저로 만든 작품도 그대로 따라옵니다. 위쪽 로그인 단추를 눌러 주세요.")}</p>
+        <p className="muted">{t("로그인하면 이 브라우저로 만든 작품도 그대로 따라옵니다.")}</p>
         <div className="wt-ed-gate-acts">
           <button type="button" className="btn btn-w" onClick={() => go("result", { run: runId })}>{t("완성본 보기")}</button>
-          <button type="button" className="btn btn-w" onClick={() => go("works")}>{t("둘러보기")}</button>
+          <button type="button" className="btn btn-p" onClick={() => setAuthOpen(true)}>{t("로그인")}</button>
         </div>
+        <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
       </div>
     );
   }
@@ -214,8 +218,9 @@ export default function Editor({ runId, go, authStatus = "loading" }:
               {t("내가 얹은 것 보기")}
             </label>
             <p className="ed-saved wt-ed-saved" id="savedNote" data-state="idle" />
-            {/* 비공개 작품은 공유 버튼을 감춘다(#638) */}
-            {info?.public !== false && <ShareMenu runId={runId} episode={episode} className="icon-btn" iconOnly />}
+            {/* 비공개 작품은 공유 버튼을 감춘다(#638). 링크 공유(#898)는 열쇠를 붙인 주소로 공유한다. */}
+            {(info?.public !== false || !!info?.share_key) &&
+              <ShareMenu runId={runId} episode={episode} className="icon-btn" iconOnly shareKey={info?.share_key} />}
             <button type="button" className="btn btn-p wt-ed-bake" id="bakeBtn">{t("이미지로 뽑기")}</button>
             <button type="button" className="btn btn-w wt-ed-done" onClick={() => go("result", { run: runId })}>{t("완성본으로")}</button>
           </div>
@@ -260,6 +265,7 @@ export default function Editor({ runId, go, authStatus = "loading" }:
         <main className="ed-stage wt-ed-stage" id="stageCol">
           <div className="ep-tabs wt-ed-eptabs" id="edEpTabs" hidden />
           <div id="scenes" className="wt-ed-scenes" />
+          <div id="regenAskHome" hidden />
           <p className="ed-foot-note wt-ed-footnote" id="edFootNote" />
         </main>
 
@@ -271,13 +277,15 @@ export default function Editor({ runId, go, authStatus = "loading" }:
 
         <div className="wt-ed-resize" role="separator" aria-orientation="vertical" aria-label={t("오른쪽 단 폭 조절")}
              onPointerDown={(e) => startResize(e, "right")} onDoubleClick={() => resetSide("right")} />
-        <aside className="ed-dock wt-ed-dock" id="edDock" aria-label={t("말풍선 · 스티커 · 효과음")}>
+        <aside className="ed-dock wt-ed-dock" id="edDock" aria-label={t("말풍선 · 스티커 · 효과음 · 그리기")}>
           <div className="dock-handle" id="dockHandle" aria-hidden="true" />
           <div className="dock-bar wt-ed-dockbar">
             <div className="dock-tabs wt-ed-docktabs" id="dockTabs">
               <button type="button" className="dock-tab chip is-on" data-tab="bubble">{t("말풍선")}</button>
               <button type="button" className="dock-tab chip" data-tab="sticker">{t("스티커")}</button>
               <button type="button" className="dock-tab chip" data-tab="sfx">{t("효과음")}</button>
+              {/* 장 위에 붓·지우개로 직접 고친다(리터치). 고르는 동안은 그리기 모드 — 말풍선은 안 잡힌다. */}
+              <button type="button" className="dock-tab chip" data-tab="paint">{t("그리기")}</button>
             </div>
             <button type="button" className="dock-fold icon-btn wt-ed-dockfold" id="dockFold"
                     aria-expanded="false" aria-controls="dockBody" aria-label={t("도구 닫기")}><IconClose size={14} /></button>
@@ -296,42 +304,6 @@ export default function Editor({ runId, go, authStatus = "loading" }:
 
       {/* 다시 그리기 창 — 장마다 있는 「다시 그리기」를 누르면 뜨는 팝업. 항목(칩)은 엔진이 /config 에서
           받아 채우고, 고른 항목과 적은 말이 둘 다 그리는 프롬프트에 들어간다(#548). id 는 엔진이 쓴다. */}
-      <div className="ask modal" id="regenAsk" hidden>
-        <div className="ask-box modal-box" role="dialog" aria-modal="true" aria-labelledby="regenAskTitle">
-          <h2 id="regenAskTitle">{t("다시 그리기")}</h2>
-          <p className="ask-sub" id="regenAskSub" />
-          <p className="ask-unsafe" id="regenAskUnsafe" hidden>
-            {t("이 장은 이미지 안전 기준에 걸려 비워 둔 장이에요. 노출이나 선정적인 부분을 바꿔 장면 설명을 고쳐 주세요. 다시 그리기는 무료예요.")}
-          </p>
-          {/* 장면 설명 고치기(#626) — 엔진이 채우고, 바뀐 칸만 보낸다 */}
-          <div className="wt-ed-sceneedit" id="regenAskSceneEdit" hidden>
-            <label className="wt-ed-askfield">
-              <span>{t("장소와 상황")}</span>
-              <textarea id="regenAskWhere" rows={2} maxLength={600} className="field" />
-            </label>
-            <label className="wt-ed-askfield">
-              <span>{t("벌어지는 일")}</span>
-              <textarea id="regenAskWhat" rows={3} maxLength={900} className="field" />
-            </label>
-          </div>
-          <p className="ask-scene" id="regenAskScene" hidden />
-          <p className="fb-lead">{t("무엇이 마음에 안 드나요?")}</p>
-          <div className="fb-tags" id="regenAskTags" />
-          <label className="wt-ed-askfield">
-            <span>{t("더 하고 싶은 말")}</span>
-            <textarea id="regenAskText" rows={3} maxLength={500} className="field"
-                      placeholder={t("더 하고 싶은 말 · 예: 우산을 들고 있게")} />
-          </label>
-          <label className="check-line">
-            <input type="checkbox" id="regenAskTextless" />
-            <span>{t("말풍선 없이 그림만")}</span>
-          </label>
-          <div className="ask-actions">
-            <button type="button" className="btn btn-w" id="regenAskCancel">{t("취소")}</button>
-            <button type="button" className="btn btn-p" id="regenAskGo">{t("이 장면 다시 그리기")}</button>
-          </div>
-        </div>
-      </div>
       <div className="toast wt-ed-toast" id="toast" hidden />
       {creditShort !== null && (
         /* 장 다시 그리기를 눌렀는데 크레딧이 모자랄 때(#548) */

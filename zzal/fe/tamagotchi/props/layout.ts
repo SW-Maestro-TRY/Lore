@@ -299,7 +299,8 @@ export const SHORT_Q = '(max-height: 720px)';
  *   `FOOT_FLOOR_SHORT`). 소품 층(PropLayer)이 `StageGeom.footFloor` 로 이 값을 넘긴다.
  */
 export function footlineFromBottom(stageH: number, floorPx: number = FOOT_FLOOR): number {
-  return Math.min(330, Math.max(floorPx, stageH * 0.3));
+  const floor = stageH < 240 ? Math.min(floorPx, stageH * 0.45) : floorPx;
+  return Math.min(330, Math.max(floor, stageH * 0.3));
 }
 
 /**

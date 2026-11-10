@@ -4,6 +4,7 @@ import com.lore.zzal.alert.ZzalAlerts;
 import com.lore.zzal.generation.client.PostProcessor;
 import com.lore.zzal.generation.steps.GridStep;
 import com.lore.zzal.generation.steps.IdentityStep;
+import com.lore.zzal.generation.steps.Layer2PostStep;
 import com.lore.zzal.generation.steps.MotionGridStep;
 import com.lore.zzal.generation.steps.MotionPostStep;
 import com.lore.zzal.generation.steps.PostProcessStep;
@@ -75,8 +76,8 @@ class HatchPipelineV1Test {
     }
 
     @Test
-    @DisplayName("v1 = sheet → identity → grid → grid2 → post (5단계)")
-    void hatchHasFiveSteps() {
+    @DisplayName("v1 = sheet → identity → grid → post (4단계, 1층에서 끝) · 2층 = grid2 → postprocess2 (#696)")
+    void hatchEndsAtLayerOne() {
         // ★ 이름이 채워진 목을 쓴다 — 레지스트리가 기동할 때 "문단에 기대는 단계" 의 이름이
         //   실제로 그 버전에 있는지 확인하므로, name() 이 null 인 맨 목이면 그 확인에서 터진다.
         PipelineRegistry r = new PipelineRegistry(StepMocks.sheet(), StepMocks.identity(),
@@ -84,12 +85,17 @@ class HatchPipelineV1Test {
                 mock(MotionGridStep.class), mock(MotionPostStep.class), "v1", "v1");
 
         assertThat(r.currentVersion(GenKind.HATCH)).isEqualTo("v1");
-        assertThat(r.steps(GenKind.HATCH, "v1")).hasSize(5);
+        assertThat(r.steps(GenKind.HATCH, "v1")).extracting(GenerationStep::name)
+                .containsExactly(SheetStep.NAME, IdentityStep.NAME, GridStep.NAME, PostProcessStep.NAME);
+        assertThat(r.steps(GenKind.LAYER2, "v1")).extracting(GenerationStep::name)
+                .containsExactly(PostProcessStep.GRID2, Layer2PostStep.NAME);
+        // 2층 버전은 부화 버전을 그대로 따른다(프롬프트·스크립트가 부화와 짝).
+        assertThat(r.currentVersion(GenKind.LAYER2)).isEqualTo("v1");
     }
 
     @Test
-    @DisplayName("★ 후처리 — 격자 2장을 한 세션 안에서 basic/{판} 아래에 자르며 칸의 자세 매핑을 함께 넘긴다")
-    void splitsTwoGridsWithPostures() throws Exception {
+    @DisplayName("★ 1층 후처리 — 격자 1장만 basic/{판} 아래에 자르며 1층 자세 매핑을 넘긴다(#696)")
+    void splitsLayerOneOnly() throws Exception {
         PostProcessor post = mock(PostProcessor.class);
         PostProcessor.Session session = mock(PostProcessor.Session.class);
         when(post.open(anyString(), anyString())).thenReturn(session);
@@ -101,20 +107,62 @@ class HatchPipelineV1Test {
 
         StepContext ctx = new StepContext(7L, "여울", null, "v1");
         ctx.putImage(GridStep.NAME, "images/zzal/pets/7/grid.png");
-        ctx.putImage(PostProcessStep.GRID2, "images/zzal/pets/7/grid2.png");
         step.run(ctx);
 
-        // ★ 화면이 basicImageKey 를 .../basic/{판}/{key}.webp 로 조립한다 — 자리가 어긋나면 그림이 안 뜬다.
-        // ★★ 두 층이 <b>한 세션</b>이어야 한다. 층마다 열면 작업 폴더가 갈리고, 2층이 1층 앵커에 합쳐 쓰지 못한다.
-        // ★ 자세 매핑이 빠지면 후처리가 1층 기본값으로 되돌아가 2층 reply·wake_up 을 앉기·눕기로 맞춘다.
         verify(post, times(1)).open("images/zzal/pets/7/basic/2", "v1");
         InOrder order = inOrder(session);
         order.verify(session).split(eq("images/zzal/pets/7/grid.png"),
-                anyList(), eq(postures.forStep("v1", GridStep.NAME)));
-        order.verify(session).split(eq("images/zzal/pets/7/grid2.png"),
-                anyList(), eq(postures.forStep("v1", PostProcessStep.GRID2)));
+                eq(LAYER1), eq(postures.forStep("v1", GridStep.NAME)), eq(1));
         order.verify(session).close();
+        verify(session, times(1)).split(anyString(), anyList(), anyString(), anyInt());
         verify(recorder).markBasicBaked(7L, 2);
+    }
+
+    @Test
+    @DisplayName("★★ 2층 후처리 — 새 판을 열고 1층 앵커를 먼저 깔고 1층 8종을 옮겨 실은 뒤 2층을 자른다(#696)")
+    void layerTwoOpensNewRoundOnTopOfLayerOneAnchors() throws Exception {
+        PostProcessor post = mock(PostProcessor.class);
+        PostProcessor.Session session = mock(PostProcessor.Session.class);
+        when(post.open(anyString(), anyString())).thenReturn(session);
+        HatchPostures postures = new HatchPostures();
+        com.lore.zzal.pet.ZzalPetRepository pets = mock(com.lore.zzal.pet.ZzalPetRepository.class);
+        com.lore.zzal.pet.ZzalPet pet = mock(com.lore.zzal.pet.ZzalPet.class);
+        when(pet.getBasicRound()).thenReturn(1);
+        when(pets.findById(7L)).thenReturn(java.util.Optional.of(pet));
+        Layer2PostStep step = new Layer2PostStep(post, new MotionCatalog("", "", "v1"), postures, pets);
+
+        StepContext ctx = new StepContext(7L, "여울", null, "v1");
+        ctx.putImage(PostProcessStep.GRID2, "images/zzal/pets/7/grid2.png");
+        StepResult r = step.run(ctx);
+
+        // ★ 같은 판에 덧올리면 화면이 이미 받아 간 1층만의 anchors.json 이 CDN 캐시에 남는다 — 새 판(2).
+        verify(post).open("images/zzal/pets/7/basic/2", "v1");
+        InOrder order = inOrder(session);
+        order.verify(session).seedAnchors("images/zzal/pets/7/basic/1/anchors.json");
+        order.verify(session).carryOver("images/zzal/pets/7/basic/1", LAYER1);
+        order.verify(session).split(eq("images/zzal/pets/7/grid2.png"),
+                eq(LAYER2), eq(postures.forStep("v1", PostProcessStep.GRID2)), eq(2));
+        order.verify(session).close();
+        // 판을 올리고 READY 로 바꾸는 일은 Layer2Service 가 한 커밋에서 — 여기서는 판 번호만 돌려준다.
+        assertThat(r.text()).isEqualTo("2");
+    }
+
+    @Test
+    @DisplayName("★ 실패 주입 — 2층 격자가 없으면 멈춘다 · 1층 판이 없으면 멈춘다")
+    void layerTwoStopsWithoutInputs() {
+        PostProcessor post = mock(PostProcessor.class);
+        com.lore.zzal.pet.ZzalPetRepository pets = mock(com.lore.zzal.pet.ZzalPetRepository.class);
+        com.lore.zzal.pet.ZzalPet pet = mock(com.lore.zzal.pet.ZzalPet.class);
+        when(pet.getBasicRound()).thenReturn(0);
+        when(pets.findById(7L)).thenReturn(java.util.Optional.of(pet));
+        Layer2PostStep step = new Layer2PostStep(post, new MotionCatalog("", "", "v1"), new HatchPostures(), pets);
+
+        StepContext noGrid = new StepContext(7L, "여울", null, "v1");
+        assertThatThrownBy(() -> step.run(noGrid)).hasMessageContaining(PostProcessStep.GRID2);
+
+        StepContext noRound = new StepContext(7L, "여울", null, "v1");
+        noRound.putImage(PostProcessStep.GRID2, "images/zzal/pets/7/grid2.png");
+        assertThatThrownBy(() -> step.run(noRound)).hasMessageContaining("basicRound=0");
     }
 
     @Test
@@ -128,27 +176,6 @@ class HatchPipelineV1Test {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("app.zzal.pipeline-version")
                 .hasMessageContaining("없는버전");
-    }
-
-    @Test
-    @DisplayName("★ 실패 주입 — 2층 격자가 없으면 반쪽으로 굽지 않고 멈춘다")
-    void missingSecondGridStopsInsteadOfBakingHalf() throws Exception {
-        // ★ 1층만 잘라 성공으로 치면 16칸 중 8칸이 빈 펫이 <b>완성</b>으로 기록된다. 오류는 어디에서도
-        //   안 나고 화면의 여덟 칸이 비어야만 드러난다 — 그럴 바엔 여기서 크게 실패하는 편이 낫다.
-        PostProcessor post = mock(PostProcessor.class);
-        GenerationRecorder recorder = mock(GenerationRecorder.class);
-        PostProcessStep step =
-                new PostProcessStep(post, new MotionCatalog("", "", "v1"), new HatchPostures(), recorder);
-
-        StepContext ctx = new StepContext(7L, "여울", null, "v1");
-        ctx.putImage(GridStep.NAME, "images/zzal/pets/7/grid.png");
-
-        assertThatThrownBy(() -> step.run(ctx))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining(PostProcessStep.GRID2);
-        // 판 번호도 올리지 않는다 — 올려 두면 굽지도 않은 판이 주소로 나간다.
-        verify(recorder, never()).nextBasicRound(anyLong());
-        verify(recorder, never()).markBasicBaked(anyLong(), anyInt());
     }
 
     @Test
@@ -317,6 +344,69 @@ class HatchPipelineV1Test {
 
         RunResult r = runner.run(1L, new StepContext(7L, "여울", null, "v1"), List.of(List.of(boom)), List.of());
         assertThat(r.success()).isFalse();
+        assertThat(r.gridRejected()).isFalse();
+    }
+
+    /** 주어진 메시지로 실패하는 후처리 단계. */
+    private static GenerationStep failingPost(String message) {
+        return new GenerationStep() {
+            @Override
+            public String name() {
+                return PostProcessStep.NAME;
+            }
+
+            @Override
+            public int limitSeconds() {
+                return 30;
+            }
+
+            @Override
+            public String label() {
+                return "깨어날 준비를 하는 중";
+            }
+
+            @Override
+            public StepResult run(StepContext ctx) {
+                throw new IllegalStateException(message);
+            }
+        };
+    }
+
+    @Test
+    @DisplayName("★★ 2026-10-07 — 후처리 exit 1(빈 칸 등)은 '후처리 실패' 신호와 격자 이름이 붙어 돌아온다")
+    void postprocessCrashCarriesTheGrid() {
+        GenerationRunner runner = new GenerationRunner(mock(GenerationRecorder.class), mock(ZzalAlerts.class));
+        RunResult r = runner.run(1L, new StepContext(7L, "여울", null, "v1"),
+                List.of(List.of(failingPost(PostProcessStep.GRID_SOURCE_FORMAT.formatted(PostProcessStep.GRID2)
+                        + " 후처리 실패(exit 1)\nValueError: min() arg is an empty sequence"))), List.of());
+
+        assertThat(r.success()).isFalse();
+        assertThat(r.postprocessCrashed()).isTrue();
+        assertThat(r.gridRejected()).isFalse();
+        assertThat(r.failedGrid()).isEqualTo(PostProcessStep.GRID2);
+    }
+
+    @Test
+    @DisplayName("★ 게이트 거부도 어느 격자인지 실어 보낸다")
+    void gateRejectionCarriesTheGrid() {
+        GenerationRunner runner = new GenerationRunner(mock(GenerationRecorder.class), mock(ZzalAlerts.class));
+        RunResult r = runner.run(1L, new StepContext(7L, "여울", null, "v1"),
+                List.of(List.of(failingPost(PostProcessStep.GRID_SOURCE_FORMAT.formatted(GridStep.NAME)
+                        + " 후처리 실패(exit 3)\n[게이트] " + GenerationRunner.GRID_STRUCTURE_MARK))), List.of());
+
+        assertThat(r.gridRejected()).isTrue();
+        assertThat(r.failedGrid()).isEqualTo(GridStep.NAME);
+    }
+
+    @Test
+    @DisplayName("★ 후처리 시간 초과는 '후처리 실패' 가 아니다 — 격자를 버리지 않는다")
+    void postprocessTimeoutIsNotACrash() {
+        GenerationRunner runner = new GenerationRunner(mock(GenerationRecorder.class), mock(ZzalAlerts.class));
+        RunResult r = runner.run(1L, new StepContext(7L, "여울", null, "v1"),
+                List.of(List.of(failingPost(PostProcessStep.GRID_SOURCE_FORMAT.formatted(GridStep.NAME)
+                        + " 후처리 시간 초과(120초)"))), List.of());
+
+        assertThat(r.postprocessCrashed()).isFalse();
         assertThat(r.gridRejected()).isFalse();
     }
 }

@@ -3,6 +3,16 @@
 import { registerDict, type Dict } from "../../lib/i18n";
 
 const dict: Dict = {
+  "한 편은 {base}장까지예요. 이야기가 길어 장면이 더 많으면 한 장에 {per}크레딧이 더 들고, 크레딧이 모자라면 {base}장까지 먼저 그린 뒤 나머지는 나중에 이어 그릴 수 있어요.": {
+    en: "An episode includes up to {base} pages. If a longer story needs more scenes, each extra page costs {per} credits; if you're short, we'll draw the first {base} pages and you can continue the rest later.",
+    ja: "1話は{base}ページまでです。話が長くて場面が増えると1ページ{per}クレジットかかり、足りない場合は{base}ページまで先に描いて、残りは後から続けて描けます。",
+    zh: "每话包含 {base} 页。故事较长、场景更多时，每多一页需 {per} 积分；积分不够时会先画前 {base} 页，剩下的之后可以接着画。",
+  },
+  "제목 · 추가 설정": { en: "Title · extra settings", ja: "タイトル · 追加設定", zh: "标题 · 附加设定" },
+  "추가 설정": { en: "Extra settings", ja: "追加設定", zh: "附加设定" },
+  "비워 두면 이야기에 맞춰 지어 드려요": { en: "Leave blank and we'll name it to fit the story", ja: "空欄なら物語に合わせて付けます", zh: "留空则按故事为你起名" },
+  "세계관 규칙·말투·꼭 들어갈 장면처럼 더 알려 주고 싶은 것": { en: "Anything else — world rules, speech style, a scene that must appear", ja: "世界観のルール・口調・必ず入れたい場面など", zh: "世界规则、说话方式、一定要有的场景等" },
+
   /* ---- 빵부스러기 · 폰 제목 ---- */
   "캐릭터": { en: "Character", ja: "キャラクター", zh: "角色" },
   "이야기 · 장르": { en: "Story · Genre", ja: "ストーリー · ジャンル", zh: "故事 · 题材" },
@@ -25,6 +35,10 @@ const dict: Dict = {
 
   /* ---- 1 · 캐릭터 ---- */
   "누가 주인공인가요?": { en: "Who's the main character?", ja: "主人公は誰ですか？", zh: "谁是主角？" },
+  "{n}명까지 · 한 명 더할 때마다 +{c}C": { en: "Up to {n} · +{c}C for each added one", ja: "{n}人まで · 1人追加ごとに+{c}C", zh: "最多 {n} 位 · 每多一位 +{c}C" },
+  "한 편 {a}C + 주인공 추가 {b}C": { en: "Episode {a}C + extra main characters {b}C", ja: "1話 {a}C + 主人公追加 {b}C", zh: "一话 {a}C + 追加主角 {b}C" },
+  "크레딧 잔액이 부족해요 (필요 {need} · 보유 {have})": { en: "Not enough credits (need {need} · have {have})", ja: "クレジットが足りません（必要 {need} · 保有 {have}）", zh: "积分不足（需要 {need} · 持有 {have}）" },
+  "주인공 {n}": { en: "Main character {n}", ja: "主人公{n}", zh: "主角{n}" },
   "{name}과 함께 갈게요!": { en: "Let's go with {name}!", ja: "{name}と一緒に進めます！", zh: "就和{name}一起吧！" },
   "다른 캐릭터로": { en: "Choose a different character", ja: "別のキャラクターに", zh: "换一个角色" },
   "다른 캐릭터 고르기": { en: "Pick another character", ja: "別のキャラクターを選ぶ", zh: "选择其他角色" },
@@ -135,6 +149,8 @@ const dict: Dict = {
   "보는 방식": { en: "Follow along", ja: "進め方", zh: "跟进方式" },
   "쓰는 크레딧": { en: "Credits used", ja: "使用クレジット", zh: "使用点数" },
   "무료": { en: "Free", ja: "無料", zh: "免费" },
+  "무료 이벤트 중!": { en: "Free event now!", ja: "無料イベント開催中！", zh: "免费活动进行中！" },
+  "남은 무료 횟수 {n}회": { en: "{n} free creations left", ja: "無料作成の残り {n} 回", zh: "剩余免费次数 {n} 次" },
   "저작권 확인": { en: "Copyright confirmation", ja: "著作権の確認", zh: "版权确认" },
   "업로드한 사진·설정에 대한 저작권 문제가 없음을 확인합니다": { en: "I confirm there are no copyright issues with the photos and settings I uploaded", ja: "アップロードした写真・設定に著作権上の問題がないことを確認します", zh: "我确认上传的照片与设定不存在版权问题" },
   "이용약관 요약 보기": { en: "See terms summary", ja: "利用規約の要約を見る", zh: "查看条款摘要" },
@@ -143,18 +159,27 @@ const dict: Dict = {
   "LORE는 만들어진 결과물의 저작권 분쟁에 대해 책임지지 않습니다.": { en: "LORE is not responsible for copyright disputes over generated results.", ja: "LOREは生成された結果物の著作権紛争について責任を負いません。", zh: "LORE 对生成结果的版权纠纷不承担责任。" },
   "시작하는 중": { en: "Starting", ja: "開始中", zh: "正在开始" },
   "웹툰 만들기": { en: "Create webtoon", ja: "ウェブトゥーンを作る", zh: "制作条漫" },
-  "시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸려요.": { en: "Times assume an empty queue. It takes longer if others are ahead of you.", ja: "時間は待ち行列が空のときの目安です。前に人がいるとさらにかかります。", zh: "时间以队列为空时为准。前面有人的话会更久。" },
+  "시간은 줄이 비었을 때 기준이에요. 앞에 사람이 있으면 더 걸릴 수 있습니다.": { en: "Times assume an empty queue. It may take longer if others are ahead of you.", ja: "時間は待ち行列が空のときの目安です。前に人がいるとさらにかかることがあります。", zh: "时间以队列为空时为准。前面有人的话会更久。" },
   "{time} · 앞에 사람이 있으면 더 걸려요": { en: "{time} · longer if others are ahead", ja: "{time} · 前に人がいるとさらにかかります", zh: "{time} · 前面有人会更久" },
 
   /* 화질 (lib/wizardData QUALITY_INFO) — lede 의 " · " 는 앞부분만 잘라 쓰므로 유지 */
+  "세일": { en: "Sale", ja: "セール", zh: "优惠" },
+  "파격 세일": { en: "Special sale", ja: "特別セール", zh: "特惠" },
+  "오픈 세일중": { en: "Opening sale", ja: "オープンセール中", zh: "开业优惠中" },
   "물결": { en: "Ripple", ja: "さざ波", zh: "涟漪" },
   "약 6분 · 가장 빠른 생성": { en: "About 6 min · Fastest", ja: "約6分 · 最速", zh: "约 6 分钟 · 最快" },
   "굵고 단순한 선으로 가볍게 표현해요.": { en: "Bold, simple lines with a light touch.", ja: "太くシンプルな線で軽やかに表現します。", zh: "用粗而简洁的线条轻快呈现。" },
   "배경과 소품은 필요한 만큼만 담아요.": { en: "Backgrounds and props only as needed.", ja: "背景と小物は必要な分だけ描きます。", zh: "背景与道具只画必要的部分。" },
   "파도": { en: "Wave", ja: "波", zh: "波浪" },
+  "아르카나 마법학교 page02 · {mode} 예시": { en: "Arcana Magic School page 02 · {mode} sample", ja: "アルカナ魔法学校 2ページ · {mode}の例", zh: "阿尔卡纳魔法学校第 2 页 · {mode} 示例" },
+  "밤에 노래하는 학교 4페이지 · {mode} 예시": { en: "The School That Sings at Night · page 04 · {mode} sample", ja: "夜に歌う学校・4ページ目・{mode}の例", zh: "夜晚歌唱的学校第 4 页 · {mode} 示例" },
+  "예시 그림체 · 로맨스 판타지": { en: "Sample art style · Romance fantasy", ja: "サンプル画風 · ロマンスファンタジー", zh: "示例画风 · 浪漫奇幻" },
+  "예시 그림체 · 일반 웹툰": { en: "Sample art style · General webtoon", ja: "サンプル画風 · 一般ウェブトゥーン", zh: "示例画风 · 普通条漫" },
+  "약 8분 · 빠른 기본 생성": { en: "About 8 min · Faster default", ja: "約8分 · 速い標準生成", zh: "约 8 分钟 · 更快的默认生成" },
   "약 8분 · 자연스러운 디테일": { en: "About 8 min · Natural detail", ja: "約8分 · 自然なディテール", zh: "约 8 分钟 · 自然细节" },
   "인물과 배경을 가장 자연스럽게 표현해요.": { en: "Characters and backgrounds at their most natural.", ja: "人物と背景を最も自然に表現します。", zh: "人物与背景最自然的呈现。" },
   "너울": { en: "Swell", ja: "うねり", zh: "涌浪" },
+  "약 15분 · 더 오래 걸리는 섬세한 표현": { en: "About 15 min · More detailed, takes longer", ja: "約15分 · 時間をかけて細かく表現", zh: "约 15 分钟 · 耗时更久，细节更丰富" },
   "약 15분 · 가장 섬세한 표현": { en: "About 15 min · Most detailed", ja: "約15分 · 最も繊細", zh: "约 15 分钟 · 最精细" },
   "가는 선과 풍부한 디테일로 표현해요.": { en: "Fine lines and rich detail.", ja: "細い線と豊かなディテールで表現します。", zh: "用细线与丰富的细节呈现。" },
   "배경과 소품까지 깊이 있게 담아내요.": { en: "Backgrounds and props rendered in depth.", ja: "背景と小物まで深く描き込みます。", zh: "背景与道具也深入刻画。" },
@@ -194,6 +219,46 @@ const dict: Dict = {
   "AI 가 만든 이야기와 장면을 확인하고, 원하는 부분을 고친 뒤 만들어요. 나갔다 와도 이어서 할 수 있어요.": { en: "Check the story and scenes AI made, fix what you want, then make it. You can leave and come back.", ja: "AI が作ったストーリーと場面を確認し、直したいところを直してから作ります。離れても続きからできます。", zh: "确认 AI 写的故事和场景，修改想改的部分再制作。离开后也能继续。" },
   "이 브라우저에서만 이어서 할 수 있어요. 다른 기기에서는 작업을 찾지 못해요.": { en: "You can only continue on this browser. Other devices can't find this job.", ja: "このブラウザでのみ続けられます。他の端末では作業が見つかりません。", zh: "只能在此浏览器继续，其他设备找不到这个作业。" },
   "· 내 내용": { en: "· My content", ja: "· 自分の内容", zh: "· 我的内容" },
+  /* ---- 빠졌던 번역 ---- */
+  "{name} 수정": { en: "Edit {name}", ja: "{name}を編集", zh: "编辑 {name}" },
+  "그림체 · 방식": { en: "Art style · Options", ja: "画風 · 進め方", zh: "画风 · 方式" },
+  "다시 확인": { en: "Check again", ja: "再確認", zh: "重新确认" },
+  "만들기 단계": { en: "Creation steps", ja: "作成ステップ", zh: "制作步骤" },
+  "생성 방식": { en: "Creation mode", ja: "生成方式", zh: "生成方式" },
+  "어떤 이야기인가요?": { en: "What's the story?", ja: "どんなストーリーですか？", zh: "是什么样的故事？" },
+  "이전 캐릭터": { en: "Previous character", ja: "前のキャラクター", zh: "上一个角色" },
+  "저장 전 확인": { en: "Review before saving", ja: "保存前の確認", zh: "保存前确认" },
+  "직접 입력": { en: "Enter manually", ja: "直接入力", zh: "手动输入" },
+  "캐릭터 · 이야기": { en: "Character · Story", ja: "キャラクター · ストーリー", zh: "角色 · 故事" },
+  "크레딧 정보를 불러오지 못했어요. 다시 확인해 주세요.": { en: "Couldn't load your credit info. Please check again.", ja: "クレジット情報を読み込めませんでした。もう一度確認してください。", zh: "无法加载积分信息，请重新确认。" },
 };
 
 registerDict(dict);
+
+/* 빠른 시작(2026-10-27) */
+registerDict({
+  "주인공을 한 줄로 적어 주세요": { en: "Describe your main character in a line", ja: "主人公を一行で書いてください", zh: "用一句话写下主角" },
+  "또는 캐릭터 카드를 골라요": { en: "Or pick a character card", ja: "またはキャラクターカードを選ぶ", zh: "或者选一张角色卡" },
+  "성격 · 외형 · 상황, 한 줄이면 돼요": { en: "Personality, looks, situation — one line is enough", ja: "性格・外見・状況、一行で十分です", zh: "性格、外貌、处境，一句话就够" },
+  "적은 캐릭터는 내 캐릭터에 남아요. 그림을 안 넣으면 첫 웹툰의 캐릭터 시트로 채워져요.": {
+    en: "The character is saved to My characters. Without a picture, it's filled in from your first webtoon's character sheet.",
+    ja: "書いたキャラクターはマイキャラクターに残ります。絵を入れない場合は、最初のウェブトゥーンのキャラクターシートで埋まります。",
+    zh: "写下的角色会保存在我的角色里。不放图片的话，会用第一部漫画的角色设定图填上。",
+  },
+  "뭘 적을지 모르겠다면": { en: "Not sure what to write?", ja: "何を書くか迷ったら", zh: "不知道写什么？" },
+  "다 마신 캔커피": { en: "Empty coffee can", ja: "飲み終えた缶コーヒー", zh: "喝完的罐装咖啡" },
+  "꼬마 마왕": { en: "Tiny demon king", ja: "ちびっこ魔王", zh: "小魔王" },
+  "지친 대학원생": { en: "Tired grad student", ja: "疲れた大学院生", zh: "疲惫的研究生" },
+  "맥짐": { en: "Mack", ja: "マック", zh: "麦克" },
+  "소율": { en: "Soyul", ja: "ソユル", zh: "素律" },
+  "원기": { en: "Wongi", ja: "ウォンギ", zh: "元基" },
+  "다 마신 캔커피. 먹을 것 앞에서는 의리도 원칙도 없다.": { en: "An empty coffee can. Has no loyalty or principles around food.", ja: "飲み終えた缶コーヒー。食べ物の前では義理も原則もない。", zh: "喝完的罐装咖啡。在食物面前毫无义气和原则。" },
+  "꼬마 여자아이처럼 생겼지만 사실 마왕이다. 그러나 귀엽다.": { en: "Looks like a little girl but is actually the demon king. Still cute.", ja: "小さな女の子に見えるが実は魔王。それでもかわいい。", zh: "看起来像小女孩，其实是魔王。但很可爱。" },
+  "피곤에 쩌든 안경 쓴 대학원생": { en: "An exhausted grad student with glasses", ja: "疲れ切った眼鏡の大学院生", zh: "疲惫不堪的戴眼镜研究生" },
+  "캐릭터 그림 넣기": { en: "Add character picture", ja: "キャラクターの絵を入れる", zh: "添加角色图片" },
+  "그림 바꾸기": { en: "Change picture", ja: "絵を変える", zh: "更换图片" },
+  "그림 빼기": { en: "Remove picture", ja: "絵を外す", zh: "移除图片" },
+  "넣은 캐릭터 그림": { en: "Added character picture", ja: "入れたキャラクターの絵", zh: "已添加的角色图片" },
+  "캐릭터 저장 중…": { en: "Saving character…", ja: "キャラクターを保存中…", zh: "正在保存角色…" },
+  "캐릭터를 저장하지 못했습니다": { en: "Couldn't save the character", ja: "キャラクターを保存できませんでした", zh: "无法保存角色" },
+});

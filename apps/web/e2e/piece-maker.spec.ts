@@ -2,7 +2,7 @@
 //
 // 왜 라우트 가로채기인가 — 카드는 lore 백엔드의 카드 API 셋(`/api/piece-maker/v1/public/cards…`)에서 오고, 가설은
 // 같은 백엔드에 맡긴다(`/api/piece-maker/v1/hypotheses`, 로그인 필요). 검사는 서버와 DB 없이 돌아야 하므로 `piece-maker-lore.ts` 의
-// 가짜 lore 서버가 표본 25장 위에서 진짜 서버와 같은 규칙(회차로 거르기 · 회수 칸 가리기 · 검색 · 나눠 주기 · 맡길 때 카드
+// 가짜 lore 서버가 불러온 카드 표본 위에서 진짜 서버와 같은 규칙(회차로 거르기 · 회수 칸 가리기 · 검색 · 나눠 주기 · 맡길 때 카드
 // 복사)으로 답하고, 로그인(`/api/v1/users/me` · `/api/v1/auth/login`)도 대신 답한다. 표본은 `piece-maker/fe/tests/fixtures/`
 // (NarrativeAnalysis 의 `python3.12 -m src.gpt_judge.web.export_fixtures --out <폴더>`)다.
 //
@@ -15,10 +15,10 @@
 //      저장이 안 돼도 통과한다. 같은 컨텍스트에서 새 페이지를 연다.
 //   3. 늦게 온 응답은 타이머로 늦추지 않는다. 응답을 손으로 붙잡아 둔다. 새 결과가 뜬 것을 먼저
 //      확인하고, 그다음에 붙잡은 응답을 놓는다. "옛 결과가 없다"만 보면 아무것도 안 떠도 통과한다.
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { collectErrors } from './helpers';
 import { ALL_KINDS, matchesCard } from '../../../piece-maker/fe/lib/search';
-import { CARDS, HYPOTHESES_URL, LIST_URL, answer, fail, failHypothesis, load, mockLore, selectChapter, visibleCards, waitForJudgementPoll, type Fixture, type LoreHypothesis } from './piece-maker-lore';
+import { CARDS, HYPOTHESES_URL, LIST_URL, answer, fail, failHypothesis, load, mockLore, ok, selectChapter, visibleCards, waitForJudgementPoll, type Fixture, type LoreHypothesis } from './piece-maker-lore';
 
 /** Python 서버가 실제로 준 T2 판정(400화). 3부에서는 운영자가 넣은 판정이 가설의 `judgement` · `presentation` 으로 온다. */
 type JudgeResponse = {
@@ -74,9 +74,41 @@ async function writeTheory(page: Page, claim = '샹크스와 루피는 다시 �
   await page.fill('#piece-maker-claim', claim);
 }
 
+/** 레이아웃 검사는 실제 API 쓰기를 막고, 공통 행동 기록도 브라우저에서만 접수한다. */
+async function blockRealApi(context: BrowserContext): Promise<void> {
+  await context.route('**/api/**', route => route.abort('blockedbyclient'));
+  await context.route('**/api/v1/events', route => answer(route, ok(null)));
+}
+
+async function workspaceBounds(page: Page) {
+  return page.evaluate(() => {
+    const bounds = (element: Element) => {
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, height: rect.height,
+        clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, scrollTop: element.scrollTop,
+        overflowY: style.overflowY, position: style.position };
+    };
+    const header = [...document.querySelectorAll('header')].find(el => !el.closest('.piece-maker-page'))!;
+    return {
+      viewport: { width: innerWidth, height: innerHeight },
+      document: { scrollHeight: document.documentElement.scrollHeight, clientHeight: document.documentElement.clientHeight,
+        scrollWidth: document.documentElement.scrollWidth, scrollY },
+      header: bounds(header),
+      explore: bounds(document.querySelector('[data-part="explore"]')!),
+      cards: bounds(document.querySelector('[data-part="results"]')!),
+      compose: bounds(document.querySelector('[data-part="compose"]')!),
+      paper: bounds(document.querySelector('[data-part="compose"] .paper')!),
+      footer: bounds(document.querySelector('.compose-footer')!),
+    };
+  });
+}
+
 // `/piece-maker` 는 처음 열 때 컴파일하느라 느리다. 설정의 웹 서버는 `/zzal` 만 미리 연다.
 test.beforeAll(async ({ browser }) => {
   const page = await browser.newPage();
+  await blockRealApi(page.context());
+  await mockLore(page.context());
   await page.goto('/piece-maker', { waitUntil: 'domcontentloaded', timeout: 120_000 });
   await page.waitForSelector('[data-part="results"]', { timeout: 120_000 });
   await page.close();
@@ -87,7 +119,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('폰', () => {
-  test('가로로 넘치지 않고, 모바일 탭이 lore 헤더 바로 아래에 붙는다', async ({ page, context }) => {
+  test('가로로 넘치지 않고, 모바일 탭이 본문과 함께 스크롤된다', async ({ page, context }) => {
+    await blockRealApi(context);
     await mockLore(context);
     await open(page);
     await expect(page.getByRole('link', { name: 'Piece Maker', exact: true }).first()).toHaveAttribute('href', '/piece-maker');
@@ -95,16 +128,22 @@ test.describe('폰', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     await expect(page.locator('[data-part="rail"]')).toBeHidden();
 
+    const tabsBefore = await page.locator('[data-part="mobile-tabs"]').evaluate(el => ({ top: el.getBoundingClientRect().top, scrollY: window.scrollY }));
     await page.evaluate(() => window.scrollTo({ top: 1500, behavior: 'instant' }));
-    const gap = await page.evaluate(() => {
+    const scrolled = await page.evaluate(() => {
       const header = [...document.querySelectorAll('header')].find((h) => !h.closest('.piece-maker-page'))!;
       const tabs = document.querySelector('[data-part="mobile-tabs"]')!;
-      return Math.round(tabs.getBoundingClientRect().top - header.getBoundingClientRect().bottom);
+      return { top: tabs.getBoundingClientRect().top, bottom: tabs.getBoundingClientRect().bottom, headerBottom: header.getBoundingClientRect().bottom, scrollY: window.scrollY };
     });
-    expect(gap).toBe(0);
+    expect(scrolled.scrollY).toBeGreaterThan(tabsBefore.scrollY);
+    expect(tabsBefore.top - scrolled.top).toBeCloseTo(scrolled.scrollY - tabsBefore.scrollY, 1);
+    expect(scrolled.bottom).toBeLessThanOrEqual(scrolled.headerBottom);
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await expect(page.locator('[data-part="mobile-tabs"]')).toBeInViewport();
   });
 
-  test('탭을 바꾸면 패널이 하나씩 보이고, 쓰던 글이 남는다', async ({ page, context }) => {
+  test('탭을 바꾸면 패널이 하나씩 보이고, 쓰던 글이 남는다', async ({ page, context }, testInfo) => {
+    await blockRealApi(context);
     await mockLore(context);
     await open(page);
     await expect(page.locator('[data-part="explore"]')).toBeVisible();
@@ -121,6 +160,21 @@ test.describe('폰', () => {
     await page.click('[data-part="mobile-tabs"] [data-action="compose"]');
     await expect(page.locator('#piece-maker-title')).toHaveValue('폰에서 쓴 제목');
     await expect(pickedCard(page, 'T2')).toBeVisible();
+    const note = pickedCard(page, 'T2').locator('[data-part="note"]');
+    await note.fill('모바일에서 작성한 해석');
+    await page.fill('#piece-maker-claim', '약속을 확인하는 재회가 일어날 것이다.');
+    const bounds = await workspaceBounds(page);
+    expect(bounds.explore.position, '모바일 탐색 패널은 고정하지 않는다').not.toBe('sticky');
+    expect(bounds.paper.scrollHeight, '모바일 작성은 문서를 스크롤한다').toBeLessThanOrEqual(bounds.paper.clientHeight + 1);
+    expect(bounds.document.scrollWidth, '모바일 가로 넘침 없음').toBeLessThanOrEqual(bounds.viewport.width);
+    await note.scrollIntoViewIfNeeded();
+    await note.focus();
+    await expect(note).toBeFocused();
+    await expect(note).toBeInViewport({ ratio: 1 });
+    const visibleNote = await note.boundingBox();
+    const footer = await page.locator('.compose-footer').boundingBox();
+    expect(visibleNote!.y + visibleNote!.height, '해석 입력이 저장 줄에 가려지지 않는다').toBeLessThanOrEqual(footer!.y + 1);
+    await page.screenshot({ path: testInfo.outputPath('mobile-compose.png'), animations: 'disabled' });
   });
 });
 
@@ -134,19 +188,151 @@ test.describe('데스크톱', () => {
     expect(response.headers().location).toMatch(/\/piece-maker\?source=bookmark$/);
   });
 
-  test('문서는 스크롤되지 않는다. 패널이 저마다 스크롤된다', async ({ page, context }) => {
-    await mockLore(context);
-    const errors = collectErrors(page);
-    await open(page, LAST);
-    const doc = await page.evaluate(() => ({ scroll: document.documentElement.scrollHeight, client: document.documentElement.clientHeight }));
-    expect(doc.scroll).toBeLessThanOrEqual(doc.client);
-    const pane = await page.locator('[data-part="results"]').evaluate((el) => ({ scroll: el.scrollHeight, client: el.clientHeight }));
-    expect(pane.scroll).toBeGreaterThan(pane.client);
-    for (const part of ['sd-hero', 'topbar', 'explore', 'compose']) await expect(page.locator(`[data-part="${part}"]`)).toBeVisible();
-    await expect(page.locator('[data-part="sd-hero"] img')).toHaveJSProperty('complete', true);
-    expect(await page.locator('[data-part="sd-hero"] img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
-    expect(errors).toEqual([]);
-  });
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720 }]) {
+    test(`${viewport.width}×${viewport.height}: 문서와 카드 목록을 스크롤하고 근거 본문과 해석을 함께 본다`, async ({ page, context }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await blockRealApi(context);
+      await mockLore(context);
+      const errors: string[] = [];
+      page.on('pageerror', error => errors.push(error.message));
+      await open(page);
+      await page.evaluate(() => document.fonts.ready);
+      for (const part of ['sd-hero', 'topbar', 'explore', 'compose']) await expect(page.locator(`[data-part="${part}"]`)).toBeVisible();
+      await expect(page.locator('[data-part="sd-hero"] img')).toHaveJSProperty('complete', true);
+      await pick(page, 'T2', 'T3');
+      await page.locator('[data-part="results"]').evaluate(el => { el.scrollTop = 0; });
+      const selected = pickedCard(page, 'T2');
+      await page.evaluate(() => {
+        const card = document.querySelector('[data-part="selection"] [data-card-id="T2"]')!;
+        const header = [...document.querySelectorAll('header')].find(el => !el.closest('.piece-maker-page'))!;
+        window.scrollTo({ top: card.getBoundingClientRect().top + scrollY - header.getBoundingClientRect().height - 16, behavior: 'instant' });
+      });
+      await expect.poll(async () => (await workspaceBounds(page)).explore.top).toBeLessThan(90);
+      const bounds = await workspaceBounds(page);
+      expect(bounds.document.scrollHeight).toBeGreaterThan(bounds.document.clientHeight);
+      expect(bounds.document.scrollY, '실제 페이지가 이동했다').toBeGreaterThan(0);
+      expect(bounds.document.scrollWidth, '데스크톱 가로 넘침 없음').toBeLessThanOrEqual(viewport.width);
+      expect(Math.abs(bounds.explore.top - bounds.header.bottom - 16), '탐색은 헤더 아래에 붙는다').toBeLessThanOrEqual(1);
+      expect(Math.abs(bounds.explore.height - (viewport.height - bounds.header.height - 32)), '탐색 높이는 뷰포트에서 헤더와 여백을 뺀다').toBeLessThanOrEqual(1);
+      expect(bounds.explore.bottom, '탐색 하단이 화면 안에 있다').toBeLessThanOrEqual(viewport.height - 15);
+      expect(bounds.cards.clientHeight).toBeGreaterThan(0);
+      expect(bounds.cards.scrollHeight).toBeGreaterThan(bounds.cards.clientHeight);
+      expect(bounds.paper.scrollHeight, '작성 본문에 내부 스크롤이 없다').toBeLessThanOrEqual(bounds.paper.clientHeight + 1);
+      expect(bounds.compose.scrollHeight, '작성 패널에 내부 스크롤이 없다').toBeLessThanOrEqual(bounds.compose.clientHeight + 1);
+      const first = listCard(page, 'T1');
+      await expect(first.locator('p')).toBeInViewport({ ratio: 1 });
+      await expect(first.locator('[data-action="add"]')).toBeInViewport({ ratio: 1 });
+      const firstBox = await first.boundingBox();
+      expect(firstBox!.y).toBeGreaterThanOrEqual(bounds.cards.top - 1);
+      expect(firstBox!.y + firstBox!.height).toBeLessThanOrEqual(bounds.cards.bottom + 1);
+      const note = selected.locator('[data-part="note"]');
+      await expect(selected.locator('.fact')).toBeInViewport({ ratio: 1 });
+      await expect(note).toBeInViewport({ ratio: 1 });
+      await note.fill('이 약속이 다시 만날 근거다.');
+      await expect(note).toBeFocused();
+      const noteBox = await note.boundingBox();
+      const footerBox = await page.locator('.compose-footer').boundingBox();
+      expect(noteBox!.y + noteBox!.height, '해석 입력은 저장 줄 위에서 전부 보인다').toBeLessThanOrEqual(footerBox!.y + 1);
+      await page.screenshot({ path: testInfo.outputPath('desktop-evidence-and-note.png'), animations: 'disabled' });
+      await page.locator('[data-part="results"]').evaluate(el => { el.scrollTop = 180; });
+      const scrollBeforeWheel = await page.locator('[data-part="results"]').evaluate(el => el.scrollTop);
+      const cardsBox = await page.locator('[data-part="results"]').boundingBox();
+      await page.mouse.move(cardsBox!.x + 40, cardsBox!.y + cardsBox!.height - 60);
+      await page.mouse.wheel(0, 120);
+      await expect.poll(() => page.locator('[data-part="results"]').evaluate(el => el.scrollTop), { message: '휠로 카드 목록을 넘길 수 있다' }).toBeGreaterThan(scrollBeforeWheel);
+      const listScroll = await page.locator('[data-part="results"]').evaluate(el => el.scrollTop);
+      expect(listScroll, '카드 목록 자체가 이동했다').toBeGreaterThan(0);
+      await note.fill('카드 목록을 넘겨도 작성 위치가 유지된다.');
+      await page.evaluate(() => window.scrollBy({ top: 80, behavior: 'instant' }));
+      expect(await page.locator('[data-part="results"]').evaluate(el => el.scrollTop), '페이지·해석 편집이 카드 목록 위치를 바꾸지 않는다').toBe(listScroll);
+      await page.screenshot({ path: testInfo.outputPath('desktop-editing.png'), animations: 'disabled' });
+      await testInfo.attach('workspace-bounds', { body: JSON.stringify(bounds, null, 2), contentType: 'application/json' });
+      // 목록 끝의 휠이 어느 영역을 움직이는지 기록한다. 문서로 이어지는 것은 브라우저의 기본 동작이다.
+      const cards = page.locator('[data-part="results"]');
+      await cards.evaluate(el => { el.scrollTop = el.scrollHeight; });
+      const beforeWheel = await workspaceBounds(page);
+      await page.mouse.move(beforeWheel.cards.left + 40, beforeWheel.cards.bottom - 60);
+      await page.mouse.wheel(0, 200);
+      await page.mouse.wheel(0, 200);
+      // Chromium의 휠 처리가 끝난 뒤 위치를 기록한다. API 응답 대기에 쓰는 지연은 아니다.
+      await page.waitForTimeout(150);
+      const afterWheel = await workspaceBounds(page);
+      await testInfo.attach('card-list-end-wheel', { body: JSON.stringify({ before: beforeWheel, after: afterWheel }, null, 2), contentType: 'application/json' });
+      expect(afterWheel.cards.scrollTop).toBeGreaterThan(0);
+      expect(afterWheel.document.scrollWidth).toBeLessThanOrEqual(viewport.width);
+      await pickedCard(page, 'T3').locator('[data-action="remove"]').click();
+      await expect(pickedCard(page, 'T3')).toHaveCount(0);
+      await expect(page.locator('[data-part="evidence-count"]')).toHaveText('근거 1');
+      await expect(note).toHaveValue('카드 목록을 넘겨도 작성 위치가 유지된다.');
+      await note.scrollIntoViewIfNeeded();
+      await note.focus();
+      await expect(note).toBeInViewport({ ratio: 1 });
+      const shortNote = await note.boundingBox();
+      const shortFooter = await page.locator('.compose-footer').boundingBox();
+      expect(shortNote!.y + shortNote!.height, '근거 제거 뒤 짧은 초안의 해석도 저장 줄 위에 보인다').toBeLessThanOrEqual(shortFooter!.y + 1);
+      await expect(page.locator('.compose-footer [data-action="save"]')).toBeInViewport({ ratio: 1 });
+      await page.screenshot({ path: testInfo.outputPath('desktop-short-draft.png'), animations: 'disabled' });
+      expect(errors).toEqual([]);
+    });
+
+    test(`${viewport.width}×${viewport.height}: 긴 가설에서 저장과 판정 접수 후 결과 자리에 접근한다`, async ({ page, context }, testInfo) => {
+      await page.setViewportSize(viewport);
+      await blockRealApi(context);
+      const state = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
+      const errors: string[] = [];
+      page.on('pageerror', error => errors.push(error.message));
+      await open(page, LAST);
+      await pick(page, 'T2', 'T3', 'T5');
+      await page.fill('#piece-maker-title', '약속과 능력의 제약이 다시 등장한다');
+      for (const id of ['T2', 'T3', 'T5']) await pickedCard(page, id).locator('[data-part="note"]').fill('기록에 드러난 약속과 제약은 이후의 전개를 예고하는 근거다.');
+      await page.fill('#piece-maker-claim', '루피와 샹크스가 다시 만나며, 능력의 제약이 그 과정에 영향을 줄 것이다.');
+      const claim = page.locator('#piece-maker-claim');
+      await claim.scrollIntoViewIfNeeded();
+      await claim.focus();
+      const bounds = await workspaceBounds(page);
+      expect(bounds.document.scrollY, '긴 작성 내용을 따라 문서가 이동했다').toBeGreaterThan(200);
+      const claimBox = await claim.boundingBox();
+      expect(claimBox!.y + claimBox!.height, '주장 입력은 저장 줄 위에서 보인다').toBeLessThanOrEqual(bounds.footer.top + 1);
+      await testInfo.attach('focused-claim', { body: JSON.stringify({ claim: claimBox, footer: bounds.footer }, null, 2), contentType: 'application/json' });
+      const save = page.locator('.compose-footer [data-action="save"]');
+      await expect(save).toBeInViewport({ ratio: 1 });
+      await save.click();
+      await expect(page.locator('[data-part="save-status"]')).toContainText('저장');
+      const judge = page.locator('[data-action="judge"]');
+      await judge.scrollIntoViewIfNeeded();
+      await expect(judge).toBeInViewport({ ratio: 1 });
+      const beforeSubmit = await page.evaluate(() => scrollY);
+      await judge.click();
+      await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+      await expect(page.locator('[data-part="judge-pending"]')).toBeInViewport({ ratio: 1 });
+      await expect(page.locator('[data-action="new-draft"]')).toBeInViewport({ ratio: 1 });
+      const submitted = await page.locator('.submitted-judgement').boundingBox();
+      const afterSubmit = await workspaceBounds(page);
+      expect(submitted!.y, '접수 상태는 고정 헤더 아래에 있다').toBeGreaterThanOrEqual(afterSubmit.header.bottom + 15);
+      expect(await page.evaluate(() => scrollY), '접수 후 판정 영역으로 돌아온다').toBeLessThan(beforeSubmit);
+      expect(afterSubmit.document.scrollWidth).toBeLessThanOrEqual(viewport.width);
+      expect(state.hypotheses).toHaveLength(1);
+      judgeAs(state.hypotheses[0], { ...JUDGE_T2.judgement, cited_cards: ALL_CARDS }, JUDGE_T2.presentation ?? null);
+      await waitForJudgementPoll(page);
+      await expect(page.locator('[data-part="judge-result"]')).toBeVisible();
+      await expect(page.locator('[data-part="judge-grade"]')).toBeInViewport({ ratio: 1 });
+      await expect(page.locator('#piece-maker-title')).toHaveJSProperty('readOnly', true);
+      await expect(save).toHaveCount(0);
+      await page.screenshot({ path: testInfo.outputPath('desktop-judgement.png'), animations: 'disabled' });
+      // 기존 제출본을 새 페이지에서 복원해도 판정이 고정 헤더에 가려지지 않는다.
+      const restored = await context.newPage();
+      await restored.setViewportSize(viewport);
+      await open(restored);
+      await expect(restored.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+      await expect(restored.locator('[data-part="judge-grade"]')).toBeInViewport({ ratio: 1 });
+      const restoredBounds = await workspaceBounds(restored);
+      const restoredResult = await restored.locator('.submitted-judgement').boundingBox();
+      expect(restoredResult!.y, '복원한 판정도 헤더 아래에서 시작한다').toBeGreaterThanOrEqual(restoredBounds.header.bottom + 15);
+      await restored.screenshot({ path: testInfo.outputPath('desktop-restored.png'), animations: 'disabled' });
+      await restored.close();
+      expect(errors).toEqual([]);
+    });
+  }
 
   /* ---- 2부에서 생긴 것 — 회차 · 나눠 받기 · 서버 검색 ---------------------------------------------- */
 
@@ -175,37 +361,42 @@ test.describe('데스크톱', () => {
   });
 
   test('★ T5 는 1화 독자에게 미회수, 400화 독자에게 회수됨(66화) — 상세의 회수 칸이 회차로 가려진다', async ({ page, context }) => {
+    await blockRealApi(context);
     await mockLore(context);
     await open(page);
     await listCard(page, 'T5').locator('[data-action="open"]').click();
-    await expect(modal(page)).toContainText('장부 기록: 미회수');
-    await expect(modal(page)).not.toContainText('장부의 회수 기록');
+    await expect(modal(page).locator('.tag.amber')).toHaveText('미회수');
+    await expect(modal(page)).not.toContainText('회수 내용');
     await page.keyboard.press('Escape');
 
     await selectChapter(page, LAST);
     await listCard(page, 'T5').locator('[data-action="open"]').click();
-    await expect(modal(page)).toContainText('장부 기록: 회수됨');
-    await expect(modal(page)).toContainText('장부의 회수 기록 (66화)');
+    await expect(modal(page).locator('.tag.amber')).toHaveText('회수됨');
+    await expect(modal(page)).toContainText('회수 내용 (66화)');
   });
 
-  test('"더 보기"가 다음 쪽을 붙인다 — 서버가 10장씩 주면 세 번에 25장', async ({ page, context }) => {
+  test('"더 보기"가 10장씩 받아 표본 전체를 중복 없이 붙인다', async ({ page, context }) => {
+    expect(ALL_CARDS.length).toBeGreaterThan(20);
     await mockLore(context, { pageSize: 10 });
     await open(page, LAST);
     const more = page.locator('[data-part="load-more"] [data-action="more"]');
     await expect(results(page)).toHaveCount(10);
-    await expect(more).toContainText('10/25');
+    await expect(more).toContainText(`10/${ALL_CARDS.length}`);
 
     await more.click();
     await expect(results(page)).toHaveCount(20);
-    await expect(listCard(page, 'T34')).toBeVisible(); // 스무 번째 카드
-    await expect(listCard(page, 'T374')).toHaveCount(0); // 스물한 번째 — 다음 쪽
+    await expect(listCard(page, ALL_CARDS[19].id)).toBeVisible();
+    await expect(listCard(page, ALL_CARDS[20].id)).toHaveCount(0);
 
-    await more.click();
-    await expect(results(page)).toHaveCount(25);
-    await expect(listCard(page, 'T374')).toBeVisible();
+    for (let shown = 20; shown < ALL_CARDS.length; shown += 10) {
+      await more.click();
+      await expect(results(page)).toHaveCount(Math.min(shown + 10, ALL_CARDS.length));
+    }
+    await expect(listCard(page, ALL_CARDS[20].id)).toBeVisible();
     await expect(more).toHaveCount(0);
-    // 붙인 뒤에도 순서는 T 번호 순이다.
+    // 표본 전체가 중복 없이 T 번호 순으로 붙어야 한다.
     const ids = await results(page).evaluateAll((els) => els.map((el) => el.getAttribute('data-card-id')));
+    expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toEqual(ALL_CARDS.map((card) => card.id));
   });
 
@@ -392,6 +583,7 @@ test.describe('데스크톱', () => {
   });
 
   test('저장한 가설을 "내 가설"에서 연다', async ({ page, context }) => {
+    await blockRealApi(context);
     await mockLore(context);
     await open(page, LAST);
     await pick(page, 'T2');
@@ -416,6 +608,7 @@ test.describe('데스크톱', () => {
   });
 
   test('카드 상세 — Esc 로 닫으면 포커스가 돌아온다. 모달에서 담으면 닫힌다', async ({ page, context }) => {
+    await blockRealApi(context);
     await mockLore(context);
     await open(page, LAST);
     const resolved = ALL_CARDS.find((card) => card.status === 'resolved')!;
@@ -429,6 +622,7 @@ test.describe('데스크톱', () => {
     await expect(opener).toBeFocused();
 
     await opener.click();
+    await expect(modal(page).locator('[data-action="add"]')).toHaveText('가설에 담기');
     await modal(page).locator('[data-action="add"]').click();
     expect(await modalIsOpen(page)).toBe(false);
     expect(await pickedIds(page)).toEqual([resolved.id]);
@@ -460,12 +654,13 @@ test.describe('데스크톱', () => {
     await expect(page.locator('[data-part="judge-result"]')).toBeVisible();
     await page.click('[data-action="preview"]');
     const text = await modal(page).locator('#piece-maker-copy-text').inputValue();
-    for (const piece of ['게시글 제목', '게시글에 들어갈 주장', '판정 결과: 판정 보류', String(LAST)]) {
+    for (const piece of ['게시글 제목', '게시글에 들어갈 주장', '【판정 결과】 → 판정 보류', String(LAST)]) {
       expect(text).toContain(piece);
     }
   });
 
   test('★ 로그인하지 않은 독자가 "가설 판정하기"를 누르면 로그인 창이 뜨고, 로그인하면 이어서 맡긴다', async ({ page, context }) => {
+    await blockRealApi(context);
     let sent: unknown = null;
     const lore = await mockLore(context, { onSubmit: (body) => (sent = body) });
     await open(page, LAST);
@@ -494,16 +689,17 @@ test.describe('데스크톱', () => {
       requestKey: expect.stringMatching(/^[0-9a-f-]{36}$/),
     });
     expect(lore.hypotheses.map((item) => [item.judgementStatus, item.cards.map((card) => card.id)])).toEqual([['PENDING', ['T2', 'T374']]]);
-    // 맡긴 초안은 얼어 있다 — 글은 읽기만, 저장은 막히고, 단추는 "새 가설 쓰기"로 바뀐다. 상태 줄은 되물은 결과(PENDING)다.
+    // 맡긴 초안은 읽기 전용이다. 초기화·임시 저장은 사라지고 "새 가설 쓰기"로 시작한다.
     await expect(page.locator('[data-part="judge-pending"]')).toHaveText('판정 대기 중…');
     await expect(page.locator('#piece-maker-claim')).toHaveAttribute('readonly', '');
     await expect(page.locator('[data-action="judge"]')).toHaveCount(0);
     await expect(page.locator('[data-action="new-draft"]')).toBeVisible();
-    await expect(compose.locator('[data-action="save"]')).toBeDisabled();
+    await expect(compose.locator('[data-action="reset"], [data-action="save"]')).toHaveCount(0);
     await expect(compose.locator('[data-part="frozen-tag"]')).toBeVisible();
   });
 
   test('맡긴 가설은 새 페이지에서도 얼어 있고, "새 가설 쓰기"가 빈 초안을 시작한다. 맡긴 가설은 서버에 남는다', async ({ page, context }) => {
+    await blockRealApi(context);
     const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
     await open(page, LAST);
     await page.fill('#piece-maker-title', '맡긴 가설');
@@ -516,10 +712,13 @@ test.describe('데스크톱', () => {
     await expect(again.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
     await expect(again.locator('#piece-maker-title')).toHaveValue('맡긴 가설');
     await expect(again.locator('[data-action="new-draft"]')).toBeVisible();
+    await expect(again.locator('[data-part="compose"] [data-action="reset"], [data-part="compose"] [data-action="save"]')).toHaveCount(0);
     await again.close();
 
     await page.click('[data-action="new-draft"]');
     await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'false');
+    await expect(page.locator('[data-action="reset"]')).toBeVisible();
+    await expect(page.locator('[data-action="save"]')).toBeVisible();
     await expect(page.locator('#piece-maker-title')).toHaveValue('');
     expect(await pickedIds(page)).toEqual([]);
     await expect(page.locator('[data-action="judge"]')).toBeDisabled();
@@ -543,6 +742,7 @@ test.describe('데스크톱', () => {
   });
 
   test('맡기지 못하면 서버의 문구가 나오고 쓰던 글이 남는다. 입력을 고치면 문구가 사라진다', async ({ page, context }) => {
+    await blockRealApi(context);
     await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
     // 뒤에 건 라우트가 먼저 듣는다 — 표를 갈아 넣은 뒤의 옛 화면처럼 해시가 다르다는 400 을 준다.
     const reason = '화면의 장부와 서버의 장부가 다릅니다. 페이지를 새로 열어 주세요';
@@ -552,8 +752,12 @@ test.describe('데스크톱', () => {
     await page.click('[data-action="judge"]');
 
     await expect(page.locator('[data-part="judge-state"]')).toContainText(reason);
+    await expect(page.locator('#piece-maker-judge-help')).toBeVisible();
     await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'false');
     await expect(page.locator('#piece-maker-claim')).toHaveValue('남아 있어야 하는 주장');
+    await expect(page.locator('[data-action="reset"]')).toBeVisible();
+    await expect(page.locator('[data-action="save"]')).toBeEnabled();
+    await expect(page.locator('[data-part="save-status"]')).toBeVisible();
     expect(await pickedIds(page)).toEqual(['T2', 'T374']);
     await expect(page.locator('[data-action="judge"]')).toBeEnabled();
 
@@ -561,6 +765,7 @@ test.describe('데스크톱', () => {
     await expect(page.locator('[data-part="judge-state"]')).not.toContainText(reason);
   });
   test('★ 판정이 들어오면 결과가 그려진다 — 등급, 편집본, 그리고 담지 않은 근거 카드는 판정이 실어 온 인용 카드에서 찾는다', async ({ page, context }) => {
+    await blockRealApi(context);
     const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
     const detailCalls: string[] = [];
     await context.route(/\/api\/piece-maker\/v1\/public\/cards\/(T\d+)/, (route) => {
@@ -577,6 +782,7 @@ test.describe('데스크톱', () => {
     await page.click('[data-action="judge"]');
     await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
     await expect(page.locator('[data-part="judge-pending"]')).toHaveText('판정 대기 중…');
+    await expect(page.locator('#piece-maker-judge-help')).toBeVisible();
     await expect(page.locator('[data-part="judge-result"]')).toBeHidden();
 
     // 운영자가 판정을 넣었다. 인용 카드(cited_cards)를 함께 실었다(decisions.md 1-29).
@@ -589,6 +795,8 @@ test.describe('데스크톱', () => {
     await expect(result.locator('[data-part="judge-grade"]')).toHaveAttribute('data-grade', JUDGE_T2.judgement.grade);
     await expect(result.locator('[data-part="judge-edited"] > [data-part="judge-section"]')).toHaveCount(JUDGE_T2.presentation!.sections.length);
     await expect(page.locator('[data-part="judge-state"]')).toContainText('끝났습니다');
+    await expect(page.locator('[data-part="compose"] [data-action="reset"], [data-part="compose"] [data-action="save"]')).toHaveCount(0);
+    await expect(page.locator('#piece-maker-judge-help')).toBeVisible();
     await expect(page.locator('[data-part="judge-pending"]')).toHaveCount(0);
     // 담지 않은 T374 의 제목이 근거 단추에 붙고, 누르면 상세가 열린다 — 카드 상세 API 는 부르지 않았다.
     const t374 = ALL_CARDS.find((card) => card.id === 'T374')!;
@@ -626,22 +834,41 @@ test.describe('데스크톱', () => {
     await again.close();
   });
 
-  test('판정이 실패하면 운영자가 남긴 문구가 나오고, 새 가설을 쓸 수 있다', async ({ page, context }) => {
+  test('판정이 실패하면 실패 배지와 환급 안내만 보이고, 새 가설을 쓸 수 있다', async ({ page, context }, info) => {
+    await blockRealApi(context);
     const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
     await open(page, LAST);
     await writeTheory(page);
     await page.click('[data-action="judge"]');
     await expect(page.locator('[data-part="judge-pending"]')).toBeVisible();
 
-    const item = lore.hypotheses[0];
-    item.judgementStatus = 'FAILED';
-    item.failureMessage = '모델이 답하지 않았습니다';
-    item.judgedAt = new Date().toISOString();
+    failHypothesis(lore, lore.hypotheses[0], '모델이 답하지 않았습니다');
     await waitForJudgementPoll(page);
-    await expect(page.locator('[data-part="judge-state"]')).toContainText('모델이 답하지 않았습니다');
+    await expect(page.locator('[data-part="frozen-tag"]')).toHaveText('판정 실패');
+    await expect(page.locator('[data-part="save-status"]')).toHaveCount(0);
+    await expect(page.locator('[data-part="compose"] [data-action="reset"], [data-part="compose"] [data-action="save"]')).toHaveCount(0);
+    await expect(page.locator('#piece-maker-judge-help')).toBeHidden();
+    await expect(page.locator('[data-part="judge-state"]')).toBeHidden();
+    await expect(page.locator('[data-part="credit-feedback"]')).toHaveText('판정 실패로 사용한 크레딧이 반환되었습니다.');
     await expect(page.locator('[data-part="judge-result"]')).toBeHidden();
     await expect(page.locator('[data-part="judge-pending"]')).toHaveCount(0);
     await expect(page.locator('[data-action="new-draft"]')).toBeVisible();
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    const composeBox = await page.locator('[data-part="compose"]').boundingBox();
+    await page.screenshot({
+      path: info.outputPath('judge-failed-compose.png'), animations: 'disabled',
+      clip: { x: composeBox!.x, y: composeBox!.y, width: composeBox!.width, height: 340 },
+    });
+
+    await page.click('[data-action="new-draft"]');
+    await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'false');
+    await expect(page.locator('#piece-maker-judge-help')).toBeVisible();
+    await expect(page.locator('[data-part="frozen-tag"]')).toHaveCount(0);
+    await expect(page.locator('#piece-maker-claim')).toHaveValue('');
+    await expect(page.locator('#piece-maker-claim')).not.toHaveAttribute('readonly', '');
+    await expect(page.locator('[data-action="reset"]')).toBeVisible();
+    await expect(page.locator('[data-action="save"]')).toBeVisible();
+    await expect(page.locator('[data-part="save-status"]')).toBeVisible();
   });
 
   test('판정 비용이 버튼에 보인다 — 로그인 전에는 잔액이 없다', async ({ page, context }) => {
@@ -684,6 +911,7 @@ test.describe('데스크톱', () => {
   });
 
   test('★ 판정이 실패하면 낸 크레딧이 돌아온다 — 자동 갱신 뒤 잔액이 맡기기 전으로', async ({ page, context }) => {
+    await blockRealApi(context);
     const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
     await open(page, LAST);
     await writeTheory(page);
@@ -693,11 +921,14 @@ test.describe('데스크톱', () => {
     await expect(page.locator('[data-part="judge-pending"]')).toBeVisible();
     failHypothesis(lore, lore.hypotheses[0], '자료 판이 다릅니다');
     await waitForJudgementPoll(page);
-    await expect(page.locator('[data-part="judge-state"]')).toContainText('자료 판이 다릅니다');
+    await expect(page.locator('[data-part="frozen-tag"]')).toHaveText('판정 실패');
+    await expect(page.locator('[data-part="judge-state"]')).toBeHidden();
+    await expect(page.locator('[data-part="credit-feedback"]')).toHaveText('판정 실패로 사용한 크레딧이 반환되었습니다.');
     await expect(page.locator('[data-action="credit-history"]')).toContainText('20크레딧');
   });
 
   test('새 페이지는 맡긴 가설을 다시 묻는다 — 로그인이 없으면 로그인 안내, 가설이 없으면 없다는 안내', async ({ page, context }) => {
+    await blockRealApi(context);
     const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
     await open(page, LAST);
     await writeTheory(page);
@@ -708,6 +939,7 @@ test.describe('데스크톱', () => {
     const loggedOut = await context.newPage();
     await open(loggedOut);
     await expect(loggedOut.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+    await expect(loggedOut.locator('[data-part="compose"] [data-action="reset"], [data-part="compose"] [data-action="save"]')).toHaveCount(0);
     await expect(loggedOut.locator('[data-part="judge-state"]')).toContainText('로그인하면');
     await loggedOut.close();
 
@@ -781,3 +1013,99 @@ test.describe('데스크톱', () => {
     await expect(modal(page).locator('[data-part="my-hypotheses"]')).toContainText('아직 맡긴 가설이 없습니다');
   });
 });
+
+for (const viewport of [
+  { name: 'PC', width: 1200, height: 900, hasTouch: false },
+  { name: '모바일', width: 390, height: 844, hasTouch: true },
+]) {
+  test.describe(`제출 상태 안내 · ${viewport.name}`, () => {
+    test.use({ viewport: { width: viewport.width, height: viewport.height }, hasTouch: viewport.hasTouch });
+
+    test('완료 안내와 상세 행동이 제출 상태에 맞고, 공유 버튼이 하단 폭을 채운다', async ({ page, context }, info) => {
+      await blockRealApi(context);
+      const lore = await mockLore(context, { state: { loggedIn: true, hypotheses: [] } });
+      await open(page, 6);
+      await pick(page, 'T2');
+      const composeTab = page.locator('[data-part="mobile-tabs"] [data-action="compose"]');
+      if (await composeTab.isVisible()) await composeTab.click();
+      await page.fill('#piece-maker-title', '모자 약속과 재회');
+      await page.fill('#piece-maker-claim', '모자를 돌려주는 약속이 두 인물의 재회를 예고한다.');
+      await expect(page.locator('[data-part="save-status"]')).toBeVisible();
+      await pickedCard(page, 'T2').locator('[data-action="open"]').click();
+      await expect(modal(page).locator('[data-action="add"]')).toHaveText('담기 취소');
+      await page.keyboard.press('Escape');
+
+      await page.click('[data-action="judge"]');
+      await expect(page.locator('[data-part="judge-pending"]')).toBeVisible();
+      await expect(page.locator('[data-part="save-status"]')).toHaveCount(0);
+      await expect(page.locator('#piece-maker-judge-help')).toContainText('잠시후에 확인할 수 있어요.');
+      await pickedCard(page, 'T2').locator('[data-action="open"]').click();
+      await expect(modal(page).locator('[data-action="add"]')).toHaveText('이 복선으로 새 가설 쓰기');
+      await page.keyboard.press('Escape');
+
+      const submitted = lore.hypotheses[0];
+      judgeAs(submitted, {
+        grade: 'insufficient', reason: '재회 가능성은 있지만 이후 전개를 더 확인해야 합니다.',
+        support: ['T2'], against: ['T6'], cited_cards: citedCardsFor(['T2', 'T6']),
+      }, null);
+      await waitForJudgementPoll(page);
+      const result = page.locator('[data-part="judge-result"]');
+      await expect(result).toBeVisible();
+      await expect(page.locator('#piece-maker-judge-help')).toContainText('판정 결과는 ‘내 가설’에서 다시 확인할 수 있어요.');
+      await expect(page.locator('#piece-maker-judge-help')).not.toContainText('잠시후');
+      await expect(page.locator('[data-part="save-status"]')).toHaveCount(0);
+      await expect(page.locator('[data-action="reset"], [data-action="save"]')).toHaveCount(0);
+      await expect(page.locator('.compose-footer button')).toHaveCount(1);
+      const footer = await page.locator('.compose-footer').evaluate(el => {
+        const style = getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        const button = el.querySelector('button')!.getBoundingClientRect();
+        return {
+          contentWidth: el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+          buttonWidth: button.width,
+          leftInset: button.left - rect.left - parseFloat(style.borderLeftWidth) - parseFloat(style.paddingLeft),
+          rightInset: rect.right - button.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight),
+        };
+      });
+      expect(Math.abs(footer.contentWidth - footer.buttonWidth)).toBeLessThan(1);
+      expect(Math.abs(footer.leftInset)).toBeLessThan(1);
+      expect(Math.abs(footer.rightInset)).toBeLessThan(1);
+      await info.attach('footer-width', { body: JSON.stringify(footer), contentType: 'application/json' });
+      if (viewport.hasTouch) {
+        await page.locator('[data-part="compose"]').evaluate(el => el.scrollIntoView({ block: 'start', behavior: 'instant' }));
+      } else {
+        await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+      }
+      await page.screenshot({ path: info.outputPath('completed-top.png'), animations: 'disabled' });
+
+      // 제출한 카드와 판정에서 새로 인용한 카드 모두 같은 새 가설 동작을 알린다.
+      await pickedCard(page, 'T2').locator('[data-action="open"]').click();
+      const selectedCta = modal(page).locator('[data-action="add"]');
+      await expect(selectedCta).toHaveText('이 복선으로 새 가설 쓰기');
+      await selectedCta.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: info.outputPath('completed-detail.png'), animations: 'disabled' });
+      await page.keyboard.press('Escape');
+      await result.locator('[data-action="open"][data-card-id="T6"]').click();
+      await expect(modal(page).locator('[data-action="add"]')).toHaveText('이 복선으로 새 가설 쓰기');
+      await modal(page).locator('[data-action="add"]').click();
+      await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'false');
+      expect(await pickedIds(page)).toEqual(['T6']);
+      await expect(page.locator('#piece-maker-title')).toHaveValue('');
+      await expect(page.locator('#piece-maker-claim')).toHaveValue('');
+      await expect(page.locator('[data-part="save-status"]')).toBeVisible();
+      await expect(page.locator('[data-action="reset"]')).toBeVisible();
+      await expect(page.locator('[data-action="save"]')).toBeEnabled();
+      await expect(page.locator('#piece-maker-judge-help')).toContainText('잠시후에 확인할 수 있어요.');
+      expect(lore.hypotheses).toHaveLength(1);
+      expect(submitted.cards.map(card => card.id)).toEqual(['T2']);
+      expect(submitted.title).toBe('모자 약속과 재회');
+
+      await page.locator('[data-part="topbar"] [data-action="saved"]').click();
+      await modal(page).locator(`[data-hypothesis-id="${submitted.id}"] [data-action="open-hypothesis"]`).click();
+      await expect(page.locator('[data-part="compose"]')).toHaveAttribute('data-frozen', 'true');
+      await expect(page.locator('[data-part="save-status"]')).toHaveCount(0);
+      await expect(page.locator('#piece-maker-judge-help')).toContainText('다시 확인할 수 있어요.');
+      expect(await pickedIds(page)).toEqual(['T2']);
+    });
+  });
+}
