@@ -315,9 +315,13 @@ public class HatchService {
         StepContext ctx = new StepContext(petId, pet.getName(), pet.getNote(), version).attempt(attempt);
         ctx.putImage("source", pet.getSourceImageKey());
 
-        RunResult r = runner.run(jobId, ctx,
-                registry.stages(GenKind.HATCH, version),
-                recorder.loadSucceeded(petId, GenKind.HATCH, version));
+        // ★ 그림 줄 대기열에서 부화가 맞춤·심화 뒤에 서지 않게(설계 2-1) — 부화 차례로 돌린다.
+        RunResult r;
+        try (var order = com.lore.zzal.openai.CallPriority.open(com.lore.zzal.openai.CallPriority.HATCH)) {
+            r = runner.run(jobId, ctx,
+                    registry.stages(GenKind.HATCH, version),
+                    recorder.loadSucceeded(petId, GenKind.HATCH, version));
+        }
         if (!r.success()) {
             return r;
         }

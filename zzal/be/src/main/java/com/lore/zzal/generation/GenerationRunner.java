@@ -39,16 +39,42 @@ public class GenerationRunner {
     private final GenerationRecorder recorder;
     private final ZzalAlerts alerts;
 
-    /** 단계에 시간 제한을 걸기 위한 일회용 스레드. 제한을 넘기면 이 스레드를 끊는다. */
-    private final ExecutorService timeoutExecutor = Executors.newCachedThreadPool();
+    /**
+     * 단계가 도는 곳 — 창구의 가상 스레드 실행기(설계 3-8). 예전의 무제한 감시 풀(아무도 닫지 않고
+     * 크기 제한도 없음)을 대신한다. 동시 실행은 스레드 수가 아니라 창구 줄 자리가 막는다.
+     */
+    private final ExecutorService stepExecutor;
+
+    /**
+     * CPU 를 쓰는 후처리(파이썬 자르기)는 동시에 2개까지(설계 3-8). 가상 스레드라도 CPU 일은 코어 수를 넘기면 안 된다.
+     * ★ {@code synchronized} 가 아니라 세마포어 — 가상 스레드 핀 고정을 피한다.
+     */
+    private final java.util.concurrent.Semaphore postprocess = new java.util.concurrent.Semaphore(POSTPROCESS_PERMITS);
+    static final int POSTPROCESS_PERMITS = 2;
+    private static final java.util.Set<String> POSTPROCESS_STEPS = java.util.Set.of(
+            com.lore.zzal.generation.steps.PostProcessStep.NAME,
+            com.lore.zzal.generation.steps.Layer2PostStep.NAME,
+            com.lore.zzal.generation.steps.MotionPostStep.NAME);
 
     /** 검증용 제한 시간(초). 0 이면 단계가 정한 값을 쓴다. 운영에서는 절대 켜지 않는다. */
     @org.springframework.beans.factory.annotation.Value("${app.zzal.generation.limit-override-seconds:0}")
     private int limitOverrideSeconds;
 
+    /** 시험·직접 생성용 — 창구 없이 혼자 쓰는 가상 스레드 실행기. */
     public GenerationRunner(GenerationRecorder recorder, ZzalAlerts alerts) {
+        this(recorder, alerts, (com.lore.zzal.openai.OpenAiGateway) null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public GenerationRunner(GenerationRecorder recorder, ZzalAlerts alerts,
+                            org.springframework.beans.factory.ObjectProvider<com.lore.zzal.openai.OpenAiGateway> gateways) {
+        this(recorder, alerts, gateways.getIfAvailable());
+    }
+
+    public GenerationRunner(GenerationRecorder recorder, ZzalAlerts alerts, com.lore.zzal.openai.OpenAiGateway gateway) {
         this.recorder = recorder;
         this.alerts = alerts;
+        this.stepExecutor = gateway != null ? gateway.executor() : Executors.newVirtualThreadPerTaskExecutor();
     }
 
     /**
@@ -66,10 +92,16 @@ public class GenerationRunner {
      */
     public RunResult run(Long jobId, StepContext ctx, List<List<GenerationStep>> stages,
                          List<GenStepRecord> resume) {
+        boolean[] interrupted = {false};
         try {
-            return bake(jobId, ctx, stages, resume);
+            return bake(jobId, ctx, stages, resume, interrupted);
         } finally {
             alerts.generationFinished(Instant.now());
+            // ★ 바깥 끼어들기(종료 등)를 받았으면 기록을 다 남긴 뒤 표시를 되살린다 — 부르는 쪽이
+            //   "끊겼다"를 알고 새 시도를 시작하지 않게(설계 3-8).
+            if (interrupted[0]) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
@@ -84,7 +116,7 @@ public class GenerationRunner {
      * @param resume 앞선 시도에서 성공한 단계들. 이어받아 건너뛴다
      */
     private RunResult bake(Long jobId, StepContext ctx, List<List<GenerationStep>> stages,
-                           List<GenStepRecord> resume) {
+                           List<GenStepRecord> resume, boolean[] interrupted) {
         String version = ctx.version();
         recorder.markJobRunning(jobId);
 
@@ -118,6 +150,9 @@ public class GenerationRunner {
 
             StageOutcome outcome = runStage(jobId, ctx, todo);
             total = total.add(outcome.cost());
+            if (outcome.outerInterrupted()) {
+                interrupted[0] = true;
+            }
             if (outcome.error() != null) {
                 recorder.failJob(jobId, outcome.error(), total);
                 if (outcome.quotaBlocked()) {
@@ -157,7 +192,7 @@ public class GenerationRunner {
      */
     private record StageOutcome(BigDecimal cost, GenErrorCode error, boolean gridRejected,
                                boolean quotaBlocked, boolean postprocessCrashed, String failedGrid,
-                               String detail) {
+                               String detail, boolean outerInterrupted) {
     }
 
     /**
@@ -175,13 +210,25 @@ public class GenerationRunner {
         for (Pending p : todo) {
             Long stepId = recorder.startStep(jobId, p.seq(), p.step().name());
             int limit = limitOverrideSeconds > 0 ? limitOverrideSeconds : p.step().limitSeconds();
+            // 그림 줄 차례(부화 먼저)는 스레드에 붙어 있어 단계 스레드에서 다시 연다.
+            com.lore.zzal.openai.CallPriority priority = com.lore.zzal.openai.CallPriority.current();
+            boolean cpu = POSTPROCESS_STEPS.contains(p.step().name());
             Callable<StepResult> task = () -> {
-                try(var usage = com.lore.zzal.generation.client.ProviderUsageContext.open(
+                try (var order = com.lore.zzal.openai.CallPriority.open(priority);
+                     var usage = com.lore.zzal.generation.client.ProviderUsageContext.open(
                         "generation_" + p.step().name(), ctx.petId(), jobId, "step-" + stepId, 1)) {
-                    return p.step().run(ctx);
+                    if (!cpu) {
+                        return p.step().run(ctx);
+                    }
+                    postprocess.acquire();
+                    try {
+                        return p.step().run(ctx);
+                    } finally {
+                        postprocess.release();
+                    }
                 }
             };
-            running.add(new Running(p.step(), stepId, timeoutExecutor.submit(task),
+            running.add(new Running(p.step(), stepId, stepExecutor.submit(task),
                     System.nanoTime() + TimeUnit.SECONDS.toNanos(limit)));
         }
         if (running.size() > 1) {
@@ -197,14 +244,35 @@ public class GenerationRunner {
         String failedGrid = null;
         String detail = null;
         List<StepResult> done = new ArrayList<>(running.size());
+        boolean outerInterrupted = false;
 
         for (Running r : running) {
+            if (outerInterrupted) {
+                // 바깥이 이미 끊겼다 — 남은 단계도 끊긴 것으로 적는다(응답을 못 받았으니 비용 0).
+                r.future().cancel(true);
+                recorder.failStep(r.stepId(), GenErrorCode.INTERRUPTED, BigDecimal.ZERO);
+                error = worse(error, GenErrorCode.INTERRUPTED);
+                continue;
+            }
             try {
                 long left = Math.max(0, r.deadlineNanos() - System.nanoTime());
                 StepResult result = r.future().get(left, TimeUnit.NANOSECONDS);
                 recorder.succeedStep(r.stepId(), result);
                 done.add(result);
                 cost = cost.add(result.costUsd());
+            } catch (InterruptedException e) {
+                // ★★ 바깥(부화 스레드)이 끊겼다 — 안쪽 단계도 전부 끊는다(설계 3-8). 안 끊으면 아무도 안 받을
+                //   응답에 돈이 나간다. cancel(true) 가 가상 스레드를 끊고, JDK HttpClient 는 진행 중 요청을 취소한다.
+                outerInterrupted = true;
+                for (Running other : running) {
+                    other.future().cancel(true);
+                }
+                log.warn("끼어들기 — 진행 중 단계를 끊는다 jobId={} step={}", jobId, r.step().name());
+                recorder.failStep(r.stepId(), GenErrorCode.INTERRUPTED, BigDecimal.ZERO);
+                error = worse(error, GenErrorCode.INTERRUPTED);
+                if (detail == null) {
+                    detail = "끼어들기 — " + r.step().name();
+                }
             } catch (TimeoutException e) {
                 r.future().cancel(true);
                 log.warn("시간 초과 — jobId={} step={}", jobId, r.step().name());
@@ -251,7 +319,8 @@ public class GenerationRunner {
                 ctx.putText(result.name(), result.text());
             }
         }
-        return new StageOutcome(cost, error, gridRejected, quotaBlocked, postprocessCrashed, failedGrid, detail);
+        return new StageOutcome(cost, error, gridRejected, quotaBlocked, postprocessCrashed, failedGrid, detail,
+                outerInterrupted);
     }
 
     /**
