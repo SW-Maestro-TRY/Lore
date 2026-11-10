@@ -97,15 +97,6 @@
   height: 34px;
 }
 
-.userEmail {
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
 /* 좁은 화면.
  *
  * 2026-09-20 이전에는 여기서 .nav 를 통째로 숨겼다 — "Zzal/Piece Maker/Webtoon
@@ -148,12 +139,6 @@
     gap: 6px;
   }
 
-  /* 로그인하면 아이디 + 로그아웃이 한 줄에 서게 되는데, 360px 폭에서는 둘 다
-   * 못 들어간다. 없어도 되는 것은 아이디다 — 로그인했다는 사실은 버튼이
-   * "로그아웃" 이라는 것으로 이미 드러난다. */
-  .userEmail {
-    display: none;
-  }
 }
 
 /* 더 좁은 화면 — 크레딧 칩까지 있으면 여기서부턴 확실히 모자란다.

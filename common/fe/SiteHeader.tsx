@@ -26,7 +26,6 @@ export default function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
 
-  /* 웹툰 탭은 헤더에서 **로그인 하나만** 본다. (담당: 하은, #223) */
   const onWebtoon = pathname.startsWith("/webtoon");
 
   /* 크레딧은 계정 것이라 탭과 상관없이 같은 값이다 — 헤더에 두고 어디서나 보이게 한다.
@@ -36,7 +35,7 @@ export default function SiteHeader() {
   const [chargeOpen, setChargeOpen] = useState(false);
 
 
-  const { status, user, isAuthenticated, signOut } = useAuth();
+  const { status, user, isAuthenticated } = useAuth();
 
   useEffect(() => {
     if (!isAuthenticated) { setCredits(null); return; }
@@ -97,36 +96,18 @@ export default function SiteHeader() {
           {status === "loading" ? (
             <span className={styles.authPlaceholder} aria-hidden="true" />
           ) : isAuthenticated ? (
-            /* 웹툰 탭에서는 **이름 하나**다. 눌러서 마이페이지로 가고,
-               로그아웃은 그 안에 있다.
-
-               이름이 곧 그 문인 이유: 헤더에 이름·마이페이지·로그아웃을
-               늘어놓으면 만들던 사람 앞에 나가는 길만 셋이 된다. 그리고
-               로그인한 사람이 자기 이름을 누르는 것은 어디서나 "내 자리로"
-               라는 뜻이라, 라벨을 따로 달지 않아도 읽힌다. */
-            onWebtoon ? (
-              <>
-                {credits != null && (
-                  <button type="button" className={styles.creditChip}
-                          onClick={() => setChargeOpen(true)}
-                          title="크레딧 충전">
-                    ◈ {credits.toLocaleString("ko-KR")}
-                  </button>
-                )}
-                <Link href={MY_PAGE} className={styles.authButton} title={user?.email}>
-                  {displayName}
-                </Link>
-              </>
-            ) : (
-              <>
-                <span className={styles.userEmail} title={user?.email}>
-                  {displayName}
-                </span>
-                <button type="button" className={styles.authButton} onClick={() => void signOut()}>
-                  로그아웃
+            <>
+              {credits != null && (
+                <button type="button" className={styles.creditChip}
+                        onClick={() => setChargeOpen(true)}
+                        title="크레딧 충전">
+                  ◈ {credits.toLocaleString("ko-KR")}
                 </button>
-              </>
-            )
+              )}
+              <Link href={MY_PAGE} className={styles.authButton} title={user?.email}>
+                {displayName}
+              </Link>
+            </>
           ) : (
             <button type="button" className={styles.authButton} onClick={() => setAuthOpen(true)}>
               로그인
