@@ -421,7 +421,6 @@ public class ChatService {
     /** T2 몫 — 튜토리얼 답 뒤의 펫 턴. 보상·호칭·진행 없음. */
     private Answered commitTutorialTurns(ChatTurnCommit c,ZzalPet pet,ZzalChatSession session,ZzalChatTurn user,
             GeneratedLine g,Instant now) {
-        if(metrics!=null) metrics.outcome("chat_user_turn","turn-"+user.getId(),pet.getUserId(),pet.getId(),null,"saved");
         String motion=com.lore.zzal.attendance.CustomChatActions.select(g.motion(),c.actions());
         var reply=turns.save(ZzalChatTurn.pet(session,user.getIdx()+1,c.plan().type(),g.text(),motion,g.generator(),g.failReason(),null,g.outcome().code(),g.latencyMs(),now));
         reply.recordMemoryContext(c.ctx().factMemories().stream().map(com.lore.zzal.chat.memory.facts.FactView::id).toList());
@@ -438,9 +437,19 @@ public class ChatService {
     private Answered finishInline(Live live) {
         ChatTurnCommit c = live.commit();
         GeneratedLine g = lines.generate(c.ctx(), c.userId());
-        return c.tutorial()
+        Answered a = c.tutorial()
                 ? commitTutorialTurns(c, live.pet(), live.session(), live.userTurn(), g, live.now())
                 : commitRowTurns(c, live.pet(), live.session(), live.userTurn(), live.firstAnswerCounted(), g, live.now());
+        recordUserTurnSaved(c, live.userTurn().getId());   // 이 트랜잭션이 커밋된 뒤에 나간다(예전 그대로)
+        return a;
+    }
+
+    /**
+     * 사용자 턴 저장 결과 기록(zzal_server_chat_user_turn). 트랜잭션 안에서 부르면 커밋 뒤에 REQUIRES_NEW 로 쓴다 —
+     * 그때 커밋한 연결을 아직 쥐고 있으므로 연결이 하나 더 든다. 나눠 부르는 답하기는 T2 가 끝난 뒤 트랜잭션 밖에서 부른다.
+     */
+    public void recordUserTurnSaved(ChatTurnCommit c, long userTurnId) {
+        if(metrics!=null) metrics.outcome("chat_user_turn","turn-"+userTurnId,c.userId(),c.petId(),null,"saved");
     }
 
     /** T1 이 만든 것 — 값({@link ChatTurnCommit})과, 한 트랜잭션 경로만 이어 쓰는 엔티티. */
@@ -464,6 +473,15 @@ public class ChatService {
      * </ol>
      */
     public Answered commitAnswer(ChatTurnCommit c, GeneratedLine g, Instant completedAt) {
+        return commitAnswer(c, g, completedAt, id -> recordUserTurnSaved(c, id));
+    }
+
+    /**
+     * {@link #commitAnswer(ChatTurnCommit, GeneratedLine, Instant)} 와 같고, 사용자 턴 결과 기록은 하지 않고 저장한 턴 id 만
+     * 넘긴다. 부르는 쪽이 T2 를 끝낸 뒤 트랜잭션 밖에서 {@link #recordUserTurnSaved} 를 부른다(커밋 직후 연결 2개를 막으려고).
+     */
+    public Answered commitAnswer(ChatTurnCommit c, GeneratedLine g, Instant completedAt,
+                                 java.util.function.LongConsumer userTurnSaved) {
         if (c.slot() != ChatSlot.CONTINUOUS) throw new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE);
         ZzalPet pet = petService.refresh(c.userId(), c.petId(), completedAt);
         if (!pet.isAlive()) throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
@@ -480,9 +498,11 @@ public class ChatService {
         int userIdx = prev == null ? 0 : prev.getIdx() + 1;
         QuestionItem answering = !c.tutorial() && prev != null && prev.isPet() ? prev.getQuestionItem() : null;
         ZzalChatTurn userTurn = turns.save(ZzalChatTurn.user(session, userIdx, c.text(), answering, now));
-        return c.tutorial()
+        Answered a = c.tutorial()
                 ? commitTutorialTurns(c, pet, session, userTurn, g, now)
                 : commitRowTurns(c, pet, session, userTurn, false, g, now);
+        userTurnSaved.accept(userTurn.getId());
+        return a;
     }
 
     /** T1 몫 — 사용자 턴을 넣고 차례를 센 뒤 LLM 문맥을 만든다. 나눠 부를 때는 호출자가 롤백한다. */
@@ -528,7 +548,6 @@ public class ChatService {
     /** T2 몫 — 사용자 턴 뒤의 보상(판당 1회)·호칭·펫 턴. 보상은 이 시점의 펫·판 상태로 계산한다. */
     private Answered commitRowTurns(ChatTurnCommit c, ZzalPet pet, ZzalChatSession session, ZzalChatTurn userTurn,
                                     boolean firstAnswerCounted, GeneratedLine g, Instant now) {
-        if(metrics!=null) metrics.outcome("chat_user_turn","turn-"+userTurn.getId(),pet.getUserId(),pet.getId(),null,"saved");
         String text = c.text();
         boolean continuous = session.getSlot() == ChatSlot.CONTINUOUS;
         boolean firstAnswer = firstAnswerCounted;

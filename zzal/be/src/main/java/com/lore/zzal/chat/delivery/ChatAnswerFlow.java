@@ -125,7 +125,13 @@ public class ChatAnswerFlow {
             }
             try {
                 GeneratedLine g = chat.generateReply(p.commit());          // ── 트랜잭션 밖 ──
-                return inTransaction(status -> save(userId, petId, slot, request, now, started, p, g));
+                long[] savedTurn = {0};
+                ChatResponses.Answered out = inTransaction(status -> save(userId, petId, slot, request, now, started,
+                        p, g, id -> savedTurn[0] = id));
+                // 결과 기록은 T2 가 커밋되고 연결을 돌려준 뒤에(트랜잭션 안이면 커밋 직후 연결이 하나 더 든다).
+                // T2 가 거절·실패하면 여기 오지 않으므로 기록하지 않는다(예전 의미 그대로).
+                if (savedTurn[0] != 0) chat.recordUserTurnSaved(p.commit(), savedTurn[0]);
+                return out;
             } finally {
                 inFlight.remove(p.key(), p.mine());
                 p.mine().done().countDown();
@@ -177,7 +183,8 @@ public class ChatAnswerFlow {
     // ── T2 ───────────────────────────────────────────────────────────────
 
     private ChatResponses.Answered save(Long userId, Long petId, ChatSlot slot, ChatRequests.Answer request,
-                                        Instant now, long started, Prepared p, GeneratedLine g) {
+                                        Instant now, long started, Prepared p, GeneratedLine g,
+                                        java.util.function.LongConsumer userTurnSaved) {
         var locked = pets.findByIdForUpdate(petId).filter(x -> x.isOwnedBy(userId))
                 .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_PET_NOT_FOUND));
         // A request accepted just before the deadline may finish later. Preserve that one reply,
@@ -189,7 +196,7 @@ public class ChatAnswerFlow {
             var previous = deliveries.findByPetIdAndRequestId(petId, request.requestId());
             if (previous.isPresent()) return replay(previous.get(), userId, petId, slot, request, completedAt);
         }
-        ChatService.Answered a = chat.commitAnswer(p.commit(), g, completedAt);
+        ChatService.Answered a = chat.commitAnswer(p.commit(), g, completedAt, userTurnSaved);
         PetResponses.Detail pet = PetResponses.Detail.from(a.action().pet(), null, a.action().pet().now(completedAt),
                 catalog, petService.motionRows(petId), a.action().justUnlocked(), false,
                 petService.scenes(petId), petService.pieces(petId));
