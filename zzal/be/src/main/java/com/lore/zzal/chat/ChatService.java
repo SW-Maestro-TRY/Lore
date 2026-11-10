@@ -111,6 +111,8 @@ public class ChatService {
     private final LineChain lines;
     private final int maxRounds;
     @Autowired private com.lore.zzal.chat.delivery.ChatRewardLedger rewardLedger;
+    /** T2 의 조건부 갱신 뒤 판을 다시 읽는다. 손으로 만든 서비스(단위 시험)에는 없다. */
+    @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager entityManager;
     @Autowired private com.lore.zzal.attendance.CustomMotionOwnershipService customMotionOwnership;
 
     /** BABY 첫 턴 실패 뒤 다시 부르기까지 기다리는 시간(#709). 이 안의 조회는 모델을 부르지 않는다. */
@@ -288,12 +290,22 @@ public class ChatService {
 
     @Transactional(noRollbackFor = BusinessException.class)
     public Answered answerContinuousLegacy(Long userId, Long petId, String text, Instant realNow) {
+        return finishInline(prepareLegacy(userId, petId, text, realNow));
+    }
+
+    /** T1 — 옛 클라이언트(요청 id 없음). 차례는 지금 판의 차례로 잡고 T2 에서 조건부 갱신만 한다(설계 4-1). */
+    public ChatTurnCommit prepareLegacyAnswer(Long userId, Long petId, String text, Instant realNow) {
+        return prepareLegacy(userId, petId, text, realNow).commit();
+    }
+
+    private Live prepareLegacy(Long userId, Long petId, String text, Instant realNow) {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         if (!continuousChatAvailable(pet)) throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
         var session = sessions.findByPetIdAndDayOfAndSlot(petId, ChatSessionKeys.hatchDay(pet), ChatSlot.CONTINUOUS)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE));
         if (!session.isOpen(pet.now(realNow))) throw new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE);
-        return answerRow(userId, pet, new Row(ChatSlot.CONTINUOUS, session, recentTurns(session), null), text, pet.now(realNow));
+        return prepareRow(userId, pet, new Row(ChatSlot.CONTINUOUS, session, recentTurns(session), null), text,
+                pet.now(realNow), realNow, session.getRoundCount());
     }
 
     /**
@@ -310,13 +322,24 @@ public class ChatService {
                 .filter(r -> r.slot() == slot && r.session() != null && r.session().isOpen(now))
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_CHAT_SLOT_CLOSED));
-        return answerRow(userId, pet, row, text, now);
+        return finishInline(prepareRow(userId, pet, row, text, now, realNow, row.session().getRoundCount()));
     }
 
     /** 식별된 판에만 답한다. 오래된 요청이 조회 부작용으로 새 판/모델 호출을 만들지 않는다. */
     @Transactional(noRollbackFor = BusinessException.class)
     public Answered answerTargeted(Long userId, Long petId, ChatSlot slot, String text,
                                    Long sessionId, int expectedRound, Instant realNow) {
+        return finishInline(prepareTargeted(userId, petId, slot, text, sessionId, expectedRound, realNow));
+    }
+
+    /** T1 — 식별된 판·차례 검사와 LLM 문맥. 호출자의 트랜잭션 안에서 부르고, 호출자가 롤백한다(설계 4-1). */
+    public ChatTurnCommit prepareTargetedAnswer(Long userId, Long petId, ChatSlot slot, String text,
+                                                Long sessionId, int expectedRound, Instant realNow) {
+        return prepareTargeted(userId, petId, slot, text, sessionId, expectedRound, realNow).commit();
+    }
+
+    private Live prepareTargeted(Long userId, Long petId, ChatSlot slot, String text,
+                                 Long sessionId, int expectedRound, Instant realNow) {
         ZzalPet pet = petService.awake(userId, petId, realNow);
         if (!pet.isFirstMeetingComplete() || (slot == ChatSlot.CONTINUOUS && !continuousChatAvailable(pet))) throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
         Instant now = pet.now(realNow);
@@ -330,7 +353,7 @@ public class ChatService {
         if (!currentWindow || !session.isOpen(now) || session.getRoundCount() != expectedRound) {
             throw new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE);
         }
-        return answerRow(userId, pet, new Row(slot, session, ts, null), text, now);
+        return prepareRow(userId, pet, new Row(slot, session, ts, null), text, now, realNow, expectedRound);
     }
 
     /** Discovery has a durable stage row, but deliberately no chat turn before the existing greeting idx0. */
@@ -360,6 +383,17 @@ public class ChatService {
     /** Existing delivery lock owns idempotency. Question-only: no rewards, care cursor or intro advancement. */
     public Answered answerTutorial(Long userId,Long petId,String text,Long sessionId,int expectedRound,
             com.lore.zzal.chat.dto.ChatRequests.Answer.Tutorial tutorial,Instant realNow) {
+        return finishInline(prepareTutorial(userId,petId,text,sessionId,expectedRound,tutorial,realNow));
+    }
+
+    /** T1 — 튜토리얼 질문 답의 검사와 LLM 문맥. 호출자가 롤백한다(설계 4-1). */
+    public ChatTurnCommit prepareTutorialAnswer(Long userId,Long petId,String text,Long sessionId,int expectedRound,
+            com.lore.zzal.chat.dto.ChatRequests.Answer.Tutorial tutorial,Instant realNow) {
+        return prepareTutorial(userId,petId,text,sessionId,expectedRound,tutorial,realNow).commit();
+    }
+
+    private Live prepareTutorial(Long userId,Long petId,String text,Long sessionId,int expectedRound,
+            com.lore.zzal.chat.dto.ChatRequests.Answer.Tutorial tutorial,Instant realNow) {
         if(tutorial==null || tutorial.answerType()==null || tutorial.step()==null ||
            !(tutorial.step()==com.lore.zzal.chat.prompt.ConversationScene.Step.FEED || tutorial.step()==com.lore.zzal.chat.prompt.ConversationScene.Step.GAME))
             throw new BusinessException(ErrorCode.ZZAL_TUTORIAL_STEP_MISMATCH);
@@ -372,40 +406,132 @@ public class ChatService {
             .orElseThrow(()->new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE));
         if(!session.isOpen(now)||session.getRoundCount()!=expectedRound)throw new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE);
         var previous=recentTurns(session);int idx=previous.isEmpty()?0:previous.getLast().getIdx()+1;
+        // ★ 지시문의 대화 기록은 DB 턴에서 온다 — 지금과 같은 문맥을 만들려고 T1 에서도 사용자 턴을 넣는다(T1 은 롤백).
         var user=turns.save(ZzalChatTurn.user(session,idx,text,null,now));
-        if(metrics!=null) metrics.outcome("chat_user_turn","turn-"+user.getId(),pet.getUserId(),pet.getId(),null,"saved");
         session.countUserTurn(text,false);
         var options=com.lore.zzal.attendance.CustomChatActions.allowed(customMotionOwnership==null?List.of():customMotionOwnership.owned(userId,petId));
         var plan=new TurnPlan(TurnType.CONTINUE,session.getRoundCount()+1,false,null,true,ChatSlot.CONTINUOUS);
         var ctx=withFacts(new ChatContext(petId,sheets.build(pet),PetState.of(pet,now),session.getKind(),plan,null,
              history(pet,session,now),List.of()).withActionOptions(options).withScene(new com.lore.zzal.chat.prompt.ConversationScene(
              com.lore.zzal.chat.prompt.ConversationScene.Phase.TUTORIAL,tutorial.step())),text);
-        var g=lines.generate(ctx,userId);
-        String motion=com.lore.zzal.attendance.CustomChatActions.select(g.motion(),options);
-        var reply=turns.save(ZzalChatTurn.pet(session,idx+1,plan.type(),g.text(),motion,g.generator(),g.failReason(),null,g.outcome().code(),g.latencyMs(),now));
-        reply.recordMemoryContext(ctx.factMemories().stream().map(com.lore.zzal.chat.memory.facts.FactView::id).toList());
+        var commit=new ChatTurnCommit(true,userId,petId,session.getId(),ChatSlot.CONTINUOUS,expectedRound,text,ctx,plan,options,realNow);
+        return new Live(commit,pet,session,user,false,now);
+    }
+
+    /** T2 몫 — 튜토리얼 답 뒤의 펫 턴. 보상·호칭·진행 없음. */
+    private Answered commitTutorialTurns(ChatTurnCommit c,ZzalPet pet,ZzalChatSession session,ZzalChatTurn user,
+            GeneratedLine g,Instant now) {
+        if(metrics!=null) metrics.outcome("chat_user_turn","turn-"+user.getId(),pet.getUserId(),pet.getId(),null,"saved");
+        String motion=com.lore.zzal.attendance.CustomChatActions.select(g.motion(),c.actions());
+        var reply=turns.save(ZzalChatTurn.pet(session,user.getIdx()+1,c.plan().type(),g.text(),motion,g.generator(),g.failReason(),null,g.outcome().code(),g.latencyMs(),now));
+        reply.recordMemoryContext(c.ctx().factMemories().stream().map(com.lore.zzal.chat.memory.facts.FactView::id).toList());
         session.notePetTurn(g.generator(),g.costUsd());
-        memory.remember(petId,user);
-        if(memoryCapture!=null)memoryCapture.queue(petId,user,reply,g.extract().memoryDeltas(),ctx.factMemories(),now);
+        memory.remember(pet.getId(),user);
+        if(memoryCapture!=null)memoryCapture.queue(pet.getId(),user,reply,g.extract().memoryDeltas(),c.ctx().factMemories(),now);
         return new Answered(new PetService.Action(pet,List.of()),g.text(),motion,SessionView.of(session,maxRounds),List.of(TurnView.of(user),TurnView.of(reply)));
     }
 
-    private Answered answerRow(Long userId, ZzalPet pet, Row row, String text, Instant now) {
+    /**
+     * 한 트랜잭션으로 답하기(옛 경로·단위 시험) — T1 몫을 그대로 두고 LLM 을 부른 뒤 T2 몫을 잇는다.
+     * HTTP 답하기는 {@code ChatAnswerFlow} 가 이것을 T1/밖/T2 로 나눠 부른다.
+     */
+    private Answered finishInline(Live live) {
+        ChatTurnCommit c = live.commit();
+        GeneratedLine g = lines.generate(c.ctx(), c.userId());
+        return c.tutorial()
+                ? commitTutorialTurns(c, live.pet(), live.session(), live.userTurn(), g, live.now())
+                : commitRowTurns(c, live.pet(), live.session(), live.userTurn(), live.firstAnswerCounted(), g, live.now());
+    }
+
+    /** T1 이 만든 것 — 값({@link ChatTurnCommit})과, 한 트랜잭션 경로만 이어 쓰는 엔티티. */
+    private record Live(ChatTurnCommit commit, ZzalPet pet, ZzalChatSession session, ZzalChatTurn userTurn,
+                        boolean firstAnswerCounted, Instant now) {
+    }
+
+    /** 바깥(트랜잭션 밖) — 대사 급한 줄의 LLM 호출. 연결·펫 잠금을 쥐지 않은 채 부른다(설계 4-1). */
+    public GeneratedLine generateReply(ChatTurnCommit c) {
+        return lines.generate(c.ctx(), c.userId());
+    }
+
+    /**
+     * T2 — 호출자가 연 짧은 트랜잭션 안에서 펫을 다시 잠그고 저장한다(설계 4-1).
+     *
+     * <ol>
+     *   <li>펫을 잠그고 정산한다(첫 밤 유예 중이면 끝난 시각으로). ★ T1 뒤 잠들었거나 여행을 떠났어도 받아들인 답의 대사는 저장한다
+     *       (첫 밤 마감 직전 요청과 같은 정신). 보상은 이 시점의 상태로 다시 계산한다</li>
+     *   <li>차례 선점 — {@code round_count} 를 조건부로 한 칸 올린다. 0행이면 다른 답이 먼저 저장했다(STALE)</li>
+     *   <li>사용자 턴·펫 턴·보상·호칭·세션 비용. 기억 캡처 작업은 이 트랜잭션에 함께 넣고, 처리는 커밋 뒤에 돈다</li>
+     * </ol>
+     */
+    public Answered commitAnswer(ChatTurnCommit c, GeneratedLine g, Instant completedAt) {
+        if (c.slot() != ChatSlot.CONTINUOUS) throw new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE);
+        ZzalPet pet = petService.refresh(c.userId(), c.petId(), completedAt);
+        if (!pet.isAlive()) throw new BusinessException(ErrorCode.ZZAL_PET_NOT_ALIVE);
+        Instant now = pet.now(c.realNow());
+        String lastLine = c.text() == null ? null : (c.text().length() > 40 ? c.text().substring(0, 40) : c.text());
+        if (sessions.advanceRound(c.sessionId(), c.petId(), c.slot(), c.expectedRound(), lastLine, now) == 0) {
+            throw new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE);
+        }
+        ZzalChatSession session = sessions.findById(c.sessionId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_CHAT_SESSION_STALE));
+        if (entityManager != null) entityManager.refresh(session);   // 조건부 갱신은 영속성 컨텍스트를 거치지 않는다
+        List<ZzalChatTurn> ts = recentTurns(session);
+        ZzalChatTurn prev = ts.isEmpty() ? null : ts.getLast();
+        int userIdx = prev == null ? 0 : prev.getIdx() + 1;
+        QuestionItem answering = !c.tutorial() && prev != null && prev.isPet() ? prev.getQuestionItem() : null;
+        ZzalChatTurn userTurn = turns.save(ZzalChatTurn.user(session, userIdx, c.text(), answering, now));
+        return c.tutorial()
+                ? commitTutorialTurns(c, pet, session, userTurn, g, now)
+                : commitRowTurns(c, pet, session, userTurn, false, g, now);
+    }
+
+    /** T1 몫 — 사용자 턴을 넣고 차례를 센 뒤 LLM 문맥을 만든다. 나눠 부를 때는 호출자가 롤백한다. */
+    private Live prepareRow(Long userId, ZzalPet pet, Row row, String text, Instant now, Instant realNow,
+                            int expectedRound) {
         ZzalChatSession session = row.session();
         List<ZzalChatTurn> sessionTurns = new ArrayList<>(row.turns());
 
         // ── 사용자 턴 ──
         // ★ 사용자가 답하는 항목은 <b>바로 앞 턴</b>이 펫 턴이고 그 턴이 실제로 물었을 때만(question_item 은
         //   물음표가 있는 대사에만 적힌다 — 아래 asked()). 폴백이 안 물은 항목을 소비하던 결함 수정.
+        // ★ 지시문의 대화 기록(history)은 DB 턴에서 온다 — 지금과 같은 문맥을 만들려고 T1 에서도 넣는다(T1 은 롤백).
         ZzalChatTurn prev = sessionTurns.isEmpty() ? null : sessionTurns.getLast();
         QuestionItem answering = prev != null && prev.isPet() ? prev.getQuestionItem() : null;
         int userIdx = session.getSlot() == ChatSlot.CONTINUOUS
                 ? (prev == null ? 0 : prev.getIdx() + 1) : sessionTurns.size();
         ZzalChatTurn userTurn = turns.save(ZzalChatTurn.user(session, userIdx, text, answering, now));
-        if(metrics!=null) metrics.outcome("chat_user_turn","turn-"+userTurn.getId(),pet.getUserId(),pet.getId(),null,"saved");
         sessionTurns.add(userTurn);
         boolean continuous = session.getSlot() == ChatSlot.CONTINUOUS;
         boolean firstAnswer = session.countUserTurn(text, !continuous);
+        // ── 호칭(#709) — 분명한 변경 요청이면 먼저 펫 칸에 둔다(이번 대사가 바로 부르게). 저장은 T2 가 다시 한다.
+        String correction = CallMeExtractor.explicitRequest(text);
+        if (correction != null) pet.rememberExplicitCallMe(correction);
+        var allowedActions=com.lore.zzal.attendance.CustomChatActions.allowed(customMotionOwnership==null?List.of():customMotionOwnership.owned(userId,pet.getId()));
+        List<String> motions=allowedActions.stream().map(ChatContext.ActionOption::id).toList();
+
+        // ── 다음 펫 턴의 계획과 문맥 ──
+        PersonaSheet sheet = sheets.build(pet);
+        int petTurnNo = continuous ? session.getRoundCount() + 1
+                : (int) sessionTurns.stream().filter(ZzalChatTurn::isPet).count() + 1;
+        boolean itemAsked = sessionTurns.stream().anyMatch(t -> t.isPet() && t.getQuestionItem() != null);
+        TurnPlan plan = TurnPlanner.next(session.getRoundCount(), maxRounds, petTurnNo, text, itemAsked,
+                answeredItems(pet, sheet), session.getSlot());
+        ChatContext ctx = new ChatContext(pet.getId(), sheet, PetState.of(pet, now), session.getKind(), plan,
+                answering, history(pet, session, now), motions);
+        ctx=ctx.withActionOptions(allowedActions);
+        ctx=withFacts(ctx,text);
+        var commit = new ChatTurnCommit(false, userId, pet.getId(), session.getId(), session.getSlot(), expectedRound,
+                text, ctx, plan, allowedActions, realNow);
+        return new Live(commit, pet, session, userTurn, firstAnswer, now);
+    }
+
+    /** T2 몫 — 사용자 턴 뒤의 보상(판당 1회)·호칭·펫 턴. 보상은 이 시점의 펫·판 상태로 계산한다. */
+    private Answered commitRowTurns(ChatTurnCommit c, ZzalPet pet, ZzalChatSession session, ZzalChatTurn userTurn,
+                                    boolean firstAnswerCounted, GeneratedLine g, Instant now) {
+        if(metrics!=null) metrics.outcome("chat_user_turn","turn-"+userTurn.getId(),pet.getUserId(),pet.getId(),null,"saved");
+        String text = c.text();
+        boolean continuous = session.getSlot() == ChatSlot.CONTINUOUS;
+        boolean firstAnswer = firstAnswerCounted;
         if (continuous) {
             firstAnswer = rewardLedger.claim(pet, session, now);
             if (firstAnswer) session.noteReward();
@@ -430,26 +556,15 @@ public class ChatService {
                     pieceService.count(pet, com.lore.zzal.piece.PieceEvent.CHAT);
                 })
                 : new PetService.Action(pet, List.of());
-        var allowedActions=com.lore.zzal.attendance.CustomChatActions.allowed(customMotionOwnership==null?List.of():customMotionOwnership.owned(userId,pet.getId()));
-        List<String> motions=allowedActions.stream().map(ChatContext.ActionOption::id).toList();
 
         // ── 다음 펫 턴 ──
-        PersonaSheet sheet = sheets.build(pet);
-        int petTurnNo = continuous ? session.getRoundCount() + 1
-                : (int) sessionTurns.stream().filter(ZzalChatTurn::isPet).count() + 1;
-        boolean itemAsked = sessionTurns.stream().anyMatch(t -> t.isPet() && t.getQuestionItem() != null);
-        TurnPlan plan = TurnPlanner.next(session.getRoundCount(), maxRounds, petTurnNo, text, itemAsked,
-                answeredItems(pet, sheet), session.getSlot());
-        ChatContext ctx = new ChatContext(pet.getId(), sheet, PetState.of(pet, now), session.getKind(), plan,
-                answering, history(pet, session, now), motions);
-        ctx=ctx.withActionOptions(allowedActions);
-        ctx=withFacts(ctx,text);
-        GeneratedLine g = lines.generate(ctx, userId);
+        TurnPlan plan = c.plan();
+        ChatContext ctx = c.ctx();
         String modelCall = settleCallMe(pet, callOpen, callBefore, callCode, g.extract().callMe());
         userTurn.recordRead(callCode, modelCall, g.extract().userSaid(),
                 TurnPlanner.userAsked(text) || g.extract().askedBack());
-        String motion = com.lore.zzal.attendance.CustomChatActions.select(g.motion(),allowedActions);
-        ZzalChatTurn petTurn = turns.save(ZzalChatTurn.pet(session, userIdx + 1, plan.type(), g.text(), motion,
+        String motion = com.lore.zzal.attendance.CustomChatActions.select(g.motion(),c.actions());
+        ZzalChatTurn petTurn = turns.save(ZzalChatTurn.pet(session, userTurn.getIdx() + 1, plan.type(), g.text(), motion,
                 g.generator(), g.failReason(), asked(plan, g.text()), g.outcome().code(), g.latencyMs(), now));
         petTurn.recordMemoryContext(ctx.factMemories().stream().map(com.lore.zzal.chat.memory.facts.FactView::id).toList());
         session.notePetTurn(g.generator(), g.costUsd());
@@ -462,6 +577,7 @@ public class ChatService {
         if (java.util.Set.of("ok", "retried_ok", "truncated").contains(g.outcome().code()))
             pet.advanceFirstIntro(com.lore.zzal.pet.FirstIntro.Step.CHAT);
         memory.remember(pet.getId(), userTurn);
+        // 기억 캡처 작업 행은 턴과 같은 트랜잭션에 넣는다. 추출은 커밋 뒤(AFTER_COMMIT 리스너)에만 돈다.
         if(memoryCapture!=null) memoryCapture.queue(pet.getId(),userTurn,petTurn,g.extract().memoryDeltas(),ctx.factMemories(),now);
         return new Answered(action, g.text(), motion, SessionView.of(session, maxRounds),
                 List.of(TurnView.of(userTurn), TurnView.of(petTurn)));

@@ -28,6 +28,9 @@ public class ChatDeliveryService {
     private com.lore.zzal.chat.session.ZzalChatTurnRepository turns;
     @org.springframework.beans.factory.annotation.Autowired
     private com.lore.zzal.chat.ZzalChatCallRepository legacyCalls;
+    /** 답하기의 T1/밖/T2(설계 4-1). 손으로 만든 서비스(단위 시험)에는 없어 아래 한 덩어리 경로를 쓴다. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private ChatAnswerFlow flow;
 
     public ChatDeliveryService(ChatService chat, ZzalPetRepository pets, ZzalChatDeliveryRepository deliveries,
                                PetService petService, MotionCatalog catalog, JsonMapper json) {
@@ -84,9 +87,19 @@ public class ChatDeliveryService {
         return java.util.List.copyOf(result);
     }
 
-    @Transactional(noRollbackFor = BusinessException.class)
+    /**
+     * 답하기. LLM 을 기다리는 동안 DB 연결과 펫 잠금을 쥐지 않도록 {@link ChatAnswerFlow} 가 짧은 트랜잭션 둘로
+     * 나눠 처리한다. 그래서 이 메서드에는 트랜잭션이 없다(있으면 LLM 대기 내내 연결을 다시 쥔다).
+     */
     public ChatResponses.Answered answer(Long userId, Long petId, ChatSlot slot, ChatRequests.Answer request,
                                         Instant now) {
+        if (flow != null) return flow.answer(userId, petId, slot, request, now);
+        return answerInOneTransaction(userId, petId, slot, request, now);
+    }
+
+    /** 예전 한 덩어리 경로 — 스프링 밖에서 손으로 만든 서비스(단위 시험)만 쓴다. 부르는 쪽 트랜잭션 안에서 돈다. */
+    private ChatResponses.Answered answerInOneTransaction(Long userId, Long petId, ChatSlot slot,
+                                                          ChatRequests.Answer request, Instant now) {
         // 같은 펫의 조회/답과 같은 잠금. 소유권은 재전송에서도 검사하고 다른 사용자의 응답을 내주지 않는다.
         long started = System.nanoTime();
         var locked = pets.findByIdForUpdate(petId).filter(p -> p.isOwnedBy(userId))
