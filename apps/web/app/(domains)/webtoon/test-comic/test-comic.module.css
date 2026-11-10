@@ -1,0 +1,30 @@
+.page{min-height:100vh;background:#0a1320;color:#f3f2ef;padding:42px 18px 100px;font-family:var(--font-ui,system-ui,sans-serif)}
+.shell{max-width:760px;margin:0 auto}
+.heading{margin:0 0 38px}.heading h1{font-family:MaruBuri,serif;font-size:clamp(32px,6vw,54px);letter-spacing:-.035em;margin:0 0 12px}.heading p{color:#a5b1c0;font-size:16px;line-height:1.6;margin:0}
+.panel{border:1px solid #ffffff26;background:#101c2a;border-radius:18px;padding:clamp(20px,4vw,36px);margin:0 0 24px;box-shadow:0 16px 40px #0003}
+.panel h2{font-family:MaruBuri,serif;font-size:24px;margin:0 0 10px}.panel p{color:#b6c3d0;line-height:1.6;margin:0 0 24px}
+.panel label{display:block;font-size:14px;font-weight:650;margin:22px 0 9px}
+.panel input:not([type=file]),.panel textarea,.panel select{width:100%;box-sizing:border-box;border:1px solid #ffffff45;border-radius:10px;background:#0a1320;color:#f3f2ef;padding:13px 14px;font:inherit;line-height:1.5}
+.panel input[type=file]{display:block;width:100%;box-sizing:border-box;border:1px dashed #ffffff55;border-radius:10px;padding:16px;color:#cbd4de;background:#0a1320}
+.panel input:focus-visible,.panel textarea:focus-visible,.panel select:focus-visible,.panel button:focus-visible,.download:focus-visible{outline:2px solid #e6a393;outline-offset:3px}
+.panel textarea{resize:vertical}.panel button,.download{background:#e6a393;color:#101925;border:0;border-radius:10px;padding:13px 22px;font:inherit;font-weight:750;cursor:pointer;display:inline-block;text-decoration:none;margin-top:23px}
+.panel button:hover,.download:hover{background:#f3bcad}.panel button:disabled{opacity:.55;cursor:wait}
+.unlock{display:flex;gap:10px}.unlock input{flex:1;min-width:0}.unlock button{margin:0}
+.photos,.fields{display:grid;grid-template-columns:1fr 1fr;gap:0 20px}.fields>div:first-child,.fields>div:nth-child(2),.fields>div:nth-child(3),.fields>div:nth-child(4){grid-column:span 1}
+.count{font-size:13px;margin:8px 0 0!important}.fine{font-size:13px;margin:16px 0 0!important}.error{color:#ffb7ac;background:#792c2c55;border:1px solid #ffb7ac66;border-radius:10px;padding:14px}
+.comic{max-width:700px;margin:24px auto}.comic img{display:block;width:100%;height:auto}.sheet{display:block;max-width:100%;height:auto;margin:16px auto}.panel details{margin-top:20px}.panel details summary{cursor:pointer;color:#e6a393}
+@media(max-width:600px){.page{padding:30px 14px 80px}.photos,.fields{grid-template-columns:1fr}.unlock{flex-direction:column}.panel button{width:100%}}
+.plan{margin:0 0 8px;padding-left:20px;color:#cbd4de;line-height:1.8}.warn{color:#ffcf8a}
+.sheets{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}.sheets figure{margin:0}.sheets figcaption{color:#a5b1c0;font-size:13px;margin-top:6px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row button{margin-top:16px}
+.panel button.ghost,.ghost{background:transparent;color:#e6a393;border:1px solid #e6a39388;padding:9px 14px;margin-top:10px;font-weight:650}
+.panel button.ghost:hover{background:#e6a3931a}
+.tabs{display:flex;gap:8px;margin:26px 0 0;flex-wrap:wrap}.panel button.tab,.panel button.tabOn{margin:0;padding:9px 18px}.panel button.tab{background:#0a1320;color:#cbd4de;border:1px solid #ffffff33}
+.pageBox{margin:0 0 14px}.wait{display:flex;align-items:center;justify-content:center;min-height:160px;border:1px dashed #ffffff33;border-radius:10px;color:#a5b1c0;font-size:14px}
+.redraw{border:1px solid #ffffff26;border-radius:12px;padding:4px 16px 16px;margin-top:10px}.redraw label{margin-top:12px}
+.restart{background:transparent;border:0;color:#a5b1c0;text-decoration:underline;cursor:pointer;font:inherit;padding:8px 0}
+@media(max-width:600px){.sheets{grid-template-columns:1fr}}
+.sub{font-family:MaruBuri,serif;font-size:18px;margin:28px 0 6px}
+.person{border:1px solid #ffffff26;border-radius:12px;padding:12px 14px 14px;margin:12px 0}.person label{margin-top:10px}
+.personHead{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}.personHead input{flex:1 1 160px;min-width:0}.personHead select{flex:0 0 auto;width:auto}
+.personHead button{margin-top:0}.badge{font-size:12px;color:#9be3b5;border:1px solid #9be3b566;border-radius:999px;padding:3px 9px}
