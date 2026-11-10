@@ -156,5 +156,61 @@ class ChatAnswerHoldsConnectionDuringLlmIT extends ZzalItSupport {
             client.whenEmpty("{\"line\":\"응, 반가워. 뭐라고 부르면 돼?\",\"motion\":\"hello\"}");
             return client;
         }
+
+        /**
+         * 진짜와 같은 JPA 트랜잭션 관리자. 시험이 {@link FailOnceTransactionManager#failNextRollbackOnlyEnd} 로 걸어 두면
+         * 그 스레드의 다음 "롤백 전용으로 끝나는" 트랜잭션(답하기 T1)이 마무리된 뒤 한 번 예외를 던진다.
+         * 걸지 않으면 아무것도 바꾸지 않는다(스프링 부트 기본 관리자는 이 빈이 있으면 만들어지지 않는다).
+         */
+        @Bean
+        @Primary
+        FailOnceTransactionManager transactionManager(jakarta.persistence.EntityManagerFactory emf) {
+            return new FailOnceTransactionManager(emf);
+        }
+    }
+
+    /** T1 롤백·종료 중 예외를 흉내 내는 관리자 — 진짜 JPA 관리자에 넘기고, 걸어 둔 스레드에서 한 번만 마무리 뒤 던진다. */
+    public static class FailOnceTransactionManager
+            implements org.springframework.transaction.support.ResourceTransactionManager {
+        private final org.springframework.orm.jpa.JpaTransactionManager real;
+        private final java.util.concurrent.atomic.AtomicReference<Thread> armed = new java.util.concurrent.atomic.AtomicReference<>();
+
+        FailOnceTransactionManager(jakarta.persistence.EntityManagerFactory emf) {
+            this.real = new org.springframework.orm.jpa.JpaTransactionManager(emf);
+        }
+
+        /** 이 스레드에서 다음에 롤백 전용으로 끝나는 새 트랜잭션 하나가 마무리 뒤 예외를 던진다. */
+        public void failNextRollbackOnlyEnd() {
+            armed.set(Thread.currentThread());
+        }
+
+        public void disarm() {
+            armed.set(null);
+        }
+
+        @Override
+        public org.springframework.transaction.TransactionStatus getTransaction(
+                org.springframework.transaction.TransactionDefinition definition) {
+            return real.getTransaction(definition);
+        }
+
+        @Override
+        public void rollback(org.springframework.transaction.TransactionStatus status) {
+            real.rollback(status);
+        }
+
+        @Override
+        public Object getResourceFactory() {
+            return real.getResourceFactory();
+        }
+
+        @Override
+        public void commit(org.springframework.transaction.TransactionStatus status) {
+            boolean fail = status.isNewTransaction() && status.isRollbackOnly() && armed.get() == Thread.currentThread();
+            real.commit(status);
+            if (fail && armed.compareAndSet(Thread.currentThread(), null)) {
+                throw new org.springframework.transaction.TransactionSystemException("시험: T1 마무리 중 예외");
+            }
+        }
     }
 }
