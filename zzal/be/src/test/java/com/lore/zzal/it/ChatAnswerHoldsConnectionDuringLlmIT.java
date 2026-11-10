@@ -123,10 +123,17 @@ class ChatAnswerHoldsConnectionDuringLlmIT extends ZzalItSupport {
     /** 시험 동안만 느려지는 가짜 LLM — 대기는 부모의 synchronized 밖에서 해 두 호출이 겹친다. */
     public static class SlowFakeChatLineClient extends FakeChatLineClient {
         volatile long delayMs;
+        /** 다음 한 번은 이 오류로 끝난다 — 대사 사슬이 삼키지 못하는 실패(LLM 호출 자체가 예외로 끝남)를 흉내 낸다. */
+        volatile Error failNext;
         final AtomicInteger waiting = new AtomicInteger();
 
         @Override
         public Completion complete(String system, String user, String model, Duration timeout) throws Exception {
+            Error fail = failNext;
+            if (fail != null) {
+                failNext = null;
+                throw fail;
+            }
             long d = delayMs;
             if (d > 0) {
                 waiting.incrementAndGet();

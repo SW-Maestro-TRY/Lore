@@ -117,7 +117,16 @@ public class ChatAnswerFlow {
         long started = System.nanoTime();
         for (int round = 0; ; round++) {
             final int waited = round;
-            Prepared p = inTransaction(status -> prepare(status, userId, petId, slot, request, now, waited));
+            // T1 안에서 남긴 "진행 중" 표시. T1 이 롤백·종료 중 예외로 끝나 아래 try 에 못 들어가면 여기서 거둔다
+            // (안 거두면 같은 차례의 다음 요청이 최대 30초 × 3 을 기다린다).
+            Object[] registered = new Object[2];
+            Prepared p;
+            try {
+                p = inTransaction(status -> prepare(status, userId, petId, slot, request, now, waited, registered));
+            } catch (RuntimeException | Error e) {
+                if (registered[0] != null) release((String) registered[0], (InFlight) registered[1]);
+                throw e;
+            }
             if (p.replay() != null) return p.replay();
             if (p.waitFor() != null) {
                 awaitQuietly(p.waitFor());
@@ -133,8 +142,7 @@ public class ChatAnswerFlow {
                 if (savedTurn[0] != 0) chat.recordUserTurnSaved(p.commit(), savedTurn[0]);
                 return out;
             } finally {
-                inFlight.remove(p.key(), p.mine());
-                p.mine().done().countDown();
+                release(p.key(), p.mine());
             }
         }
     }
@@ -142,7 +150,7 @@ public class ChatAnswerFlow {
     // ── T1 ───────────────────────────────────────────────────────────────
 
     private Prepared prepare(TransactionStatus status, Long userId, Long petId, ChatSlot slot,
-                             ChatRequests.Answer request, Instant now, int round) {
+                             ChatRequests.Answer request, Instant now, int round, Object[] registered) {
         // 같은 펫의 조회/답과 같은 잠금. 소유권은 재전송에서도 검사하고 다른 사용자의 응답을 내주지 않는다.
         pets.findByIdForUpdate(petId).filter(p -> p.isOwnedBy(userId))
                 .orElseThrow(() -> new BusinessException(ErrorCode.ZZAL_PET_NOT_FOUND));
@@ -168,6 +176,7 @@ public class ChatAnswerFlow {
         String key = petId + "/" + c.sessionId() + "/" + c.expectedRound();
         InFlight mine = new InFlight(request.requestId(), new CountDownLatch(1));
         InFlight ahead = inFlight.putIfAbsent(key, mine);
+        if (ahead == null) { registered[0] = key; registered[1] = mine; }
         if (ahead != null && round < MAX_ROUNDS_OF_WAITING) {
             return new Prepared(null, ahead, null, null, null);
         }
@@ -176,6 +185,7 @@ public class ChatAnswerFlow {
             mine = new InFlight(request.requestId(), new CountDownLatch(1));
             key = key + "#" + UUID.randomUUID();
             inFlight.put(key, mine);
+            registered[0] = key; registered[1] = mine;
         }
         return new Prepared(null, null, c, key, mine);
     }
@@ -238,6 +248,11 @@ public class ChatAnswerFlow {
         });
         if (rejected[0] != null) throw rejected[0];
         return Objects.requireNonNull(out);
+    }
+
+    private void release(String key, InFlight mine) {
+        inFlight.remove(key, mine);
+        mine.done().countDown();
     }
 
     private static void awaitQuietly(InFlight ahead) {
