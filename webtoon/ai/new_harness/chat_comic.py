@@ -284,7 +284,9 @@ def prepare(run_dir: Path) -> None:
             if nm and (run_dir / "profiles" / nm).exists():
                 return [str(run_dir / "profiles" / nm)]
         return []
-    summary, prev_end = [], ""
+    # 앞 작품에 이어 붙이는 경우(서버가 draft 에 넣어 준다): 화 번호를 이어 세고, 앞 화가 끝난 장면에서 시작한다.
+    start = int(draft.get("start_number") or 1)
+    summary, prev_end = [], str(draft.get("prev_end") or "").strip()
     for n, ep in enumerate(episodes, 1):
         ranges = ep["ranges"]
         scenes, meta = _write_scenes(dialogue, ranges, title, cast, prev_end)
@@ -314,7 +316,9 @@ def prepare(run_dir: Path) -> None:
         _write(ep_dir / "input.json", char)
         _write(ep_dir / "directions.json", [{"n": 1, "title": title, "genre": raw["genre"], "intro": char["story"],
                                              "body": char["story"], "plot": char["story"], "scenes": [], "cast": [], "hidden": []}])
-        _write(ep_dir / "pick.json", {"n": 1, "title": title if len(episodes) == 1 else f"{title} {n}화", "genre": raw["genre"]})
+        number = start + n - 1
+        _write(ep_dir / "pick.json", {"n": 1, "title": title if (len(episodes) == 1 and start == 1) else f"{title} {number}화",
+                                      "genre": raw["genre"]})
         # 조연은 장면 글에 이름이 나오는 장에서 시트(보관함에 있으면)와 생김새 글로 붙는다(detailart.cast_sheets_in_scene).
         _write(ep_dir / "scenes.json", {"plot": "", "scenes": out, "fixed": [],
                                         "cast": [{"name": p["name"], "appearance": p["description"]} for p in extras]})
@@ -322,10 +326,11 @@ def prepare(run_dir: Path) -> None:
         (ep_dir / "quality.txt").write_text(QUALITY, encoding="utf-8")
         (ep_dir / "page_model.txt").write_text(PAGE_MODEL, encoding="utf-8")
         _write(ep_dir / "scene-meta.json", meta)
-        summary.append({"n": n, "run_id": ep_dir.name, "subtitle": ep["subtitle"], "scenes": len(out),
+        summary.append({"n": n, "number": number, "run_id": ep_dir.name, "subtitle": ep["subtitle"], "scenes": len(out),
                         "pages": len(out) + 1, "messages": [ranges[0][0], ranges[-1][1]],
                         "missing": sum(len(v) for v in lost.values())})
-    _write(run_dir / "plan.json", {"title": title, "episodes": summary})
+    _write(run_dir / "plan.json", {"title": title, "episodes": summary, "continues": draft.get("continue_of") or "",
+                                   "last_end": prev_end})
 
 
 # ── 3. 시트 보관함 ─────────────────────────────────────────────────
@@ -388,6 +393,8 @@ def use_library(parent: Path) -> None:
             spec.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(others[0], spec)  # 사양만 — 그림은 이 그림체로 새로 그린다
             source[name] = f"보관함 사양({others[0].parent.name})으로 새 그림체 시트"
+        elif png.is_file() and spec.is_file():
+            source[name] = "앞 화 시트 그대로"
         else:
             source[name] = "새로 만든 시트"
     _write(parent / "sheet_source.json", source)
