@@ -571,7 +571,7 @@
 .wt .wt-play-row-h { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
 .wt .wt-play-row-h h2 { margin: 0; font-size: 18px; font-weight: 700; }
 .wt .wt-play-row-h button { padding: 0; background: none; border: 0; font-size: 13px; color: var(--dim); cursor: pointer; }
-.wt .wt-play-row-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.wt .wt-play-row-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
 .wt .wt-play-row-list button { display: flex; flex-direction: column; gap: 4px; padding: 0 0 12px; overflow: hidden; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); text-align: left; cursor: pointer; }
 .wt .wt-play-row-list img { width: 100%; aspect-ratio: 16/10; object-fit: cover; object-position: center 22%; }
 .wt .wt-play-row-list b { padding: 6px 12px 0; font-size: 14px; }
@@ -636,9 +636,7 @@
   .wt .wt-gallery-sub { margin: 0 0 16px; font-size: 13px; }
   .wt .wt-gallery-cta .btn { height: 44px; }
 }
-/* 홈 세계 줄은 한 줄만 — PC 네 칸, 폰은 넓은 칸 하나 + 두 칸. 나머지는 「전부 보기」 */
-@media (min-width: 768px) { .wt .wt-play-row-list button:nth-child(n + 5) { display: none; } }
-@media (max-width: 767px) { .wt .wt-play-row-list button:nth-child(n + 4) { display: none; } }
+/* 홈 세계 줄: 고른 다섯 세계를 순서대로 모두 보여 준다. */
 
 /* 홈 소개 — 세계관 체험(PC E안: 글 + 세계 포스터 줄 / 폰 D안: 체험 · 웹툰 두 카드) */
 .wt .wt-pintro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 28px; align-items: center; padding-top: 120px; }

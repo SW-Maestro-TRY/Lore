@@ -12,7 +12,9 @@ import { loadWorlds, type PlayWorld } from "../play/playData";
 import { browseRuns, cardImageUrl, coverUrl, type RunCard } from "../../lib/api";
 import { byPopular } from "../works/popular";
 import { genreBucket } from "../works/genreBucket";
+import { storynationIntro } from "../play/storynationIntro";
 const asset = (path: string) => `/static/gallery/${path}`;
+const FEATURED_WORLD_IDS = ["e1d640412ec94d82bf9b", "sne-bardo-express", "sne-bunker-068", "edelia", "zombie"];
 /* 「웹툰 둘러보기」 줄 — 둘러보기 인기순(관리자가 정한 자리 → 조회순) 위 여덟 편. 하은이 둘러보기에서 자리를
  * 매일 바꾸므로 홈도 그 순서를 따른다(2026-11-04). 아래 여덟 편은 목록을 못 받았을 때만 쓴다(예시 작품, 표지는 1쪽). */
 const BROWSE_ROW = 8;
@@ -91,6 +93,7 @@ export default function GalleryHome({
   const [redraw, setRedraw] = useState<"before" | "busy" | "after">("before");
   const [worlds, setWorlds] = useState<PlayWorld[]>([]);
   useEffect(() => { void loadWorlds().then(setWorlds).catch(() => {}); }, []);
+  const featuredWorlds = FEATURED_WORLD_IDS.map((id) => worlds.find((w) => w.id === id)).filter((w): w is PlayWorld => !!w);
   /* null = 받는 중(빈 칸 자리만), 못 받으면 예시 여덟 편 */
   const [popular, setPopular] = useState<{ id: string; title: string; genre: string; cover: string }[] | null>(null);
   useEffect(() => {
@@ -178,8 +181,8 @@ export default function GalleryHome({
             <button type="button" onClick={() => go("play")}>{t("전부 보기")} ›</button>
           </div>
           <div className="wt-play-row-list">
-            {worlds.map((w) => (
-              <button type="button" key={w.id} onClick={() => go("play", { world: w.id })}>
+            {featuredWorlds.map((w) => (
+              <button type="button" key={w.id} onClick={() => go("play", { world: w.id, stage: storynationIntro(w.id) ? "intro" : undefined })}>
                 {w.cover_url && <img src={w.cover_url} alt="" />}
                 <b>{t(w.name)}</b>
                 <small>{t(w.one)}</small>

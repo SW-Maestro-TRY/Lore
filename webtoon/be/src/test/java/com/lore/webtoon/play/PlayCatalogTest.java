@@ -2,6 +2,7 @@ package com.lore.webtoon.play;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.lore.webtoon.lorebook.LoreBook;
 import java.util.List;
@@ -9,6 +10,23 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class PlayCatalogTest {
+
+    @Test
+    void 스토리네이션_세_세계는_사건과_그림이_있고_공개_응답에는_비밀이_없다() {
+        var catalog = new PlayCatalog();
+        for (String id : List.of("e1d640412ec94d82bf9b", "sne-bardo-express", "sne-bunker-068")) {
+            var world = catalog.world(id);
+            assertThat(world).isNotNull();
+            assertThat(world.get("secret")).isNotNull();
+            assertThat(((List<?>) world.get("events"))).isNotEmpty();
+            assertThat(((List<?>) world.get("events"))).allSatisfy(e ->
+                    assertThat(((Map<?, ?>) e).get("no")).isNotEqualTo("EP 00"));
+            var shown = new PlayController(catalog, null, null, null, null, null).shown(world);
+            assertThat(shown).doesNotContainKeys("secret", "lorebook");
+            assertThat((List<Map<String, Object>>) shown.get("cast")).allSatisfy(p ->
+                    assertThat(p).doesNotContainKey("secret"));
+        }
+    }
 
     @Test
     @SuppressWarnings("unchecked")

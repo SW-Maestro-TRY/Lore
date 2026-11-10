@@ -72,6 +72,31 @@ public class WebtoonCharacter {
     @Column(name = "art_key", length = 200)
     private String artKey;
 
+    /**
+     * 기억해 둔 캐릭터 시트(2026-11-08) — 같은 캐릭터의 다음 작품은 이 시트를 가져다 쓰고 시트 단계를 건너뛴다.
+     * 시트는 제일 비싼 호출 하나인데 작품마다 새로 그려 돈도 들고 얼굴도 조금씩 달라졌다. 같은 시트로 그림체를 바꿔
+     * 그려도 얼굴이 유지되는 것을 확인해(실험 haeun/스네-세계관-설계-2026-11-08/실험-시트) 그림체와 무관하게 하나만 둔다.
+     * 세계관 체험(play)은 옷을 그 세계에 맞게 바꾸므로 체험 시트는 기억하지 않는다. 설명·그림을 바꾸면 비운다.
+     */
+    @Column(name = "sheet_key", length = 300)
+    private String sheetKey;
+    @Column(name = "sheet_spec", columnDefinition = "text")
+    private String sheetSpec;
+    @Column(name = "sheet_mode", length = 20)
+    private String sheetMode;
+    @Column(name = "sheet_at")
+    private Instant sheetAt;
+
+    public String getSheetKey() { return sheetKey; }
+    public String getSheetSpec() { return sheetSpec; }
+    public String getSheetMode() { return sheetMode; }
+    public boolean hasSheet() { return sheetKey != null && !sheetKey.isBlank(); }
+    public void keepSheet(String key, String spec, String mode, Instant at) {
+        this.sheetKey = key; this.sheetSpec = spec; this.sheetMode = mode; this.sheetAt = at;
+    }
+    /** 외모의 근거(설명·그림)가 바뀌었다 — 다음 작품은 시트를 새로 그린다. */
+    private void forgetSheet() { this.sheetKey = null; this.sheetSpec = null; this.sheetMode = null; this.sheetAt = null; }
+
     /** 어떻게 만들었나 — 사진에서 그렸나, 글만으로 그렸나. 나중에 무엇이 잘 되는지 보려고 남긴다. */
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
@@ -253,6 +278,9 @@ public class WebtoonCharacter {
 
     /** 다 그렸다. */
     public void drewArt(String key, CharacterSource source, Instant at) {
+        if (key != null && !key.equals(this.artKey)) {
+            forgetSheet();
+        }
         this.artKey = key;
         this.source = source;
         this.status = CharacterStatus.READY;
@@ -406,6 +434,9 @@ public class WebtoonCharacter {
     public void rename(String name, String description, Instant at) {
         if (name != null && !name.isBlank()) {
             this.name = name;
+        }
+        if (!java.util.Objects.equals(this.description, description)) {
+            forgetSheet();
         }
         this.description = description;
         this.updatedAt = at;

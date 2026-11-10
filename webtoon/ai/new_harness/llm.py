@@ -271,11 +271,15 @@ STAGE_DEFAULT_MODELS.update({(stage, "openrouter"): f"openai/{name}"
                              for (stage, _), name in list(STAGE_DEFAULT_MODELS.items())})
 # 장면만 예외 — 위 비교에 쓴 모델 그대로(STAGE_DEFAULT_PROVIDERS 의 SCENE 참고).
 STAGE_DEFAULT_MODELS[("SCENE", "openrouter")] = "google/gemini-3.8-flash"
+# 그림은 전부 Flare 로. 본편 장면은 11/06 부터, 시트·조연 시트는 11/08 부터 — 시트는 독자가 보는 그림이 아니라
+# 참조용이라 플레어 medium 으로도 얼굴·머리·옷이 또렷하게 나왔고(실험 haeun/스네-세계관-설계-2026-11-08/실험-시트),
+# 장당 약 260원 → 70~100원이다. 화질은 imagegen.backend_for 가 시트 단계만 medium 으로 고정한다.
 # 검수 넷도 예외 — 위 실험에 쓴 모델 그대로(STAGE_DEFAULT_PROVIDERS 의 검수 참고).
 for _review in ("STORY_REVIEW", "PAGE_REVIEW", "COVER_REVIEW", "FULL_REVIEW"):
     STAGE_DEFAULT_MODELS[(_review, "openrouter")] = "google/gemini-3.5-flash"
-# 본편 장면 그림만 Flare로 그린다. 시트와 조연 시트는 기존 이미지 모델을 유지한다.
 STAGE_DEFAULT_MODELS[("PAGE_IMAGE", "openai")] = "gpt-image-2.5-flare"
+STAGE_DEFAULT_MODELS[("SHEET_IMAGE", "openai")] = "gpt-image-2.5-flare"
+STAGE_DEFAULT_MODELS[("CAST_SHEET_IMAGE", "openai")] = "gpt-image-2.5-flare"
 
 
 def model_for(stage: str, provider: str) -> str:
