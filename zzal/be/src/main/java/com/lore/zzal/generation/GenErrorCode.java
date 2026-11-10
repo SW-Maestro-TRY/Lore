@@ -18,6 +18,25 @@ public enum GenErrorCode {
 
     MODERATION_BLOCKED,
 
-    /** 그 밖의 오류(네트워크·응답 형식 등). 로그를 봐야 한다. */
-    UNKNOWN
+    /** 그 밖의 오류. 로그를 봐야 한다. */
+    UNKNOWN,
+
+    // ── 2026-11-11 설계 1-2: 처방이 다른 실패를 UNKNOWN 에서 떼어 낸다 ─────────────────
+    // ★ 값을 더하면 zzal_gen_job·zzal_gen_step 의 CHECK 제약도 마이그레이션으로 다시 만들어야 한다
+    //   (Hibernate 는 이미 있는 CHECK 를 고치지 않는다 — V2 주석). V20261111_* 참고.
+
+    /** 서버 종료·끼어들기로 끊김. 응답을 못 받았으니 비용은 0 으로 적는다. */
+    INTERRUPTED,
+
+    /** OpenAI 5xx·네트워크 오류. 같은 입력으로 다시 하면 대개 된다. */
+    PROVIDER_ERROR,
+
+    /** 429 또는 잔액·한도. 곧바로 다시 보내면 또 막힌다. */
+    QUOTA,
+
+    /** 격자 구조 게이트 탈락. 같은 격자로는 다시 해 봐야 소용없다. */
+    GATE_REJECTED,
+
+    /** 후처리 스크립트 비정상 종료. */
+    POSTPROCESS_FAILED
 }

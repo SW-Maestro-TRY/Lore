@@ -272,13 +272,40 @@ public class GenerationRunner {
      *   거부당함 → 같은 걸 다시 보내면 또 막힌다. 앞 단계(문단)부터 새로
      *   그 외    → 같은 입력으로 다시 하면 대개 된다
      */
-    private GenErrorCode classify(Throwable e) {
-        String msg = String.valueOf(e == null ? null : e.getMessage()).toLowerCase();
+    static GenErrorCode classify(Throwable e) {
+        if (e == null) {
+            return GenErrorCode.UNKNOWN;
+        }
+        // 끼어들기(서버 종료·바깥 취소) — 응답을 못 받았다. 처방은 "그대로 이어 굽기"(3-5).
+        if (e instanceof InterruptedException || e instanceof java.util.concurrent.CancellationException
+                || e instanceof java.nio.channels.ClosedByInterruptException) {
+            return GenErrorCode.INTERRUPTED;
+        }
+        String msg = String.valueOf(e.getMessage()).toLowerCase();
         if (msg.contains("moderation") || msg.contains("safety") || msg.contains("content_policy")) {
             return GenErrorCode.MODERATION_BLOCKED;
         }
+        if (quotaBlocked(e)) {
+            return GenErrorCode.QUOTA;
+        }
+        if (gridRejected(e)) {
+            return GenErrorCode.GATE_REJECTED;
+        }
+        if (postprocessCrashed(e)) {
+            return GenErrorCode.POSTPROCESS_FAILED;
+        }
+        // HTTP 요청 시간 제한(HttpRequest.timeout)에 걸렸다 — 단계 시간 초과와 같은 처방.
+        if (e instanceof java.net.http.HttpTimeoutException) {
+            return GenErrorCode.TIMEOUT;
+        }
+        if (SERVER_STATUS.matcher(msg).find() || e instanceof java.io.IOException) {
+            return GenErrorCode.PROVIDER_ERROR;
+        }
         return GenErrorCode.UNKNOWN;
     }
+
+    /** 클라이언트가 붙이는 "(HTTP 5xx)" 문구. */
+    private static final java.util.regex.Pattern SERVER_STATUS = java.util.regex.Pattern.compile("http 5\\d\\d");
 
     /**
      * 격자 구조 게이트가 "이 격자는 4x4 가 아니다" 로 막았는가.
