@@ -1,7 +1,6 @@
 package com.lore.zzal.it;
 
 import com.lore.zzal.pet.ZzalPet;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -34,7 +33,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ZzalIntegrationTest
 class PetRefreshAllLostUpdateIT extends ZzalItSupport {
 
-    @Disabled("결함(설계 4-4) — refreshAll 의 잠금 없는 목록 읽기 뒤에 커밋된 call-back 이 덮인다. P4a 범위 밖, 고칠 때 켠다")
     @Test
     void callBackCommittedBetweenListReadAndLockSurvivesRefreshAll() throws Exception {
         Long user = newUserId();

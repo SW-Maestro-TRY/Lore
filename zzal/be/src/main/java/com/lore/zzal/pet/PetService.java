@@ -353,12 +353,25 @@ public class PetService {
         return pet;
     }
 
+    /**
+     * ★ 목록은 잠금 없이 먼저 읽힌다. 그 사이 다른 트랜잭션(call-back 등)이 커밋하면, 잠금 조회({@link #findMine})는
+     *   같은 컨텍스트의 <b>먼저 읽은 낡은 엔티티</b>를 그대로 돌려주고, 정산 뒤 더티 체킹이 그 커밋을 덮는다(설계 4-4,
+     *   {@code PetRefreshAllLostUpdateIT}). 그래서 잠근 뒤 DB 의 최신 값으로 다시 읽고 나서 정산한다.
+     */
     @Transactional
     public List<ZzalPet> refreshAll(Long userId, Instant realNow) {
         List<ZzalPet> pets = petRepository.findByUserIdOrderByIdDesc(userId);
-        pets.forEach(p -> touch(findMine(userId,p.getId()), realNow));
+        pets.forEach(p -> {
+            ZzalPet locked = findMine(userId, p.getId());
+            if (entityManager != null) entityManager.refresh(locked);
+            touch(locked, realNow);
+        });
         return pets;
     }
+
+    /** {@link #refreshAll} 이 잠근 뒤 펫을 다시 읽는다. 손으로 만든 서비스(단위 시험)에는 없다. */
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
 
     /** 정산 + 방문(그날 처음이면 함께한 날 +1) + 아침 공개. 조회든 행동이든 펫을 만지는 모든 길이 여기를 지난다. */
     private void touch(ZzalPet pet, Instant realNow) {
