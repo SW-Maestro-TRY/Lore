@@ -525,6 +525,19 @@ app:
       #   허용값 minimal/low/medium/high — 그 외는 기동 실패. gpt-5 에는 none 이 없어 최저는 minimal.
       #   ★ 2026-10-27 기본 ",low,minimal" — 시도 1 은 지금 그대로, 실패해 다시 구우면 생각을 줄여 빨리 끝낸다.
       identity-reasoning-effort-by-attempt: ${ZZAL_OPENAI_IDENTITY_REASONING_EFFORT_BY_ATTEMPT:,low,minimal}
+      # OpenAI 창구 줄(설계 2-1, 계획서 P1-3). 모든 OpenAI 요청은 줄 하나에서 자리를 얻어야 나간다.
+      #   상한은 서버 1대 기준 — 2대가 되면 키 전체로는 두 배(값을 반으로 줄일지는 운영 판단).
+      #   max-wait-ms 0 = 자리가 날 때까지 기다린다. 급한 대사는 1초 넘으면 대체 대사.
+      lanes:
+        image:                 # 부화 시트·정체성 글·격자, 맞춤 격자, 심화 행동
+          max-concurrent: ${ZZAL_OPENAI_LANE_IMAGE_MAX:3}
+          max-wait-ms: ${ZZAL_OPENAI_LANE_IMAGE_WAIT_MS:0}
+        dialogue-urgent:       # 채팅, 튜토리얼 묶음
+          max-concurrent: ${ZZAL_OPENAI_LANE_URGENT_MAX:10}
+          max-wait-ms: ${ZZAL_OPENAI_LANE_URGENT_WAIT_MS:1000}
+        dialogue-background:   # 일기, 맞춤 기획
+          max-concurrent: ${ZZAL_OPENAI_LANE_BACKGROUND_MAX:1}
+          max-wait-ms: ${ZZAL_OPENAI_LANE_BACKGROUND_WAIT_MS:0}
 
     attendance:
       # Existing worker guard; enabling custom generation is separate from automatic dispatch.
