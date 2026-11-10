@@ -9,6 +9,9 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import com.lore.zzal.openai.Lane;
+import com.lore.zzal.openai.OpenAiGateway;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -16,8 +19,6 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Map;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * OpenAI Chat Completions 로 대사 한 줄. 응답은 JSON 객체로 받는다({@code response_format=json_object}).
@@ -49,7 +50,10 @@ public class OpenAiChatLineClient implements ChatLineClient {
 
     private final String apiKey;
     private final String reasoningEffort;
-    private final HttpClient http;
+    /** OpenAI 로 나가는 유일한 길(설계 2-4). */
+    private final OpenAiGateway gateway;
+    /** 이 클라이언트가 쓰는 줄 — 채팅·튜토리얼은 급한 대사, 일기·맞춤 기획은 느긋한 대사. */
+    private final Lane lane;
     private final URI endpoint;
     private final Integer maxCompletionTokens;
     private final ProviderUsageRecorder usageRecorder;
@@ -69,10 +73,18 @@ public class OpenAiChatLineClient implements ChatLineClient {
     public OpenAiChatLineClient(String apiKey,String reasoningEffort,Integer maxCompletionTokens,ProviderUsageRecorder recorder) {
         this(apiKey, reasoningEffort, maxCompletionTokens, recorder, null);
     }
-    /** baseUrl = 설정 {@code app.zzal.openai.base-url}. 비면 실제 OpenAI 주소. */
+    /** baseUrl = 설정 {@code app.zzal.openai.base-url}. 비면 실제 OpenAI 주소. 창구 없이 혼자 쓰는 옛 생성자(급한 대사 줄). */
     public OpenAiChatLineClient(String apiKey,String reasoningEffort,Integer maxCompletionTokens,ProviderUsageRecorder recorder,String baseUrl) {
-        this(apiKey, reasoningEffort, defaultHttp(),
-                com.lore.zzal.generation.client.OpenAiBaseUrl.endpoint(baseUrl, PATH), maxCompletionTokens,recorder);
+        this(apiKey, reasoningEffort, maxCompletionTokens, recorder, baseUrl, null, Lane.DIALOGUE_URGENT);
+    }
+
+    /**
+     * 운영 생성자 — 스프링의 창구 빈과 줄을 받는다. 창구가 null 이면 혼자 쓰는 창구(시험·직접 생성용, 예전 HttpClient 설정 그대로).
+     */
+    public OpenAiChatLineClient(String apiKey,String reasoningEffort,Integer maxCompletionTokens,ProviderUsageRecorder recorder,String baseUrl,
+                                OpenAiGateway gateway, Lane lane) {
+        this(apiKey, reasoningEffort, gateway != null ? gateway : OpenAiGateway.standalone(defaultHttp()), lane,
+                com.lore.zzal.generation.client.OpenAiBaseUrl.endpoint(baseUrl, PATH), maxCompletionTokens, recorder);
     }
 
     /** Package-only HTTP seam for loopback contract tests; production endpoint is fixed. */
@@ -85,12 +97,17 @@ public class OpenAiChatLineClient implements ChatLineClient {
         this(apiKey,reasoningEffort,http,endpoint,maxCompletionTokens,ProviderUsageRecorder.NO_OP);
     }
     OpenAiChatLineClient(String apiKey,String reasoningEffort,HttpClient http,URI endpoint,Integer maxCompletionTokens,ProviderUsageRecorder recorder) {
+        this(apiKey, reasoningEffort, OpenAiGateway.standalone(http), Lane.DIALOGUE_URGENT, endpoint, maxCompletionTokens, recorder);
+    }
+
+    OpenAiChatLineClient(String apiKey,String reasoningEffort,OpenAiGateway gateway,Lane lane,URI endpoint,Integer maxCompletionTokens,ProviderUsageRecorder recorder) {
         this.usageRecorder=java.util.Objects.requireNonNull(recorder);
+        this.lane = java.util.Objects.requireNonNull(lane);
         if (maxCompletionTokens != null && maxCompletionTokens <= 0) {
             throw new IllegalArgumentException("maxCompletionTokens must be positive");
         }
         this.maxCompletionTokens = maxCompletionTokens;
-        this.http = java.util.Objects.requireNonNull(http);
+        this.gateway = java.util.Objects.requireNonNull(gateway);
         this.endpoint = java.util.Objects.requireNonNull(endpoint);
         this.apiKey = apiKey;
         this.reasoningEffort = reasoningEffort == null || reasoningEffort.isBlank() ? null : reasoningEffort.strip();
@@ -103,7 +120,8 @@ public class OpenAiChatLineClient implements ChatLineClient {
 
     @Override
     public Completion complete(String system, List<Message> history, String userText, String model, Duration timeout) throws Exception {
-        try (var attempt = new com.lore.zzal.generation.client.ProviderAttempt(usageRecorder, model)) {
+        // ★ 기록·자리·429 는 창구가 맡는다. 급한 대사 줄은 자리 대기 1초를 넘으면 LaneBusyException → 대체 대사.
+        try (var call = gateway.call(lane, model, usageRecorder)) {
         ObjectNode body = json.createObjectNode();
         body.put("model", model);
         if (maxCompletionTokens != null) body.put("max_completion_tokens", maxCompletionTokens);
@@ -133,41 +151,26 @@ public class OpenAiChatLineClient implements ChatLineClient {
                 .build();
 
         // ★ 전체 시간을 한 번 더 묶는다 — 요청 timeout 은 응답 머리까지만 센다.
-        attempt.start();
-        CompletableFuture<HttpResponse<String>> f = http.sendAsync(req, HttpResponse.BodyHandlers.ofString());
-        HttpResponse<String> res;
-        try {
-            res = f.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (java.util.concurrent.TimeoutException e) {
-            f.cancel(true);
-            attempt.record(ProviderUsageRecorder.headers(model,0,null));
-            throw e;
-        } catch (java.util.concurrent.ExecutionException e) {
-            attempt.record(ProviderUsageRecorder.headers(model,0,null));
-            if (e.getCause() instanceof java.net.http.HttpTimeoutException) {
-                throw new java.util.concurrent.TimeoutException("응답 시간 초과");
-            }
-            throw e;
-        }
+        //   창구가 비동기 전송 + get(timeout) + 넘으면 cancel(true) 를 그대로 한다(OpenAiGateway.Call#sendWithin).
+        HttpResponse<String> res = call.sendWithin(req, timeout);
         String requestId=res.headers().firstValue("x-request-id").orElse(null);
-        attempt.record(ProviderUsageRecorder.headers(model,res.statusCode(),requestId));
         if (res.statusCode() != 200) {
             // 4xx·5xx 는 돈이 안 나간다(OpenAI 는 실패 요청에 과금하지 않는다).
             throw new IllegalStateException("대사 생성 실패(HTTP %d): %s".formatted(res.statusCode(),
                     res.body().length() > 300 ? res.body().substring(0, 300) : res.body()));
         }
         JsonNode payload = json.readTree(res.body());
-        attempt.record(ProviderUsageRecorder.payload(model,res.statusCode(),requestId,payload));
+        call.record(ProviderUsageRecorder.payload(model,res.statusCode(),requestId,payload));
         JsonNode usage = payload.path("usage");
         long in = usage.path("prompt_tokens").asLong(0);
         long out = usage.path("completion_tokens").asLong(0);
         BigDecimal cost = cost(model, in, out);
-        attempt.estimatedCost(cost);
+        call.estimatedCost(cost);
         String text = payload.path("choices").path(0).path("message").path("content").asText("").trim();
         if (text.isBlank()) {
             throw new BilledException("응답에 글이 없습니다", cost);
         }
-        attempt.success();
+        call.success();
         return new Completion(text, cost, in, out);
         }
     }

@@ -25,8 +25,11 @@ public class StageSpeechBatchGenerator {
             @Value("${app.zzal.chat.model:gpt-5.6-luna}") String model,
             @Value("${app.zzal.chat.reasoning-effort:none}") String effort,
             com.lore.zzal.generation.client.PersistentProviderUsageRecorder usageRecorder,
-            @Value("${app.zzal.openai.base-url:}") String openAiBaseUrl) {
-        this(enabled && key != null && !key.isBlank() ? new OpenAiChatLineClient(key, effort, 3200, usageRecorder.forFeature("tutorial_batch"), openAiBaseUrl) : null,
+            @Value("${app.zzal.openai.base-url:}") String openAiBaseUrl,
+            org.springframework.beans.factory.ObjectProvider<com.lore.zzal.openai.OpenAiGateway> gateways) {
+        // 튜토리얼 묶음은 손님이 기다리는 대사라 급한 대사 줄(설계 2-1).
+        this(enabled && key != null && !key.isBlank() ? new OpenAiChatLineClient(key, effort, 3200, usageRecorder.forFeature("tutorial_batch"), openAiBaseUrl,
+                        gateways.getIfAvailable(), com.lore.zzal.openai.Lane.DIALOGUE_URGENT) : null,
                 model, Duration.ofSeconds(12));
     }
 

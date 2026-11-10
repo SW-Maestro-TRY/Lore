@@ -68,6 +68,10 @@ public class GenerationConfig {
     @Value("${app.zzal.openai.base-url:}")
     private String openAiBaseUrl;
 
+    /** OpenAI 창구(설계 2-4). 그림·문단 클라이언트가 이걸 거쳐서만 보낸다. 없으면(직접 만든 시험) 혼자 쓰는 창구. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.lore.zzal.openai.OpenAiGateway openAiGateway;
+
     @Bean
     public ImageClient imageClient(@Value("${app.zzal.generation.real:false}") boolean real,
                                    @Value("${app.zzal.generation.fake-delay-ms:4000}") int delay,
@@ -79,7 +83,7 @@ public class GenerationConfig {
         if (fixture) com.lore.zzal.generation.client.LocalFixturePostProcessor.requireLocal(env);
         if (real) {
             requireKey(apiKey);
-            return new OpenAiImageClient(storage, apiKey, imageTimeoutSeconds, usage(), openAiBaseUrl);
+            return new OpenAiImageClient(storage, apiKey, imageTimeoutSeconds, usage(), openAiBaseUrl, openAiGateway);
         }
         ImageClient base = new FakeImageClient(delay, fakeGridKey);
         if (fixture) {
@@ -108,7 +112,7 @@ public class GenerationConfig {
                                  S3Storage storage) {
         if (real) {
             requireKey(apiKey);
-            return new OpenAiTextClient(storage, apiKey, identityMaxCompletionTokens, usage(), openAiBaseUrl);
+            return new OpenAiTextClient(storage, apiKey, identityMaxCompletionTokens, usage(), openAiBaseUrl, openAiGateway);
         }
         return new FakeTextClient(delay / 3);
     }

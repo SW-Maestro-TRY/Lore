@@ -50,6 +50,10 @@ public class ChatLineConfig {
     @Value("${app.zzal.openai.base-url:}")
     private String openAiBaseUrl;
 
+    /** OpenAI 창구(설계 2-4) — 채팅은 급한 대사 줄. 없으면(빈을 안 둔 시험 문맥) 혼자 쓰는 창구. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.lore.zzal.openai.OpenAiGateway openAiGateway;
+
     @Value("${app.zzal.chat.max-attempts:2}")
     private int maxAttempts = 2;
 
@@ -81,7 +85,8 @@ public class ChatLineConfig {
         if (maxCompletionTokens != null && maxCompletionTokens <= 0) throw new IllegalArgumentException("app.zzal.chat.max-completion-tokens must be positive");
         if (firstMeetingTimeoutMs <= 0) throw new IllegalArgumentException("app.zzal.chat.first-meeting-timeout-ms must be positive");
         log.info("채팅 대사 LLM 켜짐 — {} · {}ms", model, timeoutMs);
-        LlmLineGenerator gen = new LlmLineGenerator(new OpenAiChatLineClient(apiKey, effort, maxCompletionTokens, usage(), openAiBaseUrl), model,
+        LlmLineGenerator gen = new LlmLineGenerator(new OpenAiChatLineClient(apiKey, effort, maxCompletionTokens, usage(), openAiBaseUrl,
+                        openAiGateway, com.lore.zzal.openai.Lane.DIALOGUE_URGENT), model,
                 Duration.ofMillis(timeoutMs), Duration.ofMillis(firstMeetingTimeoutMs), systems);
         return new LineChain(gen, events, maxAttempts);
     }

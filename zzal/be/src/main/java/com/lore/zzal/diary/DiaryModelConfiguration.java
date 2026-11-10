@@ -12,6 +12,9 @@ public class DiaryModelConfiguration {
     /** OpenAI 기본 주소(비면 실제 주소). dev 벤치마크 흉내 서버용 — {@link com.lore.zzal.generation.client.OpenAiBaseUrl}. */
     @Value("${app.zzal.openai.base-url:}")
     private String openAiBaseUrl;
+    /** OpenAI 창구(설계 2-4) — 일기는 느긋한 대사 줄. 없으면 혼자 쓰는 창구. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.lore.zzal.openai.OpenAiGateway openAiGateway;
     private com.lore.zzal.generation.client.ProviderUsageRecorder usage() {
         return usageRecorder == null ? com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP : usageRecorder.forFeature("diary");
     }
@@ -27,6 +30,7 @@ public class DiaryModelConfiguration {
             @Value("${zzal.diary.timeout-ms:15000}")long timeoutMs,
             @Value("${zzal.diary.max-completion-tokens:}")Integer maxCompletionTokens){
         if(apiKey==null||apiKey.isBlank())throw new IllegalStateException("Diary explicitly enabled but existing ZZAL_OPENAI_API_KEY is missing");
-        return new ChatLineDiaryModel(new OpenAiChatLineClient(apiKey,effort,maxCompletionTokens,usage(),openAiBaseUrl),model,Duration.ofMillis(timeoutMs));
+        return new ChatLineDiaryModel(new OpenAiChatLineClient(apiKey,effort,maxCompletionTokens,usage(),openAiBaseUrl,
+                openAiGateway,com.lore.zzal.openai.Lane.DIALOGUE_BACKGROUND),model,Duration.ofMillis(timeoutMs));
     }
 }

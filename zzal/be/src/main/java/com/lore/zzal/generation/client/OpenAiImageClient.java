@@ -9,6 +9,9 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import com.lore.zzal.openai.Lane;
+import com.lore.zzal.openai.OpenAiGateway;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -50,7 +53,8 @@ public class OpenAiImageClient implements ImageClient {
 
     private final S3Storage storage;
     private final String apiKey;
-    private final HttpClient http;
+    /** OpenAI 로 나가는 유일한 길(설계 2-4). 그림 줄. */
+    private final OpenAiGateway gateway;
     private final URI endpoint;
     private final ProviderUsageRecorder usageRecorder;
     /** 요청 한 번의 응답 대기 상한(초). 설정 {@code app.zzal.openai.image-timeout-seconds}. */
@@ -63,14 +67,25 @@ public class OpenAiImageClient implements ImageClient {
     public OpenAiImageClient(S3Storage storage, String apiKey, int timeoutSeconds, ProviderUsageRecorder recorder) {
         this(storage,apiKey,timeoutSeconds,recorder,null);
     }
-    /** baseUrl = 설정 {@code app.zzal.openai.base-url}. 비면 실제 OpenAI 주소. */
+    /** baseUrl = 설정 {@code app.zzal.openai.base-url}. 비면 실제 OpenAI 주소. 창구 없이 혼자 쓰는 옛 생성자. */
     public OpenAiImageClient(S3Storage storage, String apiKey, int timeoutSeconds, ProviderUsageRecorder recorder, String baseUrl) {
-        this(storage,apiKey,timeoutSeconds,HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20))
-                .followRedirects(HttpClient.Redirect.NEVER).build(),OpenAiBaseUrl.endpoint(baseUrl, PATH),recorder);
+        this(storage, apiKey, timeoutSeconds, recorder, baseUrl, null);
+    }
+    /**
+     * 운영 생성자 — 스프링의 창구 빈을 받는다. null 이면 혼자 쓰는 창구(시험·직접 생성용, 예전 HttpClient 설정 그대로).
+     */
+    public OpenAiImageClient(S3Storage storage, String apiKey, int timeoutSeconds, ProviderUsageRecorder recorder, String baseUrl,
+                             OpenAiGateway gateway) {
+        this(storage, apiKey, timeoutSeconds, gateway != null ? gateway : OpenAiGateway.standalone(HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(20)).followRedirects(HttpClient.Redirect.NEVER).build()),
+                OpenAiBaseUrl.endpoint(baseUrl, PATH), recorder);
     }
     OpenAiImageClient(S3Storage storage,String apiKey,int timeoutSeconds,HttpClient http,URI endpoint,ProviderUsageRecorder recorder){
+        this(storage, apiKey, timeoutSeconds, OpenAiGateway.standalone(http), endpoint, recorder);
+    }
+    OpenAiImageClient(S3Storage storage,String apiKey,int timeoutSeconds,OpenAiGateway gateway,URI endpoint,ProviderUsageRecorder recorder){
         this.storage=storage;this.apiKey=apiKey;this.timeoutSeconds=timeoutSeconds;
-        this.http=java.util.Objects.requireNonNull(http);this.endpoint=java.util.Objects.requireNonNull(endpoint);
+        this.gateway=java.util.Objects.requireNonNull(gateway);this.endpoint=java.util.Objects.requireNonNull(endpoint);
         this.usageRecorder=java.util.Objects.requireNonNull(recorder);
     }
 
@@ -78,7 +93,8 @@ public class OpenAiImageClient implements ImageClient {
     public Result generate(String prompt, List<String> refImageKeys, String outputKey, ModelSpec spec)
             throws Exception {
         Path work = Files.createTempDirectory("zzal-img-");
-        try (var attempt = new ProviderAttempt(usageRecorder, spec.model())) {
+        // ★ 기록(사용량 한 줄)·자리·429 는 창구가 맡는다. 여기는 요청을 만들고 응답을 해석한다.
+        try (var call = gateway.call(Lane.IMAGE, spec.model(), usageRecorder)) {
             // 참조 이미지를 S3 에서 받아 온다(시트 생성이면 원본, 격자면 시트).
             Path[] refs = new Path[refImageKeys.size()];
             for (int i = 0; i < refImageKeys.size(); i++) {
@@ -99,12 +115,9 @@ public class OpenAiImageClient implements ImageClient {
                     .POST(HttpRequest.BodyPublishers.ofByteArray(body))
                     .build();
 
-            attempt.start();
-            HttpResponse<String> res;
-            try { res = http.send(req, HttpResponse.BodyHandlers.ofString()); }
-            catch (Exception e) { attempt.record(ProviderUsageRecorder.headers(spec.model(),0,null));throw e; }
+            // 자리를 얻어 보낸다. 429·5xx 는 창구가 ProviderQuotaException·ProviderServerException 으로 올린다.
+            HttpResponse<String> res = call.send(req);
             String requestId=res.headers().firstValue("x-request-id").orElse(null);
-            attempt.record(ProviderUsageRecorder.headers(spec.model(),res.statusCode(),requestId));
             if (res.statusCode() != 200) {
                 // 본문을 그대로 붙인다 — moderation 차단인지 한도 초과인지가 여기 적혀 있고,
                 // 위층이 그 문구를 보고 실패 종류를 가른다(처방이 정반대라 반드시 구분해야 한다).
@@ -116,9 +129,9 @@ public class OpenAiImageClient implements ImageClient {
             //   그래서 비용을 먼저 계산해 두고, 이 아래에서 터지는 모든 실패에 그 값을 실어 보낸다.
             //   안 그러면 응답 파싱·S3 업로드 실패가 "비용 0" 으로 기록돼 원가가 실제보다 낮게 보인다.
             JsonNode payload = json.readTree(res.body());
-            attempt.record(ProviderUsageRecorder.payload(spec.model(),res.statusCode(),requestId,payload));
+            call.record(ProviderUsageRecorder.payload(spec.model(),res.statusCode(),requestId,payload));
             BigDecimal cost = cost(payload);
-            attempt.estimatedCost(cost);
+            call.estimatedCost(cost);
             try {
                 String b64 = payload.path("data").path(0).path("b64_json").asText(null);
                 if (b64 == null || b64.isBlank()) {
@@ -133,7 +146,7 @@ public class OpenAiImageClient implements ImageClient {
             }
 
             log.info("이미지 생성 — {} · {} · ${}", outputKey, spec.model(), cost);
-            attempt.success();
+            call.success();
             return new Result(outputKey, cost);
         } finally {
             deleteQuietly(work);

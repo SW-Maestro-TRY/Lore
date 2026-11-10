@@ -10,6 +10,9 @@ import org.springframework.core.env.Environment;
 public class CustomProviderConfiguration {
     @org.springframework.beans.factory.annotation.Autowired
     private com.lore.zzal.generation.client.PersistentProviderUsageRecorder usageRecorder;
+    /** OpenAI 창구(설계 2-4) — 맞춤 기획은 느긋한 대사 줄. 없으면 혼자 쓰는 창구. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.lore.zzal.openai.OpenAiGateway openAiGateway;
     private com.lore.zzal.generation.client.ProviderUsageRecorder usage() {
         return usageRecorder == null ? com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP : usageRecorder.forFeature("custom_planner");
     }
@@ -27,7 +30,7 @@ public class CustomProviderConfiguration {
       new com.lore.zzal.chat.line.OpenAiChatLineClient(required(env,"app.zzal.openai.api-key"),
           env.getProperty("app.zzal.custom.planner-reasoning-effort","none"),
           env.getProperty("app.zzal.custom.planner-max-completion-tokens",Integer.class,6144), usage(),
-          env.getProperty("app.zzal.openai.base-url","")),
+          env.getProperty("app.zzal.openai.base-url",""), openAiGateway, com.lore.zzal.openai.Lane.DIALOGUE_BACKGROUND),
       java.time.Duration.ofSeconds(env.getProperty("app.zzal.custom.planner-timeout-seconds",Integer.class,90)));
   return new RealCustomBundleService(planning,worker,executor,planner,plannerModel,java.util.Objects.requireNonNull(publication,"Production custom publisher required"));
  }
