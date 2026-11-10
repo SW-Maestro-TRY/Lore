@@ -13,22 +13,21 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 설계 4-4 확인 — 펫 목록 조회({@code PetService.refreshAll})가 그 사이 커밋된 call-back 을 덮는가.
+ * 설계 4-4 — 펫 목록 조회({@code PetService.refreshAll})가 그 사이 커밋된 call-back 을 덮지 않는다.
  *
- * <h3>재현하는 순서</h3>
- * {@code refreshAll} 은 잠금 없이 목록을 먼저 읽고({@code findByUserIdOrderByIdDesc}), 그 뒤 펫마다
- * {@code findMine}(FOR UPDATE)으로 잠근다. 같은 영속성 컨텍스트에 이미 올라온 엔티티는 잠금 조회가 와도
- * Hibernate 가 <b>먼저 읽은 값</b>을 그대로 돌려준다. 그래서 목록 읽기와 잠금 사이에 다른 트랜잭션이
- * call-back 을 커밋하면, 정산(touch) 뒤 더티 체킹이 낡은 칸(여행 시작 시각 등)까지 다시 써서 덮는다.
+ * <h3>지키는 결함</h3>
+ * {@code refreshAll} 은 잠금 없이 목록을 먼저 읽고({@code findByUserIdOrderByIdDesc}) 펫마다 잠근다. 예전에는
+ * {@code findMine}(FOR UPDATE)으로 잠갔는데, 같은 영속성 컨텍스트에 이미 올라온 엔티티는 잠금 조회가 와도
+ * Hibernate 가 <b>먼저 읽은 값</b>을 그대로 돌려줘서, 목록 읽기와 잠금 사이에 커밋된 call-back 을 정산(touch) 뒤
+ * 더티 체킹이 낡은 칸(여행 시작 시각 등)으로 덮었다. 그때 이 시험은 빨강이었다("여행 상태가 되살아남").
+ *
+ * <h3>지금</h3>
+ * 잠글 때 {@code refresh(…, PESSIMISTIC_WRITE)} 로 잠그며 DB 의 최신 값으로 다시 읽은 뒤 정산해 초록이다.
+ * 펫 표 조회 수는 예전과 같다(목록 1 + 펫마다 1) — 아래 두 번째 시험이 고정한다.
  *
  * ★ 이 시험은 목록 읽기를 {@code refreshAll} 바로 앞에서 같은 트랜잭션으로 한 번 해 둔다.
  *   {@code refreshAll} 안의 목록 읽기는 같은 컨텍스트에서 그 낡은 인스턴스를 그대로 받으므로,
  *   "목록 읽기 → (다른 트랜잭션 커밋) → 잠금" 순서와 같다. 코드를 바꾸지 않고 틈을 고정하는 방법이다.
- *
- * <h3>왜 꺼 두나</h3>
- * 원인(목록 읽기가 잠금 전이라 낡은 엔티티가 잠금 뒤에도 쓰인다)이 P4a 파일 범위({@code chat/**}) 밖의
- * {@code PetService.refreshAll} 이라 이번 조각에서 고치지 않는다(계획서 P4-0 "범위 밖이면 고치지 않고 남긴다").
- * 고칠 때 이 줄을 지우면 빨강에서 시작한다.
  */
 @ZzalIntegrationTest
 class PetRefreshAllLostUpdateIT extends ZzalItSupport {
