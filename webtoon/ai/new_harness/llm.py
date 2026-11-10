@@ -54,6 +54,7 @@ load_dotenv(HERE / ".env")
 
 # 서버별 Codex 프록시 전환. Java moderation 은 WEBTOON_API_KEY 로 공식 API 를
 # 계속 사용한다(무료 엔드포인트). 생성 파이썬에만 별도 프록시 키를 적용한다.
+# 켜도 장면 나누기와 검수 넷은 OpenRouter 의 Gemini 에 남는다(_proxy_keeps_stage_default).
 CODEX_PROXY_ENABLED = os.environ.get("WEBTOON_CODEX_PROXY", "").lower() in ("1", "true", "yes", "on")
 if CODEX_PROXY_ENABLED:
     proxy_key = os.environ.get("CODEX_PROXY_API_KEY", "").strip()
@@ -185,10 +186,24 @@ def _stage_default_provider(stage: str) -> str:
     return name if name and _has_key(name) else ""
 
 
+def _proxy_keeps_stage_default(stage: str) -> bool:
+    """구독 경로(WEBTOON_CODEX_PROXY)를 켜도 코드가 정한 OpenRouter 단계에 남는가.
+
+    장면 나누기와 검수 넷(이야기 후보 · 장 · 표지 · 화 전체)이 여기 든다 — STAGE_DEFAULT_PROVIDERS 에서
+    openrouter 로 정해 둔 단계들이다. 장면은 gemini 가 장면을 중심 사건 하나씩으로 묶어서 골랐고(2026-10-27),
+    검수는 그림을 그린 회사와 다른 회사 모델이 결함을 더 잡아서 골랐다(2026-11-05, 59% → 92%).
+
+    구독 경로가 이 단계까지 gpt-6-sol 로 바꾸자 운영 세계관 체험이 3~4장에서 6~7장으로 늘고 한 편이
+    3분대에서 6~7분이 됐다(2026-11-10). 같은 이야기 · 같은 프롬프트로 장면만 나눠 보니 gemini-3.8-flash
+    4장면(36초), gpt-6-sol 7장면(81초)이었다. OpenRouter 키가 없으면 지금처럼 구독 경로로 간다.
+    """
+    return _stage_default_provider(stage) == "openrouter"
+
+
 def provider_for(stage: str) -> str:
     """이 단계가 쓸 프로바이더. 모르는 이름이면 거기서 멈춘다."""
     if CODEX_PROXY_ENABLED:
-        return "openai"
+        return "openrouter" if _proxy_keeps_stage_default(stage) else "openai"
     name, where = _pick(stage, "PROVIDER", ())
     if not name:
         name = _stage_default_provider(stage)
@@ -265,7 +280,8 @@ STAGE_DEFAULT_MODELS[("PAGE_IMAGE", "openai")] = "gpt-image-2.5-flare"
 
 def model_for(stage: str, provider: str) -> str:
     """이 단계가 쓸 모델 이름."""
-    if CODEX_PROXY_ENABLED and stage.upper() not in IMAGE_STAGES:
+    # 구독 경로의 글 단계는 gpt-6-sol 하나다. OpenRouter 에 남긴 단계(장면 · 검수 넷)는 원래 모델 그대로.
+    if CODEX_PROXY_ENABLED and stage.upper() not in IMAGE_STAGES and provider == "openai":
         return env("CODEX_PROXY_TEXT_MODEL", "gpt-6-sol")
     if stage.upper() in IMAGE_STAGES:
         model, _ = _pick(stage, "MODEL", ("NH_IMAGE_MODEL",))
@@ -322,7 +338,9 @@ class Call:
                 self.model, prompt, temp if self.temp_ok else None, limit, images=images or None)
             usage = _add_usage(first, usage)
         cost = story.cost_of(self.model, usage)
-        if CODEX_PROXY_ENABLED:
+        # 구독에 든 것은 openai(프록시)로 간 호출뿐이다. OpenRouter 로 간 장면 · 검수는 실제로 청구되므로
+        # 그 금액을 그대로 남긴다 — 0 으로 덮으면 하루 지출 상한과 원가 집계에서 빠진다.
+        if CODEX_PROXY_ENABLED and self.provider == "openai":
             cost = {"input": 0.0, "output": 0.0, "cache_read": 0.0,
                     "cache_write": 0.0, "total": 0.0, "total_krw": 0,
                     "cost_basis": "codex_subscription"}
