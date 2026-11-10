@@ -37,6 +37,29 @@ class ChatAnswerT2BranchesIT extends ZzalItSupport {
 
     @Autowired ChatService chat;
     @Autowired ZzalChatSessionRepository sessions;
+    @Autowired ChatAnswerHoldsConnectionDuringLlmIT.SlowFakeChatLineClient llm;
+
+    @org.junit.jupiter.api.AfterEach
+    void fastAgain() {
+        llm.delayMs = 0;
+    }
+
+    /**
+     * 실제 흐름(HTTP → ChatAnswerFlow)으로 답을 보내고, 가짜 LLM 이 생각하는 동안 {@code change} 로 상태를 바꾼다.
+     * 거절된 응답과 그 전후의 턴 수를 돌려준다.
+     */
+    private MvcResult answerWhileChanging(Room r, Runnable change) throws Exception {
+        llm.delayMs = 1500;
+        try (var pool = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            var answer = pool.submit(() -> postAs(r.user(), "/api/zzal/v1/me/pets/" + r.pet() + "/chat/CONTINUOUS/answer",
+                    Map.of("sessionId", r.session(), "expectedRound", 0, "requestId", UUID.randomUUID().toString(),
+                            "text", "받아들인 답")));
+            await("답하기가 LLM 대기에 들어감", java.time.Duration.ofSeconds(10), () -> llm.waiting.get() == 1);
+            change.run();
+            assertThat(llm.waiting.get()).as("상태 변경은 LLM 이 끝나기 전에 끝났다").isEqualTo(1);
+            return answer.get(30, java.util.concurrent.TimeUnit.SECONDS);
+        }
+    }
 
     record Room(Long user, Long pet, Long session) { }
 
@@ -101,6 +124,36 @@ class ChatAnswerT2BranchesIT extends ZzalItSupport {
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ZZAL_PET_NOT_ALIVE));
         assertThat(turns(r)).isEqualTo(before);
         assertThat(jdbc.queryForObject("select round_count from zzal_chat_session where id=?", Integer.class, r.session()))
+                .isZero();
+    }
+
+    @Test
+    void httpAnswerIsStaleWhenSessionClosesWhileModelThinks() throws Exception {
+        Room r = room();
+        int before = turns(r);
+        MvcResult result = answerWhileChanging(r, () -> transactions.executeWithoutResult(status ->
+                sessions.findById(r.session()).orElseThrow()
+                        .close(com.lore.zzal.chat.session.CloseReason.CLOSED, Instant.now())));
+        assertThat(result.getResponse().getStatus()).as(result.getResponse().getContentAsString()).isEqualTo(409);
+        assertThat(errorCode(result)).isEqualTo("ZZAL_CHAT_SESSION_STALE");
+        assertThat(turns(r)).isEqualTo(before);
+        assertThat(jdbc.queryForObject("select round_count from zzal_chat_session where id=?", Integer.class, r.session()))
+                .isZero();
+        assertThat(jdbc.queryForObject("select count(*) from zzal_chat_delivery where pet_id=?", Integer.class, r.pet()))
+                .isZero();
+    }
+
+    @Test
+    void httpAnswerIsNotAliveWhenPetIsReleasedWhileModelThinks() throws Exception {
+        Room r = room();
+        int before = turns(r);
+        MvcResult result = answerWhileChanging(r, () -> petService.release(r.user(), r.pet(), Instant.now()));
+        assertThat(result.getResponse().getStatus()).as(result.getResponse().getContentAsString()).isGreaterThanOrEqualTo(400);
+        assertThat(errorCode(result)).isEqualTo("ZZAL_PET_NOT_ALIVE");
+        assertThat(turns(r)).isEqualTo(before);
+        assertThat(jdbc.queryForObject("select round_count from zzal_chat_session where id=?", Integer.class, r.session()))
+                .isZero();
+        assertThat(jdbc.queryForObject("select count(*) from zzal_chat_delivery where pet_id=?", Integer.class, r.pet()))
                 .isZero();
     }
 
