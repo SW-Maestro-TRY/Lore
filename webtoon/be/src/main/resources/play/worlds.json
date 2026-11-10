@@ -130,7 +130,7 @@
               },
               {
                 "title": "약점",
-                "content": "머리를 부숴야 쓰러진다.",
+                "content": "한 번 쓰러뜨리면 다시 일어나지 않는다.",
                 "kind": "world",
                 "always": true
               },

@@ -166,8 +166,32 @@ def pages_of(run_dir: Path) -> list[Path]:
     return [p for _, p in sorted(got)]
 
 
-def build_prompt() -> str:
-    """머리말 그대로다 — 줄거리·direction 을 안 섞는다.
+def secrets_of(run_dir: Path) -> list[str]:
+    """이 run 의 비공개 설정(세계관 체험). input.json 의 settings 뒤에 서버가 단 「[비공개 설정]」 줄들. 없으면 []."""
+    try:
+        import run as R                                           # noqa: 바닥(split_secrets)만 빌린다
+        doc = json.loads((run_dir / "input.json").read_text(encoding="utf-8"))
+        if doc.get("play") is not True:
+            return []
+        return R.split_secrets(str(doc.get("settings") or ""))[1]
+    except Exception:                                             # noqa: BLE001 — 검수는 비밀이 없어도 돈다
+        return []
+
+
+def secrets_check(secrets: list[str]) -> str:
+    """전체 검수에 더하는 「비공개 설정 노출」 검사. 비밀이 없으면 빈 글 — 예전 프롬프트 그대로."""
+    if not secrets:
+        return ""
+    return "\n".join(["", "[0순위 — 비공개 설정 노출. 다른 어떤 항목보다 먼저 본다]",
+                       "아래는 이 세계가 정해 둔 비밀이다. 독자는 몰라야 한다. 말풍선·나레이션·글상자·그림의 글자에 아래 사실이 "
+                       "적혀 있거나, 독자가 읽고 바로 알아차릴 만큼 드러나 있으면 severity 는 critical, redraw 는 false, "
+                       "why 에 「비공개 설정 노출: (무엇이 어디에)」라고 적는다 — 글은 장면 단계에서 정해진 것이라 다시 그려도 "
+                       "안 바뀐다. 인물이 비밀에 맞게 행동하는 것 자체는 문제가 아니다.",
+                       *[f"- {x}" for x in secrets], ""])
+
+
+def build_prompt(secrets: list[str] | None = None) -> str:
+    """머리말 그대로다 — 줄거리·direction 을 안 섞는다. 비공개 설정이 있을 때만 그 검사가 앞에 붙는다.
 
     페이지가 몇 장인지, 어느 페이지가 표지인지는 첨부한 그림 자체의
     순서로 이미 전달된다. 텍스트를 더 얹으면 "무엇이 되려고 했는가"를
@@ -180,7 +204,8 @@ def build_prompt() -> str:
     text = path.read_text(encoding="utf-8").strip()
     if not text:
         raise SystemExit(f"프롬프트가 비어 있습니다: {path}")
-    return text
+    extra = secrets_check(secrets or [])
+    return text + ("\n" + extra if extra else "")
 
 
 # ------------------------------------------------------------------------ 파싱
@@ -243,19 +268,23 @@ def reset_issues(read: list[dict], fixed_narration: bool = False) -> list[dict]:
     }]
 
 
-def cover_issues(cover, title: str, checked: dict | None = None) -> list[dict]:
+def cover_issues(cover, title: str, checked: dict | None = None, genre: str = "") -> list[dict]:
     """모델이 센 `cover` -> issues. **표지인가는 코드가 정한다**(covercheck.judge).
 
-    그리는 자리의 표지 검수(covercheck)와 같은 기준을 쓴다 — 거기서 다시 그릴
-    횟수를 다 쓰고도 표지 모양이 아니었거나, 검수가 꺼져 있었던 경우를 여기서
-    한 번 더 잡는다. 잡히면 1페이지를 다시 그리게 한다(JobRunner 의 재생성
+    그리는 자리의 표지 검수(covercheck)와 같은 기준을 쓴다. 표지 검수가 지금 그림을
+    이미 봤으면 그 결정(통과든, 다시 그릴 횟수를 다 쓰고 그대로 둔 것이든)을 따르고
+    여기서는 아무것도 더하지 않는다. 표지 검수가 꺼져 있어 판정이 없을 때만 여기서
+    잡는다. 잡히면 1페이지를 다시 그리게 한다(JobRunner 의 재생성
     루프가 `--page 1` 로 부른다).
     """
     if checked is not None:
-        # 표지 검수가 지금 이 그림을 이미 봤다 — 그 판정을 따른다.
-        found = checked.get("issues") or []
-    elif isinstance(cover, dict):
-        found = covercheck.judge(cover, title)
+        # 표지 검수가 지금 이 그림을 이미 봤다 — 그 판정을 따른다. 통과면 그대로, 걸렸는데 그림이
+        # 바뀌지 않았다면 표지 검수가 다시 그릴 횟수를 다 쓰고 「그대로 둔다」로 끝낸 것이다. 여기서
+        # 다시 그리게 하면 1페이지를 그릴 때마다 표지 검수가 또 돌아 같은 기준으로 또 걸린다 — 실제로
+        # 표지 하나를 여섯 번 그렸다(#992). 표지 검수가 내린 결정을 여기서 뒤집지 않는다.
+        return []
+    if isinstance(cover, dict):
+        found = covercheck.judge(cover, title, genre)
     else:
         return []
     if not found:
@@ -315,7 +344,7 @@ def repeat_issues(repeat, total: int) -> list[dict]:
     return out
 
 
-def parse(text: str, *, title: str = "", cover_attached: bool = True,
+def parse(text: str, *, title: str = "", genre: str = "", cover_attached: bool = True,
           cover_checked: dict | None = None, page_count: int = 0,
           fixed_narration: bool = False) -> dict:
     """검수 응답(JSON) -> 판정.
@@ -391,7 +420,7 @@ def parse(text: str, *, title: str = "", cover_attached: bool = True,
     issues += repeat_issues(obj.get("repeat"), len(read))
     issues += reset_issues(read, fixed_narration)
     if cover_attached:
-        issues += cover_issues(obj.get("cover"), title, cover_checked)
+        issues += cover_issues(obj.get("cover"), title, cover_checked, genre)
     if page_count:
         for one in issues:
             bad = [n for n in one["pages"] if not 1 <= n <= page_count]
@@ -446,7 +475,7 @@ def review_episode(run_dir: Path, dry_run: bool = False) -> tuple[dict | None, d
         log("  [전체 검수] 그려진 페이지가 없습니다 — 건너뜁니다")
         return None, None
 
-    prompt = build_prompt()
+    prompt = build_prompt(secrets_of(run_dir))
     write_text(run_dir / "full_review_prompt.txt", prompt)
     if dry_run:
         log(f"[전체 검수] 프롬프트만 썼습니다 -> {run_dir / 'full_review_prompt.txt'}")
@@ -477,7 +506,8 @@ def review_episode(run_dir: Path, dry_run: bool = False) -> tuple[dict | None, d
     meta["pages"] = len(images)
     try:
         scenes = (read_json(run_dir / "scenes.json") or {}).get("scenes") or []
-        review = parse(text, title=covercheck.title_of(run_dir), cover_attached=cover_attached,
+        review = parse(text, title=covercheck.title_of(run_dir), genre=covercheck.genre_of(run_dir),
+                       cover_attached=cover_attached,
                        cover_checked=covercheck.latest_review(run_dir),
                        page_count=len(pages_of(run_dir)),
                        fixed_narration=any(isinstance(sc, dict) and sc.get("narration") is not None

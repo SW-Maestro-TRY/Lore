@@ -5,14 +5,15 @@
 import { uploadDataUrls } from "@common/api/uploads";
 import { listPlayWorlds, makePlayWorld, readPlayWorld, savePlayWorld, WebtoonApiError } from "../../lib/api";
 
-export interface PlayEvent { id: string; no: string; title: string; line: string; situation: string; image_url: string | null; tried: number; canon?: string[]; canon_end?: string; place?: string; spot?: string; cast?: string[]; examples?: string[]; example_people?: { id?: string; name: string; role?: string; age?: number; desc: string; relation?: string; face_url?: string; character_id?: string }[] }
-export interface PlayPerson { id?: string; name: string; role?: string; desc?: string; face_url?: string | null }
-export interface PlayWorld { id: string; name: string; genre: string; one: string; cover_url: string | null; spot: string; cast: PlayPerson[]; events: PlayEvent[]; examples?: string[]; mine?: boolean; rule?: string }
+export interface PlayEvent { id: string; no: string; title: string; line: string; situation: string; image_url: string | null; tried: number; canon?: string[]; canon_end?: string; place?: string; spot?: string; cast?: string[]; examples?: string[]; example_people?: { id?: string; name: string; role?: string; age?: number; desc: string; relation?: string; face_url?: string; character_id?: string }[]; secret?: string }
+export interface PlayPerson { id?: string; name: string; role?: string; desc?: string; face_url?: string | null; secret?: string }
+export interface PlayWorld { id: string; name: string; genre: string; one: string; cover_url: string | null; spot: string; cast: PlayPerson[]; events: PlayEvent[]; examples?: string[]; mine?: boolean; rule?: string; secret?: string }
 
 /* 세계관 만들기의 글 — 저장 API(POST /play/worlds)에 그대로 보낸다 */
-export interface DraftPerson { id: string; name: string; role: string; desc: string; face?: string; character_id?: string }
-export interface DraftEvent { id: string; title: string; line: string; situation: string; place: string; spot: string; cast: string[]; examples: string[]; example_people?: DraftPerson[]; image?: string }
-export interface WorldDraft { id?: string; cover?: string; name: string; genre: string; one: string; rule: string; cast: DraftPerson[]; events: DraftEvent[]; examples: string[]; visibility: "public" | "private"; lorebook_id?: string }
+/* secret — 비공개 설정: 만든 사람만 본다(세계 · 인물 · 사건). 체험 이야기는 알되 드러내지 않는다(서버 withSecrets) */
+export interface DraftPerson { id: string; name: string; role: string; desc: string; face?: string; character_id?: string; secret?: string }
+export interface DraftEvent { id: string; title: string; line: string; situation: string; place: string; spot: string; cast: string[]; examples: string[]; example_people?: DraftPerson[]; image?: string; secret?: string }
+export interface WorldDraft { id?: string; cover?: string; name: string; genre: string; one: string; rule: string; secret?: string; cast: DraftPerson[]; events: DraftEvent[]; examples: string[]; visibility: "public" | "private"; lorebook_id?: string }
 
 /* 서버에 저장 길이 아직 없을 때(404 · 405) 만든 세계를 이 브라우저에 둔다. 서버가 생기면 그쪽이 먼저다. */
 const LOCAL = "lore-my-worlds";
@@ -79,12 +80,12 @@ export async function makeWorld(d: WorldDraft, onTick?: () => void): Promise<Wor
   }
 }
 export function fromServer(w: ServerWorld, d: WorldDraft): WorldDraft {
-  const cast = (w.cast || []).map((p, i) => ({ id: p.id || `c${i + 1}`, name: p.name, role: p.role || "", desc: p.desc || "", face: p.face_url || undefined }));
+  const cast = (w.cast || []).map((p, i) => ({ id: p.id || `c${i + 1}`, name: p.name, role: p.role || "", desc: p.desc || "", face: p.face_url || undefined, secret: p.secret || "" }));
   return {
-    ...d, id: w.id, cover: w.cover_url || d.cover, name: w.name || d.name, genre: w.genre || d.genre, one: w.one || d.one, rule: w.rule || d.rule,
+    ...d, id: w.id, cover: w.cover_url || d.cover, name: w.name || d.name, genre: w.genre || d.genre, one: w.one || d.one, rule: w.rule || d.rule, secret: w.secret ?? d.secret,
     visibility: w.visibility || d.visibility, lorebook_id: w.lorebook_id || d.lorebook_id, examples: w.examples || d.examples, cast,
     /* 운영 세계는 사건 인물을 이름으로 적어 둔다 — 고치는 칸은 인물 id 로 고르니 이름을 id 로 바꾼다 */
-    events: (w.events || []).map((e) => ({ id: e.id, title: e.title, line: e.line || "", situation: e.situation || "", place: e.place || "", spot: e.spot || "", cast: (e.cast || []).map((c) => cast.find((p) => p.name === c)?.id || c), examples: e.examples || [], image: e.image_url || undefined,
+    events: (w.events || []).map((e) => ({ id: e.id, title: e.title, line: e.line || "", situation: e.situation || "", place: e.place || "", spot: e.spot || "", secret: e.secret || "", cast: (e.cast || []).map((c) => cast.find((p) => p.name === c)?.id || c), examples: e.examples || [], image: e.image_url || undefined,
       example_people: (e.example_people || []).map((x) => ({ id: x.id || x.name, name: x.name, role: x.role || "", desc: x.desc || "", face: x.face_url || undefined, character_id: x.character_id })) })),
   };
 }

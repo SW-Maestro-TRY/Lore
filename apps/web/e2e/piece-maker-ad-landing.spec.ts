@@ -1,6 +1,7 @@
 // 브라우저의 접수·계정 연결을 목 API로 검사한다. 실제 DB 집계는 서버 통합 검사에서 다룬다.
 import { expect, test, type Page, type BrowserContext } from '@playwright/test';
 import { AD_LANDINGS_URL, AD_LANDING_CLAIM_URL, ME_URL, ME, OTHER, answer, fail, mockLore, ok } from './piece-maker-lore';
+import { myPageLink, signOutFromMyPage } from './header-account-helper';
 
 const STORAGE = 'lore_pm_ad_landing_v2';
 const SOURCE = 'lore_pm_ad_attribution_v1';
@@ -14,7 +15,7 @@ async function login(page: Page) {
   await dialog.locator('input[type="email"]').fill('test@example.invalid');
   await dialog.locator('input[type="password"]').fill('test-password');
   await dialog.locator('button[type="submit"]').click();
-  await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+  await expect(myPageLink(page)).toBeVisible();
 }
 async function setup(context: BrowserContext, loggedIn = false) {
   const state = await mockLore(context, { state: { loggedIn, hypotheses: [] } });
@@ -93,7 +94,7 @@ test('A 로그아웃 뒤 B 로그인에 접수증을 넘기거나 남은 URL을 
   const { state, captures, claims, events } = await setup(context, true);
   await page.goto(AD);
   await expect.poll(() => claims.length).toBe(1);
-  await page.getByRole('button', { name: '로그아웃' }).click();
+  await signOutFromMyPage(page, '/piece-maker');
   await expect.poll(async () => (await saved(page))?.receipt).toBeNull();
   state.me = OTHER;
   await login(page);
@@ -124,11 +125,10 @@ test('계정 전환 뒤 늦은 접수 응답이 저장소를 되살리지 않는
   await context.route(AD_LANDINGS_URL, async route => { requested = true; await wait; await answer(route, ok({ landingId: ID, landedAt: TIME })); });
   await page.goto(AD);
   await expect.poll(() => requested).toBe(true);
-  await page.getByRole('button', { name: '로그아웃' }).click();
+  await signOutFromMyPage(page, '/piece-maker');
   await expect.poll(async () => (await saved(page))?.receipt).toBeNull();
-  const lateResponse = page.waitForResponse(response => AD_LANDINGS_URL.test(response.url()));
+  // 마이페이지 이동 시 원래 페이지의 진행 중 요청이 취소된다.
   release();
-  await lateResponse;
   await expect(page.getByRole('button', { name: '로그인', exact: true })).toBeVisible();
   expect((await saved(page)).receipt).toBeNull();
   expect(claims).toHaveLength(0);

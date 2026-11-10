@@ -24,6 +24,7 @@ import { track } from "./track";
 import { authFetch, readAllowance } from "./api";
 import { QUALITY_INFO } from "./wizardData";
 import { unsafeWhy } from "./serverI18n";
+import { EDITOR_GAP_RATIOS } from "./editorGap";
 
 const API = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
@@ -374,7 +375,7 @@ export function mountEditor(
   function gapScale(step) {
     const t = (data && data.gap_scale) || {};
     const v = t[String(step)];
-    return typeof v === "number" ? v : [0, 0.07, 0.26, 0.62][step] || 0;
+    return typeof v === "number" ? v : EDITOR_GAP_RATIOS[step] || 0;
   }
 
   /* 지금 이 장 뒤의 여백이 몇 단인가 — 고친 것이 있으면 그것, 없으면 콘티 값. */
@@ -2552,19 +2553,6 @@ export function mountEditor(
       } catch (err) { toast(err.message); }
       btn.disabled = false;
       btn.textContent = was;
-    });
-
-    // 그림만 뽑기 — 얹은 것을 빼고 밑그림을 잇는다(LORE 표시는 그대로). 굽지 않는다.
-    // 여백은 얹은 것이 아니라 지면 배치라 따라간다 — 고치던 여백이 아직 안 올라갔으면 먼저 올린다.
-    $("#plainBtn")?.addEventListener("click", async () => {
-      if (!RUN_ID) return toast(tr("샘플에는 구울 그림이 없습니다. 실제 작품을 열어 주세요."));
-      const btn = $("#plainBtn");
-      btn.disabled = true;
-      clearTimeout(pushT);
-      try { await pushNow(); } catch (_) { /* 저장이 막혀도 그림만 받기는 된다 */ }
-      track("download_click", { run: RUN_ID, kind: "episode", plain: true, where: "editor" });
-      pullFile(`${API}/runs/${encodeURIComponent(RUN_ID)}/episode.png?plain=1`, `${RUN_ID}-plain.png`);
-      btn.disabled = false;
     });
 
     // 다시 그리기 확인 창. 바깥을 눌러도 닫힌다 — 실수로 연 것을 닫는 데

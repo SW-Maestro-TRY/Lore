@@ -2,8 +2,9 @@
 //
 // 왜 따로 두나 — `piece-maker.spec.ts` 는 독자 하나의 흐름이다. 여기서는 A 가 맡기고 로그아웃한 뒤 B 가 로그인하는 길을 밟는다.
 // 가짜 서버(`piece-maker-lore.ts`)는 진짜 서버처럼 남의 가설을 404 로 답하고 내 목록(2-7)을 계정별로 준다.
-// 로그아웃 · 로그인은 lore 공용 헤더의 단추와 공용 로그인 창(role="dialog")으로 한다.
+// 로그인은 공용 헤더에서, 로그아웃은 헤더의 마이페이지를 거쳐 한다.
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { myPageLink, signOutFromMyPage } from './header-account-helper';
 import { CARDS, ME, OTHER, HYPOTHESES_URL, HYPOTHESIS_URL, MY_HYPOTHESES_URL, ME_URL, answer, fail, ok, load, mockLore, selectChapter, submitResponse, visibleCards, waitForJudgementPoll, type LoreHypothesis } from './piece-maker-lore';
 
 type JudgeResponse = { judgement: { grade: string; reason: string; support: string[]; against: string[] } };
@@ -43,9 +44,9 @@ function judgeAs(item: LoreHypothesis): void {
   item.judgedAt = new Date().toISOString();
 }
 
-/** 공용 헤더로 로그아웃한다. */
+/** 공용 마이페이지에서 로그아웃하고 작업 화면으로 돌아온다. */
 async function logout(page: Page): Promise<void> {
-  await page.getByRole('button', { name: '로그아웃' }).click();
+  await signOutFromMyPage(page, '/piece-maker');
   await expect(page.getByRole('button', { name: '로그인', exact: true })).toBeVisible();
 }
 
@@ -57,7 +58,7 @@ async function login(page: Page, email: string): Promise<void> {
   await auth.locator('input[type="email"]').fill(email);
   await auth.locator('input[type="password"]').fill('secret-pass-1');
   await auth.locator('button[type="submit"]').click();
-  await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+  await expect(myPageLink(page)).toBeVisible();
 }
 
 // 계정 상태의 검사라 배치는 상관없다. 작성 칸이 늘 보이는 데스크톱 폭으로 돈다(`piece-maker.spec.ts` 의 '데스크톱' 과 같다).
@@ -273,7 +274,7 @@ for (const mode of ['shared', 'corrupt-shared', 'old-account', 'old-shared'] as 
       } else sessionStorage.setItem('piece_maker:pending-submit', '{broken');
     }, { owner: ME.userId, mode });
     await page.reload();
-    await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+    await expect(myPageLink(page)).toBeVisible();
     await expect(page.locator('[data-action="judge"]')).toBeEnabled();
     await page.click('[data-action="judge"]');
     await expect(compose(page)).toHaveAttribute('data-frozen', 'true');
@@ -323,7 +324,7 @@ for (const returnToA of [false, true]) {
     await expect(compose(page)).toHaveAttribute('data-frozen', 'false');
     expect((await storedDraft(page)).hypothesisId).toBeUndefined();
     await page.reload();
-    await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+    await expect(myPageLink(page)).toBeVisible();
     await expect(page.locator('#piece-maker-claim')).toHaveValue('현재 계정에서 새로 작성한 주장');
   });
 }
@@ -417,7 +418,7 @@ for (const recovery of ['login', 'reload', 'other'] as const) {
     if (recovery === 'other') lore.me = OTHER;
     if (recovery === 'reload') {
       await page.reload();
-      await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+      await expect(myPageLink(page)).toBeVisible();
     } else await login(page, lore.me.email);
     if (recovery === 'other') {
       await expect(page.locator('#piece-maker-claim')).toHaveValue('');
