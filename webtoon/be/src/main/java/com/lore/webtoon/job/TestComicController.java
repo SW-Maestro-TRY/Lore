@@ -323,6 +323,7 @@ public class TestComicController {
     }
 
     /** 확인한 대화 → 화·장면 나누기 → 시트(보관함 우선). 시트 확인 단계에서 멈춘다. */
+    @SuppressWarnings("unchecked")
     @PostMapping("/drafts/{id}/generate")
     public Map<String, Object> generate(@PathVariable String id, @RequestHeader("X-Test-Passcode") String pass,
                                         @RequestBody Map<String, Object> draft,
@@ -332,11 +333,33 @@ public class TestComicController {
         if (!"review".equals(state(path).get("phase"))) throw new TestError(409, "먼저 대화를 확인해 주세요");
         if (!(draft.get("dialogue") instanceof List<?> dialogue) || dialogue.isEmpty())
             throw new TestError(400, "대화가 비어 있어요");
-        write(path.resolve("draft.json"), draft);
+        // 다음 화 이어 붙이기: 앞 작품(같은 제목) 화 번호를 이어 세고, 마지막 장면이 끝난 상태에서 시작한다.
+        String prev = String.valueOf(draft.getOrDefault("continue_of", "")).strip();
+        Map<String, Object> saved = new LinkedHashMap<>(draft);
+        if (!prev.isBlank()) {
+            Path before = dir(prev);
+            try {
+                Map<String, Object> plan = mapper.readValue(before.resolve("plan.json").toFile(), new TypeReference<>() {});
+                String title = String.valueOf(plan.getOrDefault("title", ""));
+                int last = 0;
+                String lastEnd = "";
+                for (Map<String, Object> w : (List<Map<String, Object>>) works(pass, request).get("works")) {
+                    if (!title.equals(w.get("title"))) continue;
+                    for (Map<String, Object> e : (List<Map<String, Object>>) w.get("episodes")) last = Math.max(last, ((Number) e.get("number")).intValue());
+                    Map<String, Object> wp = mapper.readValue(root.resolve(String.valueOf(w.get("id"))).resolve("plan.json").toFile(), new TypeReference<>() {});
+                    lastEnd = String.valueOf(wp.getOrDefault("last_end", lastEnd));
+                }
+                saved.put("title", title);
+                saved.put("start_number", last + 1);
+                saved.put("prev_end", lastEnd);
+            } catch (IOException e) { throw new TestError(400, "이어 붙일 작품을 읽지 못했어요"); }
+        }
+        write(path.resolve("draft.json"), saved);
         status(path, "generating", "화와 장면을 나누고 있어요");
         worker.submit(() -> {
             try {
                 mustRun(List.of("--run-id", id, "--chat-prepare"), ENV);
+                if (!prev.isBlank()) inheritSheets(prev, id);
                 mustRun(List.of("--run-id", id, "--chat-sheets"), ENV);
                 status(path, "generating", "인물 시트를 준비하고 있어요");
                 mustRun(List.of("--run-id", epId(id, 1), "--sheet"), ENV);
@@ -395,6 +418,39 @@ public class TestComicController {
         dir(id);
         mustRun(List.of("--run-id", id, "--chat-save-sheets"), ENV);
         return get(id, pass, request);
+    }
+
+    /** 둘러보기 — 만든 작품(화가 나뉜 작업) 전부. 같은 제목은 화면이 한 작품으로 묶는다(이어 붙인 다음 화). */
+    @GetMapping("/works")
+    public Map<String, Object> works(@RequestHeader("X-Test-Passcode") String pass,
+                                     jakarta.servlet.http.HttpServletRequest request) throws IOException {
+        check(pass, request.getRemoteAddr());
+        List<Map<String, Object>> out = new ArrayList<>();
+        try (var dirs = Files.list(root)) {
+            for (Path d : dirs.filter(x -> x.getFileName().toString().matches("test-[0-9a-f]{32}")).toList()) {
+                if (!Files.isRegularFile(d.resolve("plan.json")) || !Files.isRegularFile(d.resolve("test-state.json"))) continue;
+                String id = d.getFileName().toString();
+                Map<String, Object> plan = mapper.readValue(d.resolve("plan.json").toFile(), new TypeReference<>() {});
+                Map<String, Object> st = state(d);
+                List<Map<String, Object>> eps = new ArrayList<>();
+                for (Map<String, Object> e : episodes(d)) {
+                    int n = ((Number) e.get("n")).intValue();
+                    Map<String, Object> one = new LinkedHashMap<>();
+                    one.put("n", n);
+                    one.put("number", e.getOrDefault("number", n));
+                    one.put("subtitle", e.getOrDefault("subtitle", ""));
+                    one.put("pages", e.get("pages"));
+                    one.put("cover", Files.isRegularFile(ep(id, n).resolve("pages/page01.png")));
+                    one.put("stitched", Files.isRegularFile(ep(id, n).resolve("episode.png")));
+                    eps.add(one);
+                }
+                out.add(Map.of("id", id, "title", String.valueOf(plan.getOrDefault("title", "")),
+                        "createdAt", String.valueOf(st.getOrDefault("createdAt", "")),
+                        "phase", String.valueOf(st.getOrDefault("phase", "")), "episodes", eps));
+            }
+        }
+        out.sort(Comparator.comparing(m -> String.valueOf(m.get("createdAt"))));
+        return Map.of("works", out);
     }
 
     /** 보관함에 든 인물 목록(이름 → 그림체들). */
@@ -538,6 +594,21 @@ public class TestComicController {
         }
         for (int attempt = 1; attempt <= PAGE_ATTEMPTS && !Files.isRegularFile(png); attempt++) run(args, ENV);
         return Files.isRegularFile(png);
+    }
+
+    /** 앞 작품 1화의 시트를 새 작품 1화에 깐다(보관함에 같은 시트가 있으면 --chat-sheets 가 그것으로 덮는다). */
+    private void inheritSheets(String fromId, String toId) throws IOException {
+        Path from = ep(fromId, 1), to = ep(toId, 1);
+        for (String f : List.of("sheet.png", "sheet_spec.json"))
+            if (Files.isRegularFile(from.resolve(f))) Files.copy(from.resolve(f), to.resolve(f), StandardCopyOption.REPLACE_EXISTING);
+        Path sheets = from.resolve("sheets");
+        if (Files.isDirectory(sheets)) {
+            Files.createDirectories(to.resolve("sheets"));
+            try (var files = Files.list(sheets)) {
+                for (Path f : files.filter(x -> x.getFileName().toString().matches(".+\\.(png|spec\\.json)")).toList())
+                    Files.copy(f, to.resolve("sheets").resolve(f.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
     }
 
     private void stitchIfComplete(String id, int en, int total) throws IOException, InterruptedException {

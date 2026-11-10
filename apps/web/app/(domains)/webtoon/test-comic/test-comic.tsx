@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import styles from "./test-comic.module.css";
+import Library, { type Work } from "./library";
 
 type Line = { speaker: string; text: string };
 type Scene = { n: number; what: string; acting: string; missing?: string[] };
@@ -78,6 +79,9 @@ export default function TestComic() {
   const [libName, setLibName] = useState("");
   const [libSheet, setLibSheet] = useState<File | null>(null);
   const [libSpec, setLibSpec] = useState<File | null>(null);
+  const [tab, setTab] = useState<"make" | "browse">("make");
+  const [works, setWorks] = useState<Work[]>([]);
+  const [continueOf, setContinueOf] = useState("");
 
   const call = useCallback(async (path: string, options: RequestInit = {}) => {
     const response = await fetch(API + path, {
@@ -144,6 +148,13 @@ export default function TestComic() {
     try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : fail); } finally { setBusy(false); }
   }
 
+  const loadWorks = useCallback(async () => {
+    setWorks((await (await call("/works")).json()).works || []);
+  }, [call]);
+
+  const loadArt = useCallback(async (workId: string, e: number, file: string) =>
+    URL.createObjectURL(await (await call(`/drafts/${workId}/art/${file}?e=${e}`)).blob()), [call]);
+
   const loadLibrary = useCallback(async () => {
     setLibrary((await (await call("/library")).json()).people || []);
   }, [call]);
@@ -162,6 +173,7 @@ export default function TestComic() {
     await call("/check", { method: "POST" });
     setUnlocked(true);
     await loadLibrary().catch(() => undefined);
+    await loadWorks().catch(() => undefined);
     let saved = null;
     try { saved = sessionStorage.getItem("lore-test-comic-draft"); } catch { /* 저장소가 막혀 있으면 새로 시작 */ }
     if (saved) await refresh(saved).catch(() => undefined);
@@ -201,7 +213,7 @@ export default function TestComic() {
     for (const [i, p] of named.entries()) if (p.photo) await upload(draft.id, `p${i}`, p.photo);
     setDraft(await (await call(`/drafts/${draft.id}/generate`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dialogue, title, genre: "로맨틱 코미디", notes, rename,
+      body: JSON.stringify({ dialogue, title, genre: "로맨틱 코미디", notes, rename, continue_of: continueOf || undefined,
         people: named.map(p => ({ name: p.name.trim(), description: p.description, role: p.role })) }),
     })).json());
   }, "만들기를 시작하지 못했어요");
@@ -237,6 +249,7 @@ export default function TestComic() {
 
   const startOver = () => {
     try { sessionStorage.removeItem("lore-test-comic-draft"); } catch { /* 무시 */ }
+    setContinueOf(""); setTitle("");
     setDraft(null); setTranscript(""); setPeople([]); setArt({}); setCaptures([]); setPasted(""); setEpisode(1);
   };
 
@@ -265,6 +278,12 @@ export default function TestComic() {
           <button onClick={unlock} disabled={busy || !pass}>들어가기</button>
         </div>
       </section> : <>
+        <div className={styles.tabs} role="tablist">
+          <button role="tab" aria-selected={tab === "make"} className={tab === "make" ? styles.tabOn : styles.tab} onClick={() => setTab("make")}>만들기</button>
+          <button role="tab" aria-selected={tab === "browse"} className={tab === "browse" ? styles.tabOn : styles.tab}
+            onClick={() => { setTab("browse"); loadWorks().catch(e => setError(e instanceof Error ? e.message : "목록을 읽지 못했어요")); }}>둘러보기</button>
+        </div>
+        {tab === "browse" ? <Library works={works} load={loadArt} /> : <>
         {!draft || draft.phase === "upload" ? <section className={styles.panel}>
           <h2>대화 올리기</h2>
           <p>캡처를 맨 앞부터 순서대로 고르거나, 대화 글을 그대로 붙여 넣으세요. 붙여 넣으면 글자를 읽는 단계를 건너뛰어 틀릴 일이 없어요.</p>
@@ -321,8 +340,17 @@ export default function TestComic() {
               onChange={e => { const f = e.target.files?.[0] || null; setPeople(ps => ps.map((x, j) => j === i ? { ...x, photo: f } : x)); }} />
           </div>)}
           <button className={styles.ghost} onClick={() => setPeople(ps => [...ps, { name: "", description: "", role: "cast", photo: null }])}>인물 추가</button>
+          <label htmlFor="continue-of">이어 붙일 작품 · 선택</label>
+          <select id="continue-of" value={continueOf} onChange={e => {
+            const id = e.target.value; setContinueOf(id);
+            const w = works.find(x => x.id === id); if (w) setTitle(w.title);
+          }}>
+            <option value="">새 작품으로 만들기</option>
+            {Array.from(new Map(works.filter(w => w.episodes.length).map(w => [w.title, w])).values()).map(w =>
+              <option key={w.id} value={w.id}>{w.title} · 다음 화로 이어 붙이기</option>)}
+          </select>
           <div className={styles.fields}>
-            <div><label htmlFor="comic-title">제목</label><input id="comic-title" value={title} onChange={e => setTitle(e.target.value)} /></div>
+            <div><label htmlFor="comic-title">제목</label><input id="comic-title" value={title} disabled={Boolean(continueOf)} onChange={e => setTitle(e.target.value)} /></div>
             <div><label htmlFor="rename">이름 바꾸기 · 한 줄에 ‘원래이름=바꿀이름’</label><textarea id="rename" rows={2} value={rename} onChange={e => setRename(e.target.value)} placeholder="봇이 부르는 이름=몽이" /></div>
           </div>
           <label htmlFor="comic-notes">메모 · 선택</label>
@@ -391,6 +419,7 @@ export default function TestComic() {
 
         {draft?.phase === "error" ? <section className={styles.panel}><h2>작업이 멈췄어요</h2><p>{draft.message}</p></section> : null}
         {draft && draft.phase !== "upload" ? <button className={styles.restart} onClick={startOver}>새 대화로 시작하기</button> : null}
+        </>}
       </>}
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
     </div>
