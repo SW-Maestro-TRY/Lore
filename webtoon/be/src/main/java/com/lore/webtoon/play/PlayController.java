@@ -112,15 +112,27 @@ public class PlayController {
      * 운영자 세계를 화면에 줄 때 — 설정집은 시작할 때 서버가 붙이므로 빼고, 사건마다 예시 캐릭터 id 를 붙인다
      * (example_people 중 사진이 있는 사람, {@link PlayPeople}).
      */
-    private Map<String, Object> shown(Map<String, Object> world) {
+    Map<String, Object> shown(Map<String, Object> world) {
         Map<String, Object> out = new LinkedHashMap<>(world);
         out.remove("lorebook");
+        out.remove("secret");
+        List<Map<String, Object>> cast = new ArrayList<>();
+        for (Object c : PlayWorldService.list(world.get("cast"))) {
+            if (c instanceof Map<?, ?> person) {
+                Map<String, Object> visible = new LinkedHashMap<>();
+                person.forEach((k, val) -> visible.put(String.valueOf(k), val));
+                visible.remove("secret");
+                cast.add(visible);
+            }
+        }
+        out.put("cast", cast);
         out.putIfAbsent("examples", List.of());
         List<Map<String, Object>> events = new ArrayList<>();
         for (Object e : PlayWorldService.list(world.get("events"))) {
             if (e instanceof Map<?, ?> v) {
                 Map<String, Object> m = new LinkedHashMap<>();
                 v.forEach((k, val) -> m.put(String.valueOf(k), val));
+                m.remove("secret");
                 List<String> ids = new ArrayList<>(PlayWorldService.ids(v.get("examples")));
                 catalog.examples(String.valueOf(v.get("id"))).forEach(id -> {
                     if (!ids.contains(id)) {
@@ -198,6 +210,7 @@ public class PlayController {
                 ? catalogSituation(world, event, name)
                 : PlayWorldService.situation(event, Map.of());
         situation = PlayWorldService.withCanon(situation, event, played.groupEndsOf(form.eventId()));
+        situation = PlayWorldService.withSecrets(situation, world, event);   // 비공개 설정 — 이야기만 안다(2026-11-08)
         ResponseEntity<Map<String, Object>> started = jobs.createPlay(request, new JobService.CreateRequest(
                 name, null, (String) world.get("genre"), null, form.style(), null, null, null,
                 form.agreeIp(), false, form.uid(), form.characterId(), null, form.quality(), form.language(),

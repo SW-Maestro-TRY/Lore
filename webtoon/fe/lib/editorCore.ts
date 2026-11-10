@@ -24,6 +24,7 @@ import { track } from "./track";
 import { authFetch, readAllowance } from "./api";
 import { QUALITY_INFO } from "./wizardData";
 import { unsafeWhy } from "./serverI18n";
+import { EDITOR_GAP_RATIOS } from "./editorGap";
 
 const API = process.env.NEXT_PUBLIC_WEBTOON_API || "/api/webtoon/v1";
 
@@ -374,7 +375,7 @@ export function mountEditor(
   function gapScale(step) {
     const t = (data && data.gap_scale) || {};
     const v = t[String(step)];
-    return typeof v === "number" ? v : [0, 0.07, 0.26, 0.62][step] || 0;
+    return typeof v === "number" ? v : EDITOR_GAP_RATIOS[step] || 0;
   }
 
   /* 지금 이 장 뒤의 여백이 몇 단인가 — 고친 것이 있으면 그것, 없으면 콘티 값. */

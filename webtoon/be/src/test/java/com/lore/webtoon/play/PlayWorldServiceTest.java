@@ -43,6 +43,16 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 /** 세계관 만들기 — 저장·올리기·AI 로 채우기가 예시 캐릭터를 어떻게 다루는지. 모델은 부르지 않는다(하네스 가짜). */
 class PlayWorldServiceTest {
 
+    @Test
+    void 운영_세계관_한건_조회도_비로그인에게_비공개_설정을_내지_않는다() {
+        Map<String, Object> world = service.read("sne-bardo-express", null);
+        assertThat(world).doesNotContainKey("secret");
+        assertThat((List<Map<String, Object>>) world.get("cast")).allSatisfy(person ->
+                assertThat(person).doesNotContainKey("secret"));
+        assertThat((List<Map<String, Object>>) world.get("events")).allSatisfy(event ->
+                assertThat(event).doesNotContainKey("secret"));
+    }
+
     final PlayWorldRepository rows = mock(PlayWorldRepository.class);
     final PrivateLorebookService books = mock(PrivateLorebookService.class);
     final CharacterService characters = mock(CharacterService.class);

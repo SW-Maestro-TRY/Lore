@@ -207,6 +207,7 @@ public class JobRunner {
     private final JobNotice notice;
     private final CreditGate credits;
     private final GuestGate guests;
+    private final com.lore.webtoon.character.CharacterService characters;
     private final Path runsDir;
     /** 사람이 올린 사진과 입력이 있는 자리. 시트가 나오면 사진을 여기서 지운다. */
     private final Path jobsDir;
@@ -222,6 +223,7 @@ public class JobRunner {
     public JobRunner(HarnessProcess harness, JobProgress progress, JobStore store,
                      StoryStore stories, AfterRun after, WorkLedger works,
                      CreditGate credits, GuestGate guests, JobNotice notice,
+                     com.lore.webtoon.character.CharacterService characters,
                      @Value("${lore.webtoon.workers:2}") int workers,
                      @Value("${lore.webtoon.page-workers:3}") int pageWorkers,
                      @Value("${lore.webtoon.python.jobs-dir:}") String jobsDir) {
@@ -256,6 +258,7 @@ public class JobRunner {
         this.works = works;
         this.credits = credits;
         this.guests = guests;
+        this.characters = characters;
         this.notice = notice;
         /* **자리는 HarnessProcess 하나가 정한다.** 여기서 기본값을 또 적으면
            넷이 같은 문자열을 따로 갖게 되고, 한쪽만 안 고치는 순간 그 걸음만
@@ -552,6 +555,7 @@ public class JobRunner {
            두 프로세스가 부딪히지 않는다. 이야기를 다시 지어도 시트는 그대로다. 고르기에서
            그만두면 시트값만 버려진다 — 결정하고 받아들인 비용이다. */
         Path character = jobDir.resolve("character.json");
+        seedSheet(job, runId);
         sheetAhead.put(jobId, side.submit(() -> {
             try {
                 int c = callHarness(jobId, job, List.of(
@@ -598,6 +602,21 @@ public class JobRunner {
             return;
         }
         afterStory(jobId, job, runId);
+    }
+
+    /**
+     * 기억해 둔 캐릭터 시트가 있으면 run 폴더에 심어 시트 단계를 건너뛴다(2026-11-08). 세계관 체험은 옷을
+     * 세계에 맞게 새로 그려야 해서 안 심는다. 못 심으면 예전처럼 새로 그린다.
+     */
+    private void seedSheet(WebtoonJob job, String runId) {
+        try {
+            String characterId = AfterRun.characterIdOf(job.getInputJson());
+            if (characters.seedSheet(characterId, isPlay(job), runsDir.resolve(runId))) {
+                progress.say(job.getId(), "전에 그린 캐릭터 시트를 그대로 써요");
+            }
+        } catch (Exception e) {                     // noqa: 심기는 덤이다
+            log.warn("캐릭터 시트를 못 심었습니다 (job={})", job.getId(), e);
+        }
     }
 
     /** 세계관 체험 작업인가 — run 의 input.json(play=true). 못 읽으면 아니다(예전과 같다). */
@@ -1049,6 +1068,7 @@ public class JobRunner {
      */
     private void ownStart(Long jobId, WebtoonJob job, Path jobDir, String runId) throws Exception {
         progress.say(jobId, "루가 적어 주신 내용을 읽고 있어요");
+        seedSheet(job, runId);
         List<String> args = new ArrayList<>(List.of("--run-id", runId,
                 "--character", jobDir.resolve("character.json").toString(), "--own"));
         if (Files.isRegularFile(jobDir.resolve("continuation.json"))) {

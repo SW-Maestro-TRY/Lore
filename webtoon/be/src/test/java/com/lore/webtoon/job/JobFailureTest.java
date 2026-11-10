@@ -113,7 +113,7 @@ class JobFailureTest {
         JobNotice notice = mock(JobNotice.class);
         JobRunner runner = new JobRunner(harness, progress, store,
                 mock(StoryStore.class), mock(AfterRun.class), mock(WorkLedger.class),
-                mock(CreditGate.class), mock(GuestGate.class), notice,
+                mock(CreditGate.class), mock(GuestGate.class), notice, mock(com.lore.webtoon.character.CharacterService.class),
                 1, 1, tmp.resolve("jobs").toString());
 
         runner.resumeAfterPick(1L);
@@ -136,7 +136,7 @@ class JobFailureTest {
         when(harness.runsDir()).thenReturn(tmp);
         JobRunner runner = new JobRunner(harness, mock(JobProgress.class), mock(JobStore.class),
                 mock(StoryStore.class), mock(AfterRun.class), mock(WorkLedger.class),
-                mock(CreditGate.class), mock(GuestGate.class), mock(JobNotice.class),
+                mock(CreditGate.class), mock(GuestGate.class), mock(JobNotice.class), mock(com.lore.webtoon.character.CharacterService.class),
                 1, 1, tmp.resolve("jobs").toString());
         Path pages = tmp.resolve("run-2").resolve("pages");
         Files.createDirectories(pages);

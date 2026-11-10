@@ -38,14 +38,14 @@ Parameter Store). 모델은 전부 OpenAI 다.
 | 2 | `STORY` | 이야기 1개. 소개 한 문장을 먼저 정하고 본문으로 풀어 쓴다 | **gpt-6.1-sol** | 1 · 다시 짓기마다 1 |
 | 3 | `STORY_REVIEW` | 이야기 후보 검수 — 고르기 전에 후보마다 어디서 걸리는지 | **google/gemini-3.5-flash** (OpenRouter)¹ | 1 |
 | 1~2 와 동시 | `SHEET` | 캐릭터 시트 사양(사진 · 설명 → 글) | gpt-4.1 | 1 · 다시 그리기마다 1 |
-| 1~2 와 동시 | `SHEET_IMAGE` | 캐릭터 시트 그림 | **gpt-image-2** | 1 (안전 기준에 걸리면 스스로 1번 더) |
+| 1~2 와 동시 | `SHEET_IMAGE` | 캐릭터 시트 그림 — 같은 캐릭터의 두 번째 작품부터는 기억해 둔 시트를 심어 건너뛴다(체험은 예외) | **gpt-image-2.5-flare** medium 고정 | 0~1 (안전 기준에 걸리면 스스로 1번 더) |
 | 4 | `SCENE` | 고른 이야기를 장면으로 나누기(장면마다 장소 · 벌어지는 일 · 나레이션) — 장면 하나는 중심 사건 하나 | **google/gemini-3.8-flash** (OpenRouter)² | 1 |
 | 4 | `NARRATION` | 장면 글을 받은 뒤 나레이션 상자만 따로 — 그림·말풍선으로 안 되는 사실만, 빈 장은 「없음」으로 그림 단계에 (#758) | **gpt-5.1** | 1 (끄기 `NH_NARRATION_STAGE=0`, 내 내용으로 길은 안 돎) |
 | 5 | `PAGE_IMAGE` | 장 그림(표지 1장 + 장면 수) | **gpt-image-2** | 장 수 + 다시 그린 수 |
 | 5 | `PAGE_REVIEW` | 장 검수 — 장마다 그린 직후 | **google/gemini-3.5-flash** (OpenRouter)¹ | 표지 뺀 장 수 + 다시 그린 수 |
 | 5 | `COVER_REVIEW` | 표지 검수 — 칸 하나 · 글상자 없음 · 제목 그대로 | **google/gemini-3.5-flash** (OpenRouter)¹ | 1 + 다시 그린 수 |
 | 6 | `FULL_REVIEW` | 화 전체 검수 — 다 그린 뒤 처음부터 끝까지 한 번에 | **google/gemini-3.5-flash** (OpenRouter)¹ | 1 ~ 3 |
-| 옵션 | `CAST_SHEET` · `CAST_SHEET_IMAGE` | 조연 시트(사양 · 그림, 크레딧 1) | gpt-4.1 · gpt-image-2 | 사람이 누를 때 |
+| 옵션 | `CAST_SHEET` · `CAST_SHEET_IMAGE` | 조연 시트(사양 · 그림, 크레딧 1) | gpt-4.1 · gpt-image-2.5-flare medium | 사람이 누를 때 |
 | 끔 | `STORY_DIFF` | 후보 넷이 서로 다른가 | gpt-4.1 | 기본 꺼짐(`NH_STORY_DIFF`) |
 
 실제 기록 예 — 「카페 사장에게는 비밀이 많다」(20261003T133334-b5ccce, 서버로 만든 9장짜리):

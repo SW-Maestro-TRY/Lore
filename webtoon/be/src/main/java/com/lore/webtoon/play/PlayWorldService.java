@@ -57,6 +57,8 @@ public class PlayWorldService {
     private static final Logger log = LoggerFactory.getLogger(PlayWorldService.class);
     private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
     static final int MAX_EXAMPLES = 2, MAX_EVENTS = 12, MAX_CAST = 12, MAX_CANON = 8;
+    /** 비공개 설정 한도 — 세계 · 인물 · 사건. 만든 사람만 보고 AI 에는 안 넘긴다. */
+    static final int SECRET_WORLD = 4000, SECRET_PERSON = 600, SECRET_EVENT = 1500;
     /** 만들기가 이만큼 넘게 RUNNING 이면 서버가 그사이 꺼진 것이다 — 멈춘 것으로 본다. */
     private static final long STALE_SECONDS = 300;
 
@@ -679,6 +681,7 @@ public class PlayWorldService {
     @SuppressWarnings("unchecked")
     private Map<String, Object> catalogView(String id, Long user) {
         Map<String, Object> w = catalog.world(id);
+        boolean showSecrets = admin(user);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", id);
         out.put("name", text(w.get("name"), 40));
@@ -699,7 +702,11 @@ public class PlayWorldService {
                 }
             }
         }
-        out.put("rule", String.join("\n", rule));
+        String originalRule = text(w.get("rule"), 4000);
+        out.put("rule", originalRule.isEmpty() ? String.join("\n", rule) : originalRule);
+        if (showSecrets) {
+            out.put("secret", text(w.get("secret"), SECRET_WORLD));
+        }
         out.put("spot", text(w.get("spot"), 60));
         List<Map<String, Object>> cast = new ArrayList<>();
         for (Object c : list(w.get("cast"))) {
@@ -710,6 +717,9 @@ public class PlayWorldService {
                 m.put("role", text(p.get("role"), 60));
                 m.put("desc", text(p.get("desc"), 600));
                 m.put("face_url", p.get("face_url"));
+                if (showSecrets) {
+                    m.put("secret", text(p.get("secret"), SECRET_PERSON));
+                }
                 cast.add(m);
             }
         }
@@ -722,6 +732,9 @@ public class PlayWorldService {
             }
             Map<String, Object> m = new LinkedHashMap<>();
             v.forEach((k, val) -> m.put(String.valueOf(k), val));
+            if (!showSecrets) {
+                m.remove("secret");
+            }
             String eventId = text(v.get("id"), 80);
             List<Map<String, Object>> people = new ArrayList<>();
             List<String> examples = new ArrayList<>();
@@ -826,7 +839,41 @@ public class PlayWorldService {
         out.put("id", row.id);
         out.put("events", events);
         out.put("lorebook", lorebook(doc, readList(row.booksJson)));
-        return out;
+        return out;                 // 비공개 설정(secret)은 그대로 — 체험 시작이 withSecrets 로 이야기에만 넘긴다
+    }
+
+    /** 사건 글 뒤에 비공개 설정을 다는 표시. 하네스(run.py split_secrets)가 이 줄에서 갈라 읽는다. */
+    static final String SECRETS_MARK = "[비공개 설정]";
+
+    /**
+     * 체험을 시작할 때 사건 글 뒤에 비공개 설정(세계 · 이 사건에 나오는 인물 · 이 사건)을 단다(2026-11-08).
+     * 하네스는 이것을 이야기·장면·나레이션 단계에 「알고는 있되 본문·대사·나레이션·그림에 드러내지 않는다」로
+     * 주고, 장 그림 단계에는 주지 않는다 — 비밀을 모르면 복선과 인물의 행동이 비밀과 어긋나고, 알려 주되 숨기라고
+     * 해야 뒤에 뒤집힐 설정을 지킨다(하은, 11/08). 남에게 가는 세계 화면(view)에는 여전히 안 나간다.
+     */
+    static String withSecrets(String settings, Map<String, Object> world, Map<?, ?> event) {
+        List<String> lines = new ArrayList<>();
+        String w = text(world.get("secret"), SECRET_WORLD);
+        if (!w.isEmpty()) {
+            lines.add("- 세계: " + oneLine(w));
+        }
+        List<String> who = ids(event.get("cast"));
+        for (Object c : list(world.get("cast"))) {
+            if (c instanceof Map<?, ?> p) {
+                String id = text(p.get("id"), 40), name = text(p.get("name"), 30), sec = text(p.get("secret"), SECRET_PERSON);
+                if (!sec.isEmpty() && !name.isEmpty() && (who.isEmpty() || who.contains(id) || who.contains(name))) {
+                    lines.add("- " + name + ": " + oneLine(sec));
+                }
+            }
+        }
+        String e = text(event.get("secret"), SECRET_EVENT);
+        if (!e.isEmpty()) {
+            lines.add("- 이번 사건: " + oneLine(e));
+        }
+        if (lines.isEmpty()) {
+            return settings;
+        }
+        return settings + "\n\n" + SECRETS_MARK + "\n" + String.join("\n", lines);
     }
 
     /** 사건의 원래 전개 — 줄마다 한 문장, 마지막 줄이 원래 결말. 없으면 빈 목록(예전 사건은 그대로 간다). */
@@ -936,6 +983,9 @@ public class PlayWorldService {
         out.put("genre", text(doc.get("genre"), 40));
         out.put("one", text(doc.get("one"), 300));
         out.put("rule", text(doc.get("rule"), 4000));
+        if (mine) {
+            out.put("secret", text(doc.get("secret"), SECRET_WORLD));
+        }
         List<?> events = list(doc.get("events"));
         out.put("spot", events.isEmpty() || !(events.get(0) instanceof Map<?, ?> first) ? "" : text(first.get("spot"), 60));
         List<Map<String, Object>> cast = new ArrayList<>();
@@ -944,6 +994,9 @@ public class PlayWorldService {
                 Map<String, Object> m = new LinkedHashMap<>();
                 v.forEach((k, val) -> m.put(String.valueOf(k), val));
                 m.put("face_url", urlOf(m.remove("face_art")));
+                if (!mine) {
+                    m.remove("secret");
+                }
                 cast.add(m);
             }
         }
@@ -976,6 +1029,9 @@ public class PlayWorldService {
                 Map<String, Object> m = new LinkedHashMap<>();
                 v.forEach((k, val) -> m.put(String.valueOf(k), val));
                 m.put("examples", ids(v.get("examples")).stream().filter(known::containsKey).toList());
+                if (!mine) {
+                    m.remove("secret");
+                }
                 String image = urlOf(m.remove("image_art"));
                 if (image != null) {
                     m.put("image_url", image);
@@ -1078,6 +1134,7 @@ public class PlayWorldService {
         out.put("genre", text(raw.get("genre"), 40));
         out.put("one", text(raw.get("one"), 300));
         out.put("rule", text(raw.get("rule"), 4000));
+        out.put("secret", text(raw.get("secret"), SECRET_WORLD));            // 비공개 설정 — 만든 사람만 본다(아래 view)
         out.put("visibility", "public".equals(raw.get("visibility")) ? "public" : "private");
         carry(raw, out, "cover");
         out.put("lorebook_id", text(raw.get("lorebook_id"), 40));
@@ -1097,6 +1154,7 @@ public class PlayWorldService {
                 m.put("name", text(p.get("name"), 30));
                 m.put("role", text(p.get("role"), 60));
                 m.put("desc", text(p.get("desc"), 600));
+                m.put("secret", text(p.get("secret"), SECRET_PERSON));
                 carry(p, m, "face");
                 cast.add(m);
             }
@@ -1146,6 +1204,7 @@ public class PlayWorldService {
             ev.put("canon_end", text(v.get("canon_end"), 60));
             ev.put("place", text(v.get("place"), 60));
             ev.put("spot", text(v.get("spot"), 60));
+            ev.put("secret", text(v.get("secret"), SECRET_EVENT));
             ev.put("cast", who);
             ev.put("examples", ids(v.get("examples")).stream().limit(8).toList());   // 둘까지 고르는 것은 내 캐릭터인지 본 뒤에
             List<Map<String, Object>> people = new ArrayList<>();

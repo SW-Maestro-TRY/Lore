@@ -149,8 +149,10 @@ def normalize(raw: dict) -> dict:
         photos.append(str(path.resolve()))
     # 세계관 체험의 사건은 「원래 전개」를 뒤에 달고 온다(PlayController). 상황과 갈라 둔다 — 원래 전개는
     # 독자가 볼 사건이 아니라 이 이야기가 갈라져 나올 기준이다. 체험이 아니거나 원래 전개가 없으면 예전 그대로.
-    situation, canon, canon_end, groups = split_canon(str(raw.get("settings") or "").strip()) \
-        if raw.get("play") is True else (str(raw.get("settings") or "").strip(), [], "", [])
+    settings_raw, secrets = split_secrets(str(raw.get("settings") or "").strip()) \
+        if raw.get("play") is True else (str(raw.get("settings") or "").strip(), [])
+    situation, canon, canon_end, groups = split_canon(settings_raw) \
+        if raw.get("play") is True else (settings_raw, [], "", [])
     return {
         "name": str(raw.get("name") or "").strip(),
         "description": str(raw.get("description") or "").strip(),
@@ -165,6 +167,7 @@ def normalize(raw: dict) -> dict:
         "title": str(raw.get("title") or "").strip(),
         "episode": str(raw.get("episode") or "").strip(),
         **({"play": True} if raw.get("play") is True else {}),
+        **({"secrets": secrets} if secrets else {}),
         **({"canon": canon} if canon else {}),
         **({"canon_end": canon_end} if canon and canon_end else {}),
         **({"groups": [split_group(g)[0] for g in groups]} if canon and groups else {}),
@@ -516,12 +519,40 @@ def one_input_block(char: dict) -> str:
     if char.get("settings"):
         # 세계관 체험이면 적힌 글은 설정이 아니라 주인공이 놓인 사건이다.
         lines += ["", "[이번 사건]" if char.get("play") else "[추가 설정]", char["settings"]]
+    lines += secrets_block(char)
     return "\n".join(lines) + "\n"
 
 
 CANON_MARK = "[원래 전개]"
 CANON_END_MARK = "[원래 결말]"
 GROUPS_MARK = "[갈래]"
+SECRETS_MARK = "[비공개 설정]"
+
+
+def split_secrets(settings: str) -> tuple[str, list[str]]:
+    """「… [비공개 설정] - 세계: … - 이름: …」 -> (앞부분, 비공개 줄들). 서버(PlayWorldService.withSecrets)가 맨 뒤에
+    단다. 표시가 없으면 (그대로, [])."""
+    head, mark, tail = (settings or "").partition(SECRETS_MARK)
+    if not mark:
+        return (settings or "").strip(), []
+    lines = [re.sub(r"^\s*[-·•]\s*", "", x).strip() for x in tail.splitlines()]
+    return head.strip(), [x for x in lines if x]
+
+
+def secrets_block(char: dict) -> list[str]:
+    """비공개 설정 — 이야기·장면·나레이션 단계가 **알고는 있되 드러내지 않는** 사실(2026-11-08, 하은).
+
+    모르면 복선과 인물의 행동이 비밀과 어긋나고, 알려 주되 숨기라고 해야 뒤에 뒤집힐 설정을 지킨다.
+    장 그림 단계에는 주지 않는다(detailart 는 장면 글만 본다). 체험이 아니거나 비밀이 없으면 빈 목록."""
+    secrets = char.get("secrets") or []
+    if not secrets:
+        return []
+    return ["", "## 비공개 설정 — 알고만 있고 드러내지 않는다",
+            "아래는 이 세계가 정해 둔 비밀이다. 독자와 주인공은 모른다. 인물의 말·행동·망설임·선택이 이 사실과 어긋나지 않게 "
+            "쓰되(비밀을 아는 인물은 그에 맞게 움직인다), 본문·대사·나레이션 어디에도 이 사실을 적지 않고, 알아차릴 만큼 "
+            "노골적으로 암시하지도 않는다. 이미 「이번 사건」의 상황에 드러나 있는 부분만 드러난 것으로 친다. "
+            "주인공이 이 비밀을 밝혀내는 결말도 쓰지 않는다 — 이번 화에서 밝혀지는 것은 사건에 적힌 것까지다.",
+            *[f"- {x}" for x in secrets]]
 
 
 def split_group(item: str) -> tuple[str, str]:
@@ -2043,6 +2074,7 @@ def scene_input_block(char: dict, direction: dict, run_dir: Path | None = None) 
     # 요약만 받아 말을 아예 지웠다(dev 20261103T112956: 「주인님」이 울부짖음으로). 체험이 아니면 빈 글.
     if char.get("play") and char.get("settings"):
         lines += ["", "[이번 사건]", char["settings"], "", play_goal_block(char)]
+    lines += secrets_block(char)
     return "\n".join(lines) + "\n"
 
 
@@ -2172,7 +2204,7 @@ def narration_input_block(char: dict | None, direction: dict, scene_text: str) -
     return "\n".join(["# 이야기 본문 — 앞 단계에서 정해진 것", "", direction.get("title", ""), "", body,
                       "", "# 장면 (나레이션을 뺀 것)", "", scenes.strip(),
                       "", "# 사용자가 적은 것 — 독자가 볼 글이 아니다, 옮겨 적지 않는다", "",
-                      *(mine or ["(없음)"])]) + "\n"
+                      *(mine or ["(없음)"]), *(secrets_block(char) if char else [])]) + "\n"
 
 
 def stage_narration(run_dir: Path, char: dict | None, direction: dict, parsed: dict,
@@ -2298,11 +2330,36 @@ def _sheet_with_retry(run_dir: Path, char: dict, paths: dict, attempt) -> None:
             raise SystemExit(f"{label}가 두 번 연속 안전 검사에 걸렸습니다({', '.join(cats)})") from exc
 
 
+def play_outfit_lines(char: dict) -> list[str]:
+    """세계관 체험(play)의 시트 — 옷은 그 세계에 맞게, 신원은 사진 그대로.
+
+    사진 속 옷을 그대로 옮기는 것이 시트의 원칙이지만, 체험은 다른 세계의 사건에 내 캐릭터를 넣는 것이라
+    로판 예복을 입은 채 방공호에 서 있게 된다(2026-11-08 실험: 이 블록 한 줄로 옷만 바뀌고 얼굴·머리·점은
+    유지됐다). 빙의물처럼 옷을 지켜야 하는 세계는 세계 설정에 「옷차림은 그대로」라고 적으면 그 말을 따른다.
+    """
+    if not char.get("play"):
+        return []
+    book = {}
+    lore = char.get("lorebook")
+    if isinstance(lore, dict):
+        books = lore.get("books") or []
+        book = books[0] if books and isinstance(books[0], dict) else lore
+    world = str(book.get("name") or "").strip()
+    fixed = str(book.get("fixed_settings") or "").strip()
+    lines = ["", "## 옷차림 — 이 세계에 맞게",
+             "이 캐릭터는 자기 세계가 아니라 아래 세계의 사건에 들어간다. 사진·설명 속 옷차림이 이 세계와 맞지 않으면 "
+             "옷·장신구·소지품은 이 세계의 사람에게 어울리게 바꾼다. 얼굴·머리(색·길이·모양)·눈·피부·체형·점·흉터 같은 "
+             "신원 특징은 사진 그대로 지킨다. 세계 설정에 「옷차림은 그대로」 같은 말이 있으면 바꾸지 않는다."]
+    if world or fixed:
+        lines.append(f"세계: {world} — {fixed}" if world and fixed else (world or fixed))
+    return lines
+
+
 def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, spec_only: bool,
                    note: str, safety: str, paths: dict | None = None) -> None:
     paths = paths or sheet_paths(run_dir)
     photos = char["photos"]
-    block = input_block(char)
+    block = input_block(char) + "\n".join(play_outfit_lines(char))
     note = (note or "").strip()
     if note:
         # 다시 만들기에서 남긴 한 번짜리 요청 — character.json 을 고치지 않고
