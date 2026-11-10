@@ -1,6 +1,7 @@
 // 광고 출처는 Piece Maker 접수 API로만 보낸다. 공통 이벤트의 기존 계약과 타 서비스 격리를 검사한다.
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { AD_LANDINGS_URL, answer, mockLore, ok } from './piece-maker-lore';
+import { myPageLink } from './header-account-helper';
 
 type Attribution = {
   utmSource: string; utmMedium: string; utmCampaign: string;
@@ -39,7 +40,7 @@ async function login(page: Page) {
   await modal.locator('input[type="email"]').fill('attribution-test@example.test');
   await modal.locator('input[type="password"]').fill('test-password');
   await modal.locator('button[type="submit"]').click();
-  await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+  await expect(myPageLink(page)).toBeVisible();
 }
 
 function expectCommonEvent(event: Sent) {

@@ -2,6 +2,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { CARDS, ME, OTHER, answer, fail, load, mockLore, ok, toLore, visibleCards, type LoreHypothesis, type LoreState } from './piece-maker-lore';
 import { storageKey } from '../../../piece-maker/fe/lib/draft';
+import { myPageLink, signOutFromMyPage } from './header-account-helper';
 
 const RESULT_VIEW = /\/api\/piece-maker\/v1\/hypotheses\/(\d+)\/result-view$/;
 const JUDGE = load<{ judgement: Record<string, unknown> }>('judge-t2.json');
@@ -118,7 +119,7 @@ async function login(page: Page, lore: LoreState, account = OTHER) {
   await modal.locator('input[type="email"]').fill(account.email);
   await modal.locator('input[type="password"]').fill('test-password-1');
   await modal.locator('button[type="submit"]').click();
-  await expect(page.getByRole('button', { name: '로그아웃', exact: true })).toBeVisible();
+  await expect(myPageLink(page)).toBeVisible();
 }
 
 test('AC-F12-1 모바일 탐색과 화면 밖 결과는 제외하고 실제 스크롤 열람을 기록한다', async ({ page, context }) => {
@@ -311,7 +312,7 @@ test('AC-F12-5 이전 계정의 늦은 응답은 현재 계정의 열람을 완�
   await compose(page);
   await showResult(page);
   await expect.poll(() => started).toBe(true);
-  await page.getByRole('button', { name: '로그아웃', exact: true }).click();
+  await signOutFromMyPage(page, '/piece-maker');
   await login(page, lore);
   release();
   await page.locator('[data-part="topbar"] [data-action="saved"]').click();
