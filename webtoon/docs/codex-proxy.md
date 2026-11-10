@@ -6,6 +6,16 @@
 `gpt-image-2`·`gpt-image-2.5-flare`를 쓴다. 기존 `WEBTOON_API_KEY`는
 무료 입력 검사(moderation)에만 남긴다. 짤·다른 서비스 호출은 대상이 아니다.
 
+**장면 나누기와 검수 넷은 켜도 OpenRouter의 Gemini에 남는다.** 장면(SCENE)은
+`google/gemini-3.8-flash`, 이야기 후보 검수·장 검수·표지 검수·화 전체 검수는
+`google/gemini-3.5-flash`다(`llm.py` `STAGE_DEFAULT_PROVIDERS`). 처음 전환 때 이
+단계들도 `gpt-6-sol`로 갔더니, 운영 세계관 체험이 3~4장에서 6~7장으로 늘고 한 편이
+3분대에서 6~7분이 됐다(2026-11-10). 같은 이야기를 두 모델로 장면만 나눠 보니
+`gemini-3.8-flash` 4장면, `gpt-6-sol` 7장면이었다. 검수는 그림을 그린 회사와 다른
+회사 모델이 결함을 더 잡아서 고른 것이라(59% → 92%) 같이 남긴다. 이 다섯 단계는
+OpenRouter로 실제 청구되고, 그 금액이 `meta.json`·`webtoon_usage`에 그대로 남는다.
+`OPENROUTER_API_KEY`가 없으면 이 단계들도 프록시로 간다.
+
 ## 서버 설정
 
 - 각 서버의 CLIProxyAPI는 별도 Codex OAuth를 갖고, 클라이언트 키를 요구한다.
@@ -22,9 +32,10 @@ CODEX_PROXY_TEXT_MODEL=gpt-6-sol
 ```
 
 새 프로세스가 환경값을 받아야 하므로 작업이 없는 때에 app 또는 `lore-api`를
-재기동한다. `run.py --plan`에서 텍스트 단계가 `openai:gpt-6-sol`, 이미지 단계가
-기존 이미지 모델인지 확인한다. 실제 생성 후 `meta.json`과 `webtoon_usage`의
-`model`, `cost_basis=codex_subscription`, `cost_usd=0`을 대조한다.
+재기동한다. `run.py --plan`에서 텍스트 단계가 `openai:gpt-6-sol`(장면·검수 넷은
+`openrouter:google/gemini-…`), 이미지 단계가 기존 이미지 모델인지 확인한다. 실제 생성 후
+`meta.json`과 `webtoon_usage`의 `model`, 프록시로 간 호출의 `cost_basis=codex_subscription`,
+`cost_usd=0`을 대조한다. 장면·검수 넷은 `provider=openrouter`, 실제 청구액이다.
 서버의 프록시 주소로 실제 요청이 들어오는지 네트워크 또는 접근 로그로 확인한다.
 입력 검사만 공식 API로 남는다.
 
