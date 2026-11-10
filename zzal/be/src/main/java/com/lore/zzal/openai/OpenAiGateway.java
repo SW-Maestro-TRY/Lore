@@ -47,15 +47,28 @@ public class OpenAiGateway implements AutoCloseable {
     private final Map<Lane, LanePermits> permits = new EnumMap<>(Lane.class);
     private final Map<Lane, HttpClient> clients = new EnumMap<>(Lane.class);
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+    /** 줄마다 "이 시각(nanoTime) 전에는 보내지 않는다". 0 = 막히지 않음. 429 를 받으면 올린다(설계 2-2). */
+    private final Map<Lane, java.util.concurrent.atomic.AtomicLong> blockedUntil = new EnumMap<>(Lane.class);
+    /** 429 에 Retry-After 가 없을 때 줄을 막는 시간. */
+    private final Duration defaultBlock;
+
+    /** 기본 차단 시간 60초. */
+    public static final Duration DEFAULT_QUOTA_BLOCK = Duration.ofSeconds(60);
 
     public OpenAiGateway(Map<Lane, LaneConfig> configs) {
-        this(configs, null);
+        this(configs, DEFAULT_QUOTA_BLOCK);
+    }
+
+    public OpenAiGateway(Map<Lane, LaneConfig> configs, Duration defaultBlock) {
+        this(configs, defaultBlock, null);
     }
 
     /** @param shared 모든 줄이 같이 쓸 HttpClient(시험·옛 생성자용). null 이면 줄마다 새로 만든다. */
-    OpenAiGateway(Map<Lane, LaneConfig> configs, HttpClient shared) {
+    OpenAiGateway(Map<Lane, LaneConfig> configs, Duration defaultBlock, HttpClient shared) {
         this.configs = new EnumMap<>(configs);
+        this.defaultBlock = java.util.Objects.requireNonNull(defaultBlock);
         for (Lane lane : Lane.values()) {
+            blockedUntil.put(lane, new java.util.concurrent.atomic.AtomicLong());
             LaneConfig c = this.configs.get(lane);
             if (c == null) throw new IllegalArgumentException("lane config missing: " + lane.key());
             permits.put(lane, new LanePermits(c.maxConcurrent()));
@@ -71,7 +84,7 @@ public class OpenAiGateway implements AutoCloseable {
      * 줄 상한은 기본값, HttpClient 는 넘겨받은 것 하나.
      */
     public static OpenAiGateway standalone(HttpClient http) {
-        return new OpenAiGateway(LaneConfig.defaults(), java.util.Objects.requireNonNull(http));
+        return new OpenAiGateway(LaneConfig.defaults(), DEFAULT_QUOTA_BLOCK, java.util.Objects.requireNonNull(http));
     }
 
     /** 생성 단계가 도는 가상 스레드 실행기. 단계마다 스레드 하나, 상한은 줄 자리가 건다. */
@@ -86,6 +99,18 @@ public class OpenAiGateway implements AutoCloseable {
     /** 지금 그 줄에서 나가 있는 요청 수. */
     public int inFlight(Lane lane) {
         return permits.get(lane).inFlight();
+    }
+
+    /** 그 줄이 429 로 막혀 있는 남은 시간. 막히지 않았으면 0. */
+    public Duration blockedFor(Lane lane) {
+        long until = blockedUntil.get(lane).get();
+        long left = until == 0 ? 0 : until - System.nanoTime();
+        return left > 0 ? Duration.ofNanos(left) : Duration.ZERO;
+    }
+
+    private void block(Lane lane, Duration retryAfter) {
+        long until = System.nanoTime() + retryAfter.toNanos();
+        blockedUntil.get(lane).accumulateAndGet(until, Math::max);
     }
 
     /** 지금 그 줄에서 자리를 기다리는 요청 수. */
@@ -106,6 +131,31 @@ public class OpenAiGateway implements AutoCloseable {
     @Override
     public void close() {
         executor.shutdownNow();
+    }
+
+    /** 429, 또는 본문이 잔액·한도를 말하는 4xx. */
+    static boolean quota(int status, String body) {
+        if (status == 429) return true;
+        if (status < 400 || status >= 500) return false;
+        String b = body.toLowerCase(java.util.Locale.ROOT);
+        return b.contains("insufficient_quota") || b.contains("billing_hard_limit_reached") || b.contains("quota_exceeded");
+    }
+
+    /** Retry-After(초, 소수 허용) · retry-after-ms. 없거나 못 읽으면 기본값. */
+    static Duration retryAfter(HttpResponse<?> res, Duration fallback) {
+        try {
+            var ms = res.headers().firstValue("retry-after-ms");
+            if (ms.isPresent()) return Duration.ofMillis(Math.max(0, (long) Double.parseDouble(ms.get().strip())));
+            var sec = res.headers().firstValue("retry-after");
+            if (sec.isPresent()) return Duration.ofMillis(Math.max(0, (long) (Double.parseDouble(sec.get().strip()) * 1000)));
+        } catch (NumberFormatException ignored) {
+            // HTTP 날짜 형식 등 — 기본값
+        }
+        return fallback;
+    }
+
+    private static String snippet(String body) {
+        return body.length() > 300 ? body.substring(0, 300) : body;
     }
 
     /** 호출 하나. 많아야 한 번 보낸다. */
@@ -134,6 +184,12 @@ public class OpenAiGateway implements AutoCloseable {
                 HttpResponse<String> res;
                 try {
                     res = clients.get(lane).send(req, HttpResponse.BodyHandlers.ofString());
+                } catch (java.net.http.HttpTimeoutException e) {
+                    attempt.record(ProviderUsageRecorder.headers(model, 0, null));
+                    throw e;
+                } catch (java.io.IOException e) {
+                    attempt.record(ProviderUsageRecorder.headers(model, 0, null));
+                    throw new ProviderServerException(0, String.valueOf(e.getMessage()), e);
                 } catch (Exception e) {
                     attempt.record(ProviderUsageRecorder.headers(model, 0, null));
                     throw e;
@@ -169,6 +225,9 @@ public class OpenAiGateway implements AutoCloseable {
                     if (e.getCause() instanceof java.net.http.HttpTimeoutException) {
                         throw new TimeoutException("응답 시간 초과");
                     }
+                    if (e.getCause() instanceof java.io.IOException io) {
+                        throw new ProviderServerException(0, String.valueOf(io.getMessage()), io);
+                    }
                     throw e;
                 }
                 return observed(res);
@@ -177,10 +236,24 @@ public class OpenAiGateway implements AutoCloseable {
             }
         }
 
-        /** 응답 머리(상태·요청 번호)를 기록한다. */
-        private HttpResponse<String> observed(HttpResponse<String> res) {
+        /**
+         * 응답 머리(상태·요청 번호)를 기록하고, 한도·서버 오류를 정해진 예외로 올린다(설계 2-2).
+         * 그 밖의 상태(200, 400 거부 등)는 그대로 돌려준다 — 거부 본문은 클라이언트가 위층에 넘긴다.
+         */
+        private HttpResponse<String> observed(HttpResponse<String> res) throws Exception {
             String requestId = res.headers().firstValue("x-request-id").orElse(null);
-            attempt.record(ProviderUsageRecorder.headers(model, res.statusCode(), requestId));
+            int status = res.statusCode();
+            attempt.record(ProviderUsageRecorder.headers(model, status, requestId));
+            String body = res.body() == null ? "" : res.body();
+            if (quota(status, body)) {
+                Duration retryAfter = retryAfter(res, defaultBlock);
+                block(lane, retryAfter);
+                log.warn("OpenAI 한도 — lane={} HTTP {} · {}초 동안 이 줄을 막는다", lane.key(), status, retryAfter.toSeconds());
+                throw new ProviderQuotaException(status, retryAfter, snippet(body));
+            }
+            if (status >= 500) {
+                throw new ProviderServerException(status, snippet(body), null);
+            }
             return res;
         }
 
@@ -189,6 +262,7 @@ public class OpenAiGateway implements AutoCloseable {
         private void enter() throws Exception {
             if (sent) throw new IllegalStateException("한 호출은 한 번만 보낸다");
             sent = true;
+            refuseIfBlocked();
             LaneConfig c = configs.get(lane);
             long t0 = System.nanoTime();
             if (!permits.get(lane).acquire(CallPriority.current(), c.maxWaitMs())) {
@@ -197,6 +271,21 @@ public class OpenAiGateway implements AutoCloseable {
                 throw new LaneBusyException(lane, waited);
             }
             holding = true;
+            // 자리를 기다리는 동안 다른 호출이 429 를 받았을 수 있다.
+            try {
+                refuseIfBlocked();
+            } catch (ProviderQuotaException e) {
+                leave();
+                throw e;
+            }
+        }
+
+        /** 줄이 막혀 있으면 보내지 않고 같은 예외로 돌려준다. */
+        private void refuseIfBlocked() throws ProviderQuotaException {
+            Duration left = blockedFor(lane);
+            if (left.compareTo(Duration.ZERO) > 0) {
+                throw new ProviderQuotaException(0, left, lane.key() + " 줄이 한도로 막혀 있어 보내지 않았다");
+            }
         }
 
         private void leave() {

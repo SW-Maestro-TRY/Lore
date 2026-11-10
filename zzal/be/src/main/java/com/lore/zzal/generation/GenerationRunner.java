@@ -298,14 +298,12 @@ public class GenerationRunner {
         if (e instanceof java.net.http.HttpTimeoutException) {
             return GenErrorCode.TIMEOUT;
         }
-        if (SERVER_STATUS.matcher(msg).find() || e instanceof java.io.IOException) {
+        // OpenAI 5xx·연결 실패 — 창구가 ProviderServerException 으로 올린다.
+        if (causedBy(e, com.lore.zzal.openai.ProviderServerException.class) || e instanceof java.io.IOException) {
             return GenErrorCode.PROVIDER_ERROR;
         }
         return GenErrorCode.UNKNOWN;
     }
-
-    /** 클라이언트가 붙이는 "(HTTP 5xx)" 문구. */
-    private static final java.util.regex.Pattern SERVER_STATUS = java.util.regex.Pattern.compile("http 5\\d\\d");
 
     /**
      * 격자 구조 게이트가 "이 격자는 4x4 가 아니다" 로 막았는가.
@@ -316,30 +314,25 @@ public class GenerationRunner {
      * ★ 이 표식을 안 찍는 스크립트를 쓰는 버전은 예전 동작 그대로다.
      */
     /**
-     * 바깥이 <b>한도</b>로 막았는가 — 429, 또는 잔액·분당 한도를 말하는 본문.
+     * 바깥이 <b>한도</b>로 막았는가 — 창구가 429·잔액·한도 응답을 {@link com.lore.zzal.openai.ProviderQuotaException}
+     * 하나로 올린다(설계 2-2). 예전에는 예외 메시지의 문구로 갈랐다.
      *
-     * <h3>★★ 왜 메시지를 보나</h3>
-     * 이미지·문단 클라이언트는 200 이 아니면 <b>상태와 본문을 그대로 붙여</b> 예외로 올린다
-     * ({@code OpenAiImageClient} — "본문을 그대로 붙인다 — moderation 차단인지 한도 초과인지가
-     * 여기 적혀 있고"). 그래서 판정 재료는 이미 손에 있다. 새 예외 타입을 만들지 않은 이유는
-     * 클라이언트가 여럿이고(이미지·문단·후처리) 그중 하나만 고치면 <b>나머지는 조용히 옛 길</b>로
-     * 가기 때문이다.
-     *
-     * ★ 판정은 코드가 결정적으로 한다. 여기 안 걸리는 실패는 <b>지금까지 하던 대로</b> 재시도한다 —
-     *   못 알아본 쪽이 재시도를 잃는 것보다, 잘못 알아봐 멀쩡한 실패의 재시도를 없애는 쪽이 나쁘다.
+     * ★ 예외가 감싸여 올라올 수 있어 원인 사슬을 따라간다.
      */
     static boolean quotaBlocked(Throwable e) {
-        if (e == null) {
-            return false;
+        return causedBy(e, com.lore.zzal.openai.ProviderQuotaException.class);
+    }
+
+    private static boolean causedBy(Throwable e, Class<? extends Throwable> type) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (type.isInstance(t)) {
+                return true;
+            }
+            if (t.getCause() == t) {
+                break;
+            }
         }
-        String msg = String.valueOf(e.getMessage()).toLowerCase();
-        return msg.contains("http 429")
-                || msg.contains("\"429\"")
-                || msg.contains("rate_limit")
-                || msg.contains("rate limit")
-                || msg.contains("insufficient_quota")
-                || msg.contains("quota_exceeded")
-                || msg.contains("billing_hard_limit_reached");
+        return false;
     }
 
     /**

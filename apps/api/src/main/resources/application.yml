@@ -538,6 +538,8 @@ app:
         dialogue-background:   # 일기, 맞춤 기획
           max-concurrent: ${ZZAL_OPENAI_LANE_BACKGROUND_MAX:1}
           max-wait-ms: ${ZZAL_OPENAI_LANE_BACKGROUND_WAIT_MS:0}
+      # 429 를 받으면 그 줄만 막는다(설계 2-2). Retry-After 가 있으면 그 값, 없으면 이 초.
+      quota-default-block-seconds: ${ZZAL_OPENAI_QUOTA_DEFAULT_BLOCK_SECONDS:60}
 
     attendance:
       # Existing worker guard; enabling custom generation is separate from automatic dispatch.

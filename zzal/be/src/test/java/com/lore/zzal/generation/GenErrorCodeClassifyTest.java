@@ -22,15 +22,19 @@ class GenErrorCodeClassifyTest {
     @Test
     @DisplayName("429(한도) → QUOTA")
     void quota() {
-        assertThat(GenerationRunner.classify(new IllegalStateException(
-                "이미지 생성 실패(HTTP 429): {\"error\":{\"code\":\"rate_limit_exceeded\"}}"))).isEqualTo(GenErrorCode.QUOTA);
+        assertThat(GenerationRunner.classify(new com.lore.zzal.openai.ProviderQuotaException(429,
+                java.time.Duration.ofSeconds(5), "{\"error\":{\"code\":\"rate_limit_exceeded\"}}"))).isEqualTo(GenErrorCode.QUOTA);
+        // 문구만 429 인 옛 예외는 더 이상 한도로 읽지 않는다(창구를 거치지 않은 것이라 타입이 진실).
+        assertThat(GenerationRunner.classify(new IllegalStateException("이미지 생성 실패(HTTP 429): rate_limit")))
+                .isEqualTo(GenErrorCode.UNKNOWN);
     }
 
     @Test
     @DisplayName("5xx → PROVIDER_ERROR")
     void serverError() {
-        assertThat(GenerationRunner.classify(new IllegalStateException("문단 생성 실패(HTTP 520): bad gateway")))
+        assertThat(GenerationRunner.classify(new com.lore.zzal.openai.ProviderServerException(520, "bad gateway", null)))
                 .isEqualTo(GenErrorCode.PROVIDER_ERROR);
+        assertThat(GenerationRunner.classify(new java.net.ConnectException("refused"))).isEqualTo(GenErrorCode.PROVIDER_ERROR);
     }
 
     @Test

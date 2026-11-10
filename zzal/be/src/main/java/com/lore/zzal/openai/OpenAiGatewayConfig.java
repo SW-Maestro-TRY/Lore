@@ -15,7 +15,9 @@ public class OpenAiGatewayConfig {
     @Bean(destroyMethod = "close")
     public OpenAiGateway openAiGateway(Environment env) {
         var lanes = LaneConfig.from(env);
-        log.info("OpenAI 창구 — 줄 {}", lanes);
-        return new OpenAiGateway(lanes);
+        var block = java.time.Duration.ofSeconds(env.getProperty("app.zzal.openai.quota-default-block-seconds", Long.class,
+                OpenAiGateway.DEFAULT_QUOTA_BLOCK.toSeconds()));
+        log.info("OpenAI 창구 — 줄 {} · 429 기본 차단 {}초", lanes, block.toSeconds());
+        return new OpenAiGateway(lanes, block);
     }
 }
