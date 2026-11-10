@@ -70,4 +70,43 @@ class PetRefreshAllLostUpdateIT extends ZzalItSupport {
                 .as("call-back 이 커밋된 뒤 목록 조회가 끝나도 여행에서 돌아온 상태가 남아야 한다")
                 .isFalse();
     }
+
+    @org.springframework.beans.factory.annotation.Autowired jakarta.persistence.EntityManagerFactory emf;
+
+    /**
+     * 잠금과 다시 읽기를 합쳐도 펫 표 조회 수는 예전과 같다 — 목록 1번 + 펫마다 1번(잠그며 다시 읽기) = 1 + N.
+     * Hibernate 통계로 센다: 펫을 부르는 질의 실행 수(목록 1)와 펫 엔티티 읽기 수(목록 N + 다시 읽기 N = 2N).
+     * 잠금 조회({@code findByIdForUpdate})를 따로 더 부르면 질의 수가, 다시 읽기를 빼면 읽기 수가 어긋난다.
+     */
+    @Test
+    void refreshAllReadsPetTableOncePlusOncePerPet() {
+        Long user = newUserId();
+        Instant now = Instant.now();
+        int n = 3;
+        for (int i = 0; i < n; i++) {
+            transactions.execute(status -> {
+                ZzalPet created = petRepository.save(ZzalPet.draft(user, newUploadedImageKey(user), now));
+                created.character("여울", null, null, "현대", null, null, now);
+                created.markAlive("images/zzal/pets/sheet.png", "test", now);
+                return created;
+            });
+        }
+        var stats = emf.unwrap(org.hibernate.SessionFactory.class).getStatistics();
+        boolean was = stats.isStatisticsEnabled();
+        stats.setStatisticsEnabled(true);
+        try {
+            stats.clear();
+            transactions.executeWithoutResult(status -> petService.refreshAll(user, Instant.now()));
+            long petQueries = java.util.Arrays.stream(stats.getQueries())
+                    .filter(q -> q.toLowerCase().contains("from zzalpet "))
+                    .mapToLong(q -> stats.getQueryStatistics(q).getExecutionCount()).sum();
+            long petLoads = stats.getEntityStatistics(ZzalPet.class.getName()).getLoadCount();
+            System.out.printf("[P4a-3] 펫 %d마리 목록 정산: 펫 질의 %d · 펫 읽기 %d · 준비된 문장 전체 %d%n",
+                    n, petQueries, petLoads, stats.getPrepareStatementCount());
+            assertThat(petQueries).as("펫을 부르는 질의는 목록 하나뿐").isEqualTo(1);
+            assertThat(petLoads).as("목록으로 N + 잠그며 다시 읽기 N").isEqualTo(2L * n);
+        } finally {
+            stats.setStatisticsEnabled(was);
+        }
+    }
 }
