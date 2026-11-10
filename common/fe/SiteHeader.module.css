@@ -54,6 +54,13 @@
   background: var(--surface-hover);
 }
 
+/* 발표 기간 등에 Piece Maker 탭만 감춘다. 루트 레이아웃(apps/web/app/layout.tsx)이
+   서버의 표시 파일을 보고 <html data-hide-piece-maker> 를 단다. 서버가 그린 HTML 에
+   이미 들어 있어서 탭이 떴다 사라지는 깜빡임이 없다. */
+:global(html[data-hide-piece-maker]) .navLink[href="/piece-maker"] {
+  display: none;
+}
+
 /* 현재 보고 있는 탭 */
 .navLinkActive {
   color: var(--text);
@@ -67,6 +74,20 @@
   /* 이 줄은 절대 줄바꿈되면 안 된다. 헤더가 두 줄이 되면 sticky 높이가 바뀌어
    * 아래 화면이 통째로 밀린다(세 도메인이 다 이 헤더를 쓴다). */
   flex: none;
+}
+
+.creditChip {
+  padding: 9px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
 /* 로그인 / 로그아웃. 보더만 준 secondary 톤. */
@@ -174,15 +195,6 @@
   height: 34px;
 }
 
-.userEmail {
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
 /* 좁은 화면.
  *
  * 2026-09-20 이전에는 여기서 .nav 를 통째로 숨겼다 — "Zzal/Piece Maker/Webtoon
@@ -239,12 +251,6 @@
     gap: 6px;
   }
 
-  /* 로그인하면 아이디 + 로그아웃이 한 줄에 서게 되는데, 360px 폭에서는 둘 다
-   * 못 들어간다. 없어도 되는 것은 아이디다 — 로그인했다는 사실은 버튼이
-   * "로그아웃" 이라는 것으로 이미 드러난다. */
-  .userEmail {
-    display: none;
-  }
 }
 
 /* 더 좁은 화면 — 로고·탭 여백과 단추 안쪽 여백을 한 번 더 줄인다(글자를 자르거나 탭을 빼지 않는다). */
@@ -257,6 +263,10 @@
   }
   .authButton {
     padding: 8px 10px;
+    font-size: 12.5px;
+  }
+  .creditChip {
+    padding: 8px 9px;
     font-size: 12.5px;
   }
 }

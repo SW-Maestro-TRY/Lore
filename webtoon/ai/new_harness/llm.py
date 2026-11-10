@@ -52,6 +52,17 @@ def load_dotenv(path: Path) -> None:
 # setdefault 라 먼저 읽힌 쪽이 이기고, 이미 있는 환경변수는 덮어쓰지 않는다.
 load_dotenv(HERE / ".env")
 
+# 서버별 Codex 프록시 전환. Java moderation 은 WEBTOON_API_KEY 로 공식 API 를
+# 계속 사용한다(무료 엔드포인트). 생성 파이썬에만 별도 프록시 키를 적용한다.
+CODEX_PROXY_ENABLED = os.environ.get("WEBTOON_CODEX_PROXY", "").lower() in ("1", "true", "yes", "on")
+if CODEX_PROXY_ENABLED:
+    proxy_key = os.environ.get("CODEX_PROXY_API_KEY", "").strip()
+    proxy_url = os.environ.get("CODEX_PROXY_BASE_URL", "").strip()
+    if not proxy_key or not proxy_url:
+        raise SystemExit("WEBTOON_CODEX_PROXY 에 CODEX_PROXY_API_KEY 와 CODEX_PROXY_BASE_URL 이 필요합니다")
+    os.environ["OPENAI_API_KEY"] = proxy_key
+    os.environ["OPENAI_BASE_URL"] = proxy_url
+
 # 운영 서버(EC2)는 Parameter Store 에서 키 하나(WEBTOON_API_KEY)만 받는다
 # (/opt/lore/load-secrets.sh → systemd EnvironmentFile → 자바 프로세스 →
 # 이 스크립트를 자식 프로세스로 부르며 환경을 그대로 물려준다).
@@ -129,23 +140,38 @@ def _pick(stage: str, suffix: str, fallbacks: tuple) -> tuple[str, str]:
 DEFAULT_PROVIDER = "openai"
 
 
-# **검수는 gemini 가 한다(2026-10-26).** 이야기 검수 · 장 검수 · 표지 검수 · 화 전체 검수 넷.
-# 글을 짓는 쪽(OpenAI)과 다른 모델이 읽어야 같은 버릇을 같이 놓치지 않는다는 판단이다.
+# **검수는 OpenRouter 의 google/gemini-3.5-flash 가 한다(2026-11-05).** 이야기 검수 · 장 검수 ·
+# 표지 검수 · 화 전체 검수 넷. 글을 짓는 쪽(OpenAI)과 다른 회사 모델이 읽어야 같은 버릇을 같이
+# 놓치지 않는다.
+#
+# 근거 — 완성작 13편의 한 장에 정답을 아는 결함(제자리 · 건너뜀 · 되돌아감, 화 전체는 같은 장 반복)을
+# 심고 같은 입력을 두 모델에 보였다(OpenRouter, 156회, haeun/검수모델-실험-2026-11-05).
+#   장 검수 결함 검출  gpt-4.1 22/37(59%)  →  gemini-3.5-flash 36/39(92%)
+#   결함 종류까지 맞힘  8/37(22%)  →  29/39(74%)
+#   화 전체 반복 지적   gpt-5.1 5/13(38%)  →  13/13(100%)
+# 대신 멀쩡한 장을 다시 그리라고 하는 일은 2/13 → 6/13 으로 늘었다. 다시 그리기는 장마다
+# 횟수 상한(MAX_PAGE_REDRAWS)이 있어 비용이 묶인다.
+#
+# **10/26 에 gemini(직접 API)로 정해 두었지만 운영에서는 한 번도 돌지 않았다.** 운영 · staging
+# 설정에 gemini 키가 없어서 아래 「키가 없으면 건너뛴다」가 조용히 OpenAI 로 돌렸다(11/05 운영
+# webtoon_usage 로 확인). 실험과 같은 길(OpenRouter)로 바꾼 것은 운영에 이미 OpenRouter 키가
+# 있고(장면 단계가 쓴다) 비교가 그 길로 되었기 때문이다.
 #
 # 순서: `<단계>_PROVIDER` > 이 표 > `NH_PROVIDER` · `PROVIDER` > DEFAULT_PROVIDER.
 # 이 표가 전체 설정(NH_PROVIDER)보다 앞이다 — dev 박스는 NH_PROVIDER=openai 를 적어 두고
 # 있어서(infra/dev/env.example) 뒤에 두면 검수가 영영 안 넘어간다.
 #
-# **gemini 키가 없으면 이 표를 건너뛴다.** 서버에 키(HAEUN_GEMINI_API_KEY)를 넣기
-# 전에 배포돼도 검수 단계에서 키 없음으로 만들기 전체가 죽지 않고, 전처럼 돈다.
+# **키가 없으면 이 표를 건너뛴다.** OpenRouter 키가 없는 환경에서도 검수 단계가 키 없음으로
+# 만들기 전체를 죽이지 않고 NH_PROVIDER 로 돈다. 대신 조용히 넘어가지 않게 plan() 이 어디서
+# 왔는지 찍는다.
 #
 # **장면(SCENE)은 OpenRouter 의 google/gemini-3.8-flash 다(2026-10-27).** 같은 이야기 5개를 두 모델로 나눠
 # 보니 gemini 가 장면을 중심 사건 하나씩으로 묶고 마지막을 가장 큰 일이 터진 순간에서 멈췄다. gpt-5.1 은
 # 한 사건을 두세 장으로 쪼개고 이동만 하는 장을 따로 두었다(haeun/story-lab-2026-10-27/scene). 값은 1/4.
 # 비교는 전부 OpenRouter 로 했으므로 운영도 그 길 그대로다 — Gemini 직접 API 는 시험하지 않았다.
 # OpenRouter 키가 없으면 전처럼 NH_PROVIDER(운영은 openai) 의 gpt-5.1 로 돈다.
-STAGE_DEFAULT_PROVIDERS = {"STORY_REVIEW": "gemini", "PAGE_REVIEW": "gemini",
-                           "COVER_REVIEW": "gemini", "FULL_REVIEW": "gemini",
+STAGE_DEFAULT_PROVIDERS = {"STORY_REVIEW": "openrouter", "PAGE_REVIEW": "openrouter",
+                           "COVER_REVIEW": "openrouter", "FULL_REVIEW": "openrouter",
                            "SCENE": "openrouter", "PAGE_IMAGE": "openai"}
 
 
@@ -161,6 +187,8 @@ def _stage_default_provider(stage: str) -> str:
 
 def provider_for(stage: str) -> str:
     """이 단계가 쓸 프로바이더. 모르는 이름이면 거기서 멈춘다."""
+    if CODEX_PROXY_ENABLED:
+        return "openai"
     name, where = _pick(stage, "PROVIDER", ())
     if not name:
         name = _stage_default_provider(stage)
@@ -231,6 +259,9 @@ STAGE_DEFAULT_MODELS[("SCENE", "openrouter")] = "google/gemini-3.8-flash"
 # 그림은 전부 Flare 로. 본편 장면은 11/06 부터, 시트·조연 시트는 11/08 부터 — 시트는 독자가 보는 그림이 아니라
 # 참조용이라 플레어 medium 으로도 얼굴·머리·옷이 또렷하게 나왔고(실험 haeun/스네-세계관-설계-2026-11-08/실험-시트),
 # 장당 약 260원 → 70~100원이다. 화질은 imagegen.backend_for 가 시트 단계만 medium 으로 고정한다.
+# 검수 넷도 예외 — 위 실험에 쓴 모델 그대로(STAGE_DEFAULT_PROVIDERS 의 검수 참고).
+for _review in ("STORY_REVIEW", "PAGE_REVIEW", "COVER_REVIEW", "FULL_REVIEW"):
+    STAGE_DEFAULT_MODELS[(_review, "openrouter")] = "google/gemini-3.5-flash"
 STAGE_DEFAULT_MODELS[("PAGE_IMAGE", "openai")] = "gpt-image-2.5-flare"
 STAGE_DEFAULT_MODELS[("SHEET_IMAGE", "openai")] = "gpt-image-2.5-flare"
 STAGE_DEFAULT_MODELS[("CAST_SHEET_IMAGE", "openai")] = "gpt-image-2.5-flare"
@@ -238,6 +269,8 @@ STAGE_DEFAULT_MODELS[("CAST_SHEET_IMAGE", "openai")] = "gpt-image-2.5-flare"
 
 def model_for(stage: str, provider: str) -> str:
     """이 단계가 쓸 모델 이름."""
+    if CODEX_PROXY_ENABLED and stage.upper() not in IMAGE_STAGES:
+        return env("CODEX_PROXY_TEXT_MODEL", "gpt-6-sol")
     if stage.upper() in IMAGE_STAGES:
         model, _ = _pick(stage, "MODEL", ("NH_IMAGE_MODEL",))
         return model or STAGE_DEFAULT_MODELS.get((stage.upper(), provider)) or image_default(provider)
@@ -293,6 +326,10 @@ class Call:
                 self.model, prompt, temp if self.temp_ok else None, limit, images=images or None)
             usage = _add_usage(first, usage)
         cost = story.cost_of(self.model, usage)
+        if CODEX_PROXY_ENABLED:
+            cost = {"input": 0.0, "output": 0.0, "cache_read": 0.0,
+                    "cache_write": 0.0, "total": 0.0, "total_krw": 0,
+                    "cost_basis": "codex_subscription"}
         # 원화도 같이 박는다 — 그림 호출(cost.cost_fields)은 이미 넣고 있어서,
         # 글만 빠지면 한 run 의 비용을 더할 때 두 단위가 섞인다. 환율은 호출
         # 시점 값으로 **박아서** 남긴다(나중에 다시 계산하지 않는다).
@@ -361,7 +398,7 @@ def plan() -> list[dict]:
         provider = provider_for(stage)
         _, pfrom = _pick(stage, "PROVIDER", ())
         if not pfrom and _stage_default_provider(stage):
-            pfrom = "검수는 gemini (llm.py STAGE_DEFAULT_PROVIDERS)"
+            pfrom = "코드가 정한 단계 기본값 (llm.py STAGE_DEFAULT_PROVIDERS)"
         if not pfrom:
             _, pfrom = _pick(stage, "PROVIDER", ("NH_PROVIDER", "PROVIDER"))
         _, mfrom = _pick(stage, "MODEL",

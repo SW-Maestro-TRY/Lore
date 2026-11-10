@@ -2698,10 +2698,13 @@ public class JobRunner {
                     + (why.categories().isEmpty() ? "" : " · 분류 " + why.categories())
                     + "\n" + first;
             if (outOfCredits(detail)) {
+                String quotaPage = Boolean.parseBoolean(System.getenv("WEBTOON_CODEX_PROXY"))
+                        ? "Codex https://chatgpt.com/codex/settings/usage"
+                        : "OpenAI https://platform.openai.com/settings/organization/billing/overview"
+                                + " · OpenRouter https://openrouter.ai/settings/credits";
                 opsAlert.send(com.lore.webtoon.ops.OpsAlert.Level.URGENT, "model-credits",
                         "모델 크레딧·한도 소진 — 생성이 모두 막혀요", body
-                                + "\n충전: OpenAI https://platform.openai.com/settings/organization/billing/overview"
-                                + " · OpenRouter https://openrouter.ai/settings/credits");
+                                + "\n한도 확인: " + quotaPage);
             } else {
                 opsAlert.send(com.lore.webtoon.ops.OpsAlert.Level.ERROR, "job-fail:" + why.stage() + ":" + why.code(),
                         "생성 실패 — " + why.stage() + " / " + why.code(), body);

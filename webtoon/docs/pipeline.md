@@ -36,16 +36,16 @@ Parameter Store). 모델은 전부 OpenAI 다.
 | 1 | `PERSONA` | 사용자가 적은 캐릭터로 주인공 카드 | **gpt-5.1** | 1 |
 | 1 | `CAST` | 주인공과 얽힐 인물 넷 | **gpt-5.1** | 1 (PERSONA 와 동시) |
 | 2 | `STORY` | 이야기 1개. 소개 한 문장을 먼저 정하고 본문으로 풀어 쓴다 | **gpt-6.1-sol** | 1 · 다시 짓기마다 1 |
-| 3 | `STORY_REVIEW` | 이야기 후보 검수 — 고르기 전에 후보마다 어디서 걸리는지 | **gemini-3.5-flash**¹ | 1 |
+| 3 | `STORY_REVIEW` | 이야기 후보 검수 — 고르기 전에 후보마다 어디서 걸리는지 | **google/gemini-3.5-flash** (OpenRouter)¹ | 1 |
 | 1~2 와 동시 | `SHEET` | 캐릭터 시트 사양(사진 · 설명 → 글) | gpt-4.1 | 1 · 다시 그리기마다 1 |
 | 1~2 와 동시 | `SHEET_IMAGE` | 캐릭터 시트 그림 — 같은 캐릭터의 두 번째 작품부터는 기억해 둔 시트를 심어 건너뛴다(체험은 예외) | **gpt-image-2.5-flare** medium 고정 | 0~1 (안전 기준에 걸리면 스스로 1번 더) |
 | 4 | `SCENE` | 고른 이야기를 장면으로 나누기(장면마다 장소 · 벌어지는 일 · 나레이션) — 장면 하나는 중심 사건 하나 | **google/gemini-3.8-flash** (OpenRouter)² | 1 |
 | 4 | `NARRATION` | 장면 글을 받은 뒤 나레이션 상자만 따로 — 그림·말풍선으로 안 되는 사실만, 빈 장은 「없음」으로 그림 단계에 (#758) | **gpt-5.1** | 1 (끄기 `NH_NARRATION_STAGE=0`, 내 내용으로 길은 안 돎) |
 | 5 | `PAGE_IMAGE` | 장 그림(표지 1장 + 장면 수) | **gpt-image-2** | 장 수 + 다시 그린 수 |
-| 5 | `PAGE_REVIEW` | 장 검수 — 장마다 그린 직후 | **gemini-3.5-flash**¹ | 표지 뺀 장 수 + 다시 그린 수 |
-| 5 | `COVER_REVIEW` | 표지 검수 — 칸 하나 · 글상자 없음 · 제목 그대로 | **gemini-3.5-flash**¹ | 1 + 다시 그린 수 |
-| 6 | `FULL_REVIEW` | 화 전체 검수 — 다 그린 뒤 처음부터 끝까지 한 번에 | **gemini-3.5-flash**¹ | 1 ~ 3 |
-| 옵션 | `CAST_SHEET` · `CAST_SHEET_IMAGE` | 조연 시트(사양 · 그림, 크레딧 1) | gpt-4.1 · gpt-image-2.5-flare medium | 사람이 누를 때 |
+| 5 | `PAGE_REVIEW` | 장 검수 — 장마다 그린 직후 | **google/gemini-3.5-flash** (OpenRouter)¹ | 표지 뺀 장 수 + 다시 그린 수 |
+| 5 | `COVER_REVIEW` | 표지 검수 — 칸 하나 · 글상자 없음 · 제목 그대로 | **google/gemini-3.5-flash** (OpenRouter)¹ | 1 + 다시 그린 수 |
+| 6 | `FULL_REVIEW` | 화 전체 검수 — 다 그린 뒤 처음부터 끝까지 한 번에 | **google/gemini-3.5-flash** (OpenRouter)¹ | 1 ~ 3 |
+ | 옵션 | `CAST_SHEET` · `CAST_SHEET_IMAGE` | 조연 시트(사양 · 그림, 크레딧 1) | gpt-4.1 · gpt-image-2.5-flare medium | 사람이 누를 때 |
 | 끔 | `STORY_DIFF` | 후보 넷이 서로 다른가 | gpt-4.1 | 기본 꺼짐(`NH_STORY_DIFF`) |
 
 실제 기록 예 — 「카페 사장에게는 비밀이 많다」(20261003T133334-b5ccce, 서버로 만든 9장짜리):
@@ -54,9 +54,13 @@ PAGE_REVIEW 8번(gpt-4.1), SHEET_IMAGE 1번 · PAGE_IMAGE 9번(gpt-image-2).
 
 **자주 헷갈리는 것**
 
-- **검수 넷(이야기 · 장 · 표지 · 화 전체)은 gemini 다(2026-10-26).** ¹ gemini 키(`GEMINI_API_KEY`, 서버에는
-  `HAEUN_GEMINI_API_KEY`)가 있을 때만이다. 키가 없으면 전처럼 OpenAI 로 돈다 — 이야기 · 장 · 표지 검수는
-  gpt-4.1, 화 전체 검수는 gpt-5.1.
+- **검수 넷(이야기 · 장 · 표지 · 화 전체)은 OpenRouter 의 google/gemini-3.5-flash 다(2026-11-05).** ¹ `OPENROUTER_API_KEY`
+  가 있을 때만이다. 키가 없으면 전처럼 OpenAI 로 돈다 — 이야기 · 장 · 표지 검수는 gpt-4.1, 화 전체 검수는 gpt-5.1.
+  근거: 정답을 아는 결함을 심은 13편 비교에서 장 검수 결함 검출 59% → 92%, 결함 종류 맞힘 22% → 74%,
+  화 전체 반복 지적 38% → 100%(OpenRouter 156회, `haeun/검수모델-실험-2026-11-05`). 멀쩡한 장을 다시
+  그리라는 판정은 2/13 → 6/13 으로 늘었고, 다시 그리기 횟수 상한이 비용을 묶는다.
+  10/26 에 gemini 직접 API 로 정해 두었으나 운영 · staging 에 gemini 키가 없어 실제로는 계속 OpenAI 로 돌았다
+  (11/05 운영 `webtoon_usage` 로 확인). 그래서 운영에 이미 있는 OpenRouter 키 · 실험과 같은 길로 바꿨다.
 - **장면 나누기는 OpenRouter 의 google/gemini-3.8-flash 다(2026-10-27, 기준은 `story-principles.md`).** ² `OPENROUTER_API_KEY`
   가 있을 때만이다. 비교 실험을 전부 OpenRouter 로 했기 때문에 그 길 그대로 두었고, Gemini 직접 API 는
   시험하지 않았다. 키가 없으면(지금 운영) 전처럼 gpt-5.1 이다. 운영을 바꾸려면 OpenRouter 키를 넣는
@@ -81,10 +85,10 @@ PAGE_REVIEW 8번(gpt-4.1), SHEET_IMAGE 1번 · PAGE_IMAGE 9번(gpt-image-2).
 
 | 검수 | 모델 | 무엇을 보나 | 걸리면 |
 |---|---|---|---|
-| 이야기 검수 `STORY_REVIEW` | gemini-3.5-flash¹ | 후보마다 그림으로 옮겼을 때 어디서 막히는가 | **아무것도 막지 않는다.** 판정이 고르는 화면에 붙고, 바로 만들기는 통과한 후보 중에서 고른다 |
-| 장 검수 `PAGE_REVIEW` | gemini-3.5-flash¹ | 그 장만 보고 독자가 이해하는가(최우선) · 말풍선 화자 · 대사 · 앞 장과 이어지는가 · 연출 · 나레이션이 끝까지 맺어졌는가. 나레이션 첫 줄이 앞 장으로 되돌아가는지는 검수가 적은 값으로 코드가 판정 | `critical` 이면 그 장을 지우고 지적을 붙여 다시 그림 — 장마다 **1번까지**(`NH_PAGE_REVIEW_RETRY`) |
-| 표지 검수 `COVER_REVIEW` | gemini-3.5-flash¹ | 칸 하나 · 글상자 없음 · 제목 그대로 | 다시 그림 |
-| 화 전체 검수 `FULL_REVIEW` | gemini-3.5-flash¹ | 장 하나로는 안 보이는 것 — 같은 자세 반복, 앞뒤 모순, 흐름 | `critical` 이고 다시 그려 고쳐지는 것만 그 장을 다시 그림 — 장마다 **2번까지**, 전체 **3바퀴까지**(`JobRunner.MAX_PAGE_REDRAWS` · `MAX_FULL_REVIEW_ROUNDS`). 못 고쳐도 만들기는 성공으로 간다 |
+| 이야기 검수 `STORY_REVIEW` | google/gemini-3.5-flash (OpenRouter)¹ | 후보마다 그림으로 옮겼을 때 어디서 막히는가 | **아무것도 막지 않는다.** 판정이 고르는 화면에 붙고, 바로 만들기는 통과한 후보 중에서 고른다 |
+| 장 검수 `PAGE_REVIEW` | google/gemini-3.5-flash (OpenRouter)¹ | 그 장만 보고 독자가 이해하는가(최우선) · 말풍선 화자 · 대사 · 앞 장과 이어지는가 · 연출 · 나레이션이 끝까지 맺어졌는가. 나레이션 첫 줄이 앞 장으로 되돌아가는지는 검수가 적은 값으로 코드가 판정 | `critical` 이면 그 장을 지우고 지적을 붙여 다시 그림 — 장마다 **1번까지**(`NH_PAGE_REVIEW_RETRY`) |
+| 표지 검수 `COVER_REVIEW` | google/gemini-3.5-flash (OpenRouter)¹ | 칸 하나 · 글상자 없음 · 제목 그대로 | 다시 그림 |
+| 화 전체 검수 `FULL_REVIEW` | google/gemini-3.5-flash (OpenRouter)¹ | 장 하나로는 안 보이는 것 — 같은 자세 반복, 앞뒤 모순, 흐름 | `critical` 이고 다시 그려 고쳐지는 것만 그 장을 다시 그림 — 장마다 **2번까지**, 전체 **3바퀴까지**(`JobRunner.MAX_PAGE_REDRAWS` · `MAX_FULL_REVIEW_ROUNDS`). 못 고쳐도 만들기는 성공으로 간다 |
 
 **검수가 아직 안 보는 것**
 
