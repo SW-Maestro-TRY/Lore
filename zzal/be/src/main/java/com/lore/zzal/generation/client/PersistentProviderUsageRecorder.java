@@ -29,12 +29,50 @@ public final class PersistentProviderUsageRecorder implements ProviderUsageRecor
         this.events=events; tx=new TransactionTemplate(manager);
         tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
+    /**
+     * 기능 이름을 붙인 기록기. 창구가 보내기 직전의 시작 행({@code zzal_provider_call_started})과
+     * 끝의 사용량 행을 같은 callId 로 남긴다(설계 1-3·2-3).
+     */
     public ProviderUsageRecorder forFeature(String feature) {
-        return observation -> recordFor(feature, observation);
+        return new FeatureRecorder(feature);
     }
-    @Override public void record(Observation observation) throws Exception { recordFor("unknown", observation); }
-    private void recordFor(String feature, Observation o) throws Exception {
+    private final class FeatureRecorder implements ProviderUsageRecorder, com.lore.zzal.openai.ProviderCallLog {
+        private final String feature;
+        private FeatureRecorder(String feature) { this.feature = feature; }
+        @Override public void record(Observation observation) throws Exception { recordFor(feature, observation, null); }
+        @Override public void started(Call call) throws Exception { recordStarted(feature, call); }
+        @Override public void finished(Observation observation, Call call) throws Exception { recordFor(feature, observation, call); }
+    }
+    @Override public void record(Observation observation) throws Exception { recordFor("unknown", observation, null); }
+    /**
+     * 보내기 직전 기록. 칸 = callId·기능·펫·잡·단계(request_id)·시도·모델·줄. 따로 커밋(REQUIRES_NEW)한다.
+     * ★ 끝 행이 없는 시작 행 = 과금됐을 수도 있는 끊긴 호출({@code ProviderCallOrphanQuery}).
+     */
+    private void recordStarted(String feature, com.lore.zzal.openai.ProviderCallLog.Call call) throws Exception {
+        var links=call.links();
+        var data=new LinkedHashMap<String,Object>();
+        data.put("call_id",call.callId());
+        data.put("feature", links==null ? feature : Observation.safe(links.feature()));
+        data.put("pet_id",links==null ? null : links.petId());
+        data.put("job_id",links==null ? null : links.jobId());
+        data.put("request_id",links==null ? null : Observation.safe(links.requestId()));
+        data.put("attempt",links==null ? null : links.attempt());
+        data.put("model_requested",Observation.safe(call.model()));
+        data.put("lane",call.lane());
+        data.put("queue_wait_ms",call.queueWaitMs());
+        data.put("in_flight_at_start",call.inFlightAtStart());
+        Instant now=Instant.now();
+        String id=java.util.UUID.nameUUIDFromBytes(("started:"+call.callId()).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+        AnalyticsEvent row=AnalyticsEvent.of("zzal_provider_call_started",SERVER_ANON,null,JSON.writeValueAsString(data),
+                null,null,"server",null,null,now,now).envelope(id,2,null,null,null).identityStatus("server").serverOrigin();
+        if(!preserveAndPersist(row) && !retry.offer(row)) {
+            droppedWrites.incrementAndGet();
+            org.slf4j.LoggerFactory.getLogger(getClass()).error("Provider call-started retry buffer full, droppedWrites={}",droppedWrites.get());
+        }
+    }
+    private void recordFor(String feature, Observation o, com.lore.zzal.openai.ProviderCallLog.Call call) throws Exception {
         var links=ProviderUsageContext.current();
+        if(links==null && call!=null) links=call.links();
         var data=new LinkedHashMap<String,Object>();
         data.put("feature", links==null ? feature : Observation.safe(links.feature()));
         data.put("pet_id",links==null ? null : links.petId());
@@ -53,6 +91,13 @@ public final class PersistentProviderUsageRecorder implements ProviderUsageRecor
         data.put("cost_status",o.estimatedCostUsd()==null ? "unknown" : "estimated");
         data.put("estimated_cost_usd",o.estimatedCostUsd());
         data.put("rate_version",o.estimatedCostUsd()==null ? null : "legacy-static-input-output-no-cache-discount-v1");
+        if(call!=null) {
+            // 창구 줄 지표(설계 2-3) — 줄 상한 시작값(3/10/1)이 맞는지 가늠한다.
+            data.put("call_id",o.callId());
+            data.put("lane",call.lane());
+            data.put("queue_wait_ms",call.queueWaitMs());
+            data.put("in_flight_at_start",call.inFlightAtStart());
+        }
         Instant now=Instant.now();
         AnalyticsEvent row=AnalyticsEvent.of("zzal_provider_usage",SERVER_ANON,null,JSON.writeValueAsString(data),
                 null,null,"server",null,null,o.latencyMs()==null ? now : now.minusMillis(o.latencyMs()),now).envelope(o.callId(),2,null,null,null).identityStatus("server").serverOrigin();

@@ -158,16 +158,21 @@ public class OpenAiGateway implements AutoCloseable {
         return body.length() > 300 ? body.substring(0, 300) : body;
     }
 
+    /** 시작 행 커밋을 기다리는 상한. 넘으면 먼저 보낸다. */
+    static final Duration STARTED_WAIT = Duration.ofMillis(500);
+
     /** 호출 하나. 많아야 한 번 보낸다. */
     public final class Call implements AutoCloseable {
         private final Lane lane;
         private final String model;
+        private final ProviderUsageRecorder recorder;
         private final ProviderAttempt attempt;
         private boolean sent;
 
         private Call(Lane lane, String model, ProviderUsageRecorder recorder) {
             this.lane = lane;
             this.model = model;
+            this.recorder = recorder;
             this.attempt = new ProviderAttempt(recorder, model);
         }
 
@@ -277,6 +282,43 @@ public class OpenAiGateway implements AutoCloseable {
             } catch (ProviderQuotaException e) {
                 leave();
                 throw e;
+            }
+            long waitedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0);
+            var meta = new ProviderCallLog.Call(attempt.callId(), lane.key(), model, waitedMs,
+                    permits.get(lane).inFlight(), com.lore.zzal.generation.client.ProviderUsageContext.current());
+            attempt.call(meta);
+            if (recorder instanceof ProviderCallLog callLog) {
+                logStarted(callLog, meta);
+            }
+        }
+
+        /**
+         * 시작 행을 따로 커밋한다(설계 1-3). ★ 유료 호출을 막지 않는다 — 기록이 실패하면 경고만,
+         * DB 연결을 못 얻어 늦어지면 {@link #STARTED_WAIT} 만 기다리고 보낸다(기록은 뒤에서 마저 끝난다).
+         * 트랜잭션 안에서 부른 경우에도 연결 1개를 쥔 채 두 번째 연결을 무한히 기다리지 않게 하려는 것이다.
+         */
+        private void logStarted(ProviderCallLog callLog, ProviderCallLog.Call meta) {
+            java.util.concurrent.Future<?> f;
+            try {
+                f = executor.submit(() -> {
+                    try {
+                        callLog.started(meta);
+                    } catch (Exception e) {
+                        log.warn("호출 전 기록 실패 — 호출은 그대로 보낸다 callId={}", meta.callId(), e);
+                    }
+                });
+            } catch (java.util.concurrent.RejectedExecutionException e) {
+                log.warn("호출 전 기록을 맡길 실행기가 닫혔다 — callId={}", meta.callId());
+                return;
+            }
+            try {
+                f.get(STARTED_WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            } catch (TimeoutException e) {
+                log.warn("호출 전 기록이 {}ms 안에 안 끝나 먼저 보낸다 callId={}", STARTED_WAIT.toMillis(), meta.callId());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException e) {
+                log.warn("호출 전 기록 실패 — callId={}", meta.callId(), e.getCause());
             }
         }
 
