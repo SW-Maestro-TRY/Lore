@@ -19,13 +19,19 @@ import org.springframework.stereotype.Component;
 public class PlayCatalog {
 
     private static final String FILE = "play/worlds.json";
+    private static final String STORYNATION_FILE = "play/storynation-worlds.json";
 
     private final List<Map<String, Object>> worlds;
 
     public PlayCatalog() {
         try (InputStream in = new ClassPathResource(FILE).getInputStream()) {
             Map<String, List<Map<String, Object>>> doc = new ObjectMapper().readValue(in, new TypeReference<>() {});
-            this.worlds = List.copyOf(doc.get("worlds"));
+            List<Map<String, Object>> all = new java.util.ArrayList<>(doc.get("worlds"));
+            try (InputStream storynation = new ClassPathResource(STORYNATION_FILE).getInputStream()) {
+                Map<String, List<Map<String, Object>>> extra = new ObjectMapper().readValue(storynation, new TypeReference<>() {});
+                all.addAll(extra.get("worlds"));
+            }
+            this.worlds = List.copyOf(all);
         } catch (IOException e) {
             throw new UncheckedIOException(FILE + " 을 읽지 못했습니다", e);
         }
