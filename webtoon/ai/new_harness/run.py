@@ -2587,7 +2587,29 @@ def main(argv=None) -> int:
     p.add_argument("--note", default="", help="다시 만들기에서 이번 시도에만 추가로 "
                                               "반영할 요청 (이야기·시트 단계에서 씀)")
     p.add_argument("--plan", action="store_true", help="단계별 모델만 보여준다")
+    # 대화 캡처로 만드는 개인 테스트 웹툰(chat_comic.py). 보통 길과 섞이지 않게 test-<32hex> run 에서만 돈다.
+    p.add_argument("--chat-extract", action="store_true", help="비공개 캡처 대화 전사")
+    p.add_argument("--chat-prepare", action="store_true", help="확인한 대화를 화·장면으로 나눠 화마다 run 을 만든다")
+    p.add_argument("--chat-sheets", action="store_true", help="시트 보관함에서 1화 시트를 깐다")
+    p.add_argument("--chat-save-sheets", action="store_true", help="1화 시트를 보관함에 넣는다")
+    p.add_argument("--chat-share-sheets", action="store_true", help="1화 시트를 나머지 화에 복사한다")
     args = p.parse_args(argv)
+    if args.chat_extract or args.chat_prepare or args.chat_sheets or args.chat_save_sheets or args.chat_share_sheets:
+        if not args.run_id or not re.fullmatch(r"test-[0-9a-f]{32}", args.run_id):
+            raise SystemExit("비공개 테스트 run 번호가 필요합니다")
+        import chat_comic
+        private_run = RUNS_DIR / args.run_id
+        if args.chat_extract:
+            chat_comic.extract(private_run)
+        elif args.chat_prepare:
+            chat_comic.prepare(private_run)
+        elif args.chat_sheets:
+            chat_comic.use_library(private_run)
+        elif args.chat_save_sheets:
+            chat_comic.save_library(private_run)
+        else:
+            chat_comic.share_sheets(private_run)
+        return 0
     if not args.lang:
         env_lang = (llm.env("NH_LANG") or "").strip()
         args.lang = env_lang if env_lang in lang_mod.LANG_NAMES else "ko"
