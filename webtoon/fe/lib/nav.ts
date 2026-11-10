@@ -14,7 +14,7 @@
  *   /webtoon?view=mypage           마이페이지
  *   /webtoon?view=event            출석 이벤트 (할로윈 · 가면무도회, #862)
  *   /webtoon?view=feedback         피드백 보내기 (예전 주소 view=mypage&tab=feedback 도 여기로)
- *   /webtoon?view=play             세계관 체험 — 세계·사건 고르기(&world=<id>), 사건 보기(&ep=<id>), 캐릭터(&stage=char), 만드는 중(&stage=making), 만화(&stage=done)
+ *   /webtoon?view=play             세계관 체험 — 세계·사건 고르기(&world=<id>), 인트로(&stage=intro), 사건 보기(&ep=<id>), 캐릭터(&stage=char), 만드는 중(&stage=making), 만화(&stage=done)
  *   /webtoon?view=make             만들기 고르기 (웹툰 만들기 / 세계관 만들기)
  *   /webtoon?view=world-new        세계관 만들기
  *   /webtoon?view=admin            관리자 대시보드 — 개요 · 작품(&tab=works) · 캐릭터(&tab=characters) (관리자만, #779)
@@ -46,7 +46,7 @@ export interface GoParams {
   /** 세계관 체험의 세계 · 사건 · 걸음. */
   world?: string;
   ep?: string;
-  stage?: "char" | "making" | "done" | "stories";
+  stage?: "intro" | "char" | "making" | "done" | "stories";
   /** 2걸음 그림체 기본값 — 광고 작품의 그림체를 넘긴다(바꿀 수 있다). STYLE_INFO 의 키. */
   style?: string;
 }

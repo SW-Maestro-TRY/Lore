@@ -681,6 +681,7 @@ public class PlayWorldService {
     @SuppressWarnings("unchecked")
     private Map<String, Object> catalogView(String id, Long user) {
         Map<String, Object> w = catalog.world(id);
+        boolean showSecrets = admin(user);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", id);
         out.put("name", text(w.get("name"), 40));
@@ -701,7 +702,11 @@ public class PlayWorldService {
                 }
             }
         }
-        out.put("rule", String.join("\n", rule));
+        String originalRule = text(w.get("rule"), 4000);
+        out.put("rule", originalRule.isEmpty() ? String.join("\n", rule) : originalRule);
+        if (showSecrets) {
+            out.put("secret", text(w.get("secret"), SECRET_WORLD));
+        }
         out.put("spot", text(w.get("spot"), 60));
         List<Map<String, Object>> cast = new ArrayList<>();
         for (Object c : list(w.get("cast"))) {
@@ -712,6 +717,9 @@ public class PlayWorldService {
                 m.put("role", text(p.get("role"), 60));
                 m.put("desc", text(p.get("desc"), 600));
                 m.put("face_url", p.get("face_url"));
+                if (showSecrets) {
+                    m.put("secret", text(p.get("secret"), SECRET_PERSON));
+                }
                 cast.add(m);
             }
         }
@@ -724,6 +732,9 @@ public class PlayWorldService {
             }
             Map<String, Object> m = new LinkedHashMap<>();
             v.forEach((k, val) -> m.put(String.valueOf(k), val));
+            if (!showSecrets) {
+                m.remove("secret");
+            }
             String eventId = text(v.get("id"), 80);
             List<Map<String, Object>> people = new ArrayList<>();
             List<String> examples = new ArrayList<>();

@@ -1,7 +1,7 @@
 "use client";
 /* 세계관 체험 — 세계 → 사건 → 내 캐릭터 → 만화. 화면 하나에 주소(world · ep · stage)로 갈린다.
  * 카드를 눌러도 크레딧이 나가지 않는다. 나가는 곳은 내 캐릭터 화면의 「넣기」 하나뿐이다. */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { cancelJob, thumbUrl, eventPlayRuns, type PlayRunCard, listCharacters, readPlayAllowance, readCharacter, startPlayRun, type Allowance, type WebtoonApiError, pageUrl, readJob, readResult, type Character, type RunResult } from "../../lib/api";
 import { useAuth } from "@common/auth/useAuth";
 import { useLang, useT } from "../../lib/i18n";
@@ -15,13 +15,15 @@ import { CharacterEditDialog } from "../character/OriginalCharacter";
 import "../character/i18n";
 import { usePhone } from "../landing/usePhone";
 import { loadWorlds, type PlayEvent, type PlayPerson, type PlayWorld } from "./playData";
+import { storynationIntro, storynationIntroPage } from "./storynationIntro";
+import { EDITOR_GAP_RATIOS } from "../../lib/editorGap";
 import "../wizard/i18n";
 import "./i18n";
 import "./Play.css";
 import { QUALITY_INFO, worldPlayQualitySamples, WORLD_PLAY_QUALITY_THUMB, type WizardQuality } from "../../lib/wizardData";
 
 /* 모바일에서만 보이는 얇은 줄 — 이전 · 제목 · 오른쪽 글(시안 mobile.html 의 .mtop). PC 에서는 CSS 가 숨긴다. */
-function MTop({ back, onBack, title, right }: { back?: string; onBack?: () => void; title: string; right?: string }) {
+function MTop({ back, onBack, title, right }: { back?: string; onBack?: () => void; title: string; right?: ReactNode }) {
   return (
     <div className="pl-mtop">
       {back ? <button type="button" className="back" onClick={onBack}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 5l-7 7 7 7" /></svg>{back}</button> : <span />}
@@ -68,8 +70,13 @@ function CastView({ p, onClose }: { p: PlayPerson; onClose: () => void }) {
 function Worlds({ go, worlds }: { go: Go; worlds: PlayWorld[] }) {
   const t = useT();
   const [genre, setGenre] = useState("");
-  const genres = [...new Set(worlds.map((w) => w.genre).filter(Boolean))];
-  const list = genre ? worlds.filter((w) => w.genre === genre) : worlds;
+  const order = ["zombie", "arcana", "e1d640412ec94d82bf9b", "sne-bardo-express", "sne-bunker-068", "edelia", "asteria", "gatebreaker"];
+  const sorted = [...worlds].sort((a, b) => {
+    const ai = order.indexOf(a.id), bi = order.indexOf(b.id);
+    return (ai < 0 ? order.length : ai) - (bi < 0 ? order.length : bi);
+  });
+  const genres = [...new Set(sorted.map((w) => w.genre).filter(Boolean))];
+  const list = genre ? sorted.filter((w) => w.genre === genre) : sorted;
   return (
     <div className="pl-wrap">
       <MTop back={t("처음")} onBack={() => go("landing")} title={t("세계관")} />
@@ -84,8 +91,8 @@ function Worlds({ go, worlds }: { go: Go; worlds: PlayWorld[] }) {
       </div>
       <div className="pl-events">
         {list.map((w, i) => (
-          <button type="button" key={w.id} className={`pl-event${i === 0 ? " wide" : ""}${i > 0 && i === list.length - 1 && (list.length - 1) % 2 === 1 ? " full" : ""}`}
-            onClick={() => go("play", { world: w.id })}>
+          <button type="button" key={w.id} className={`pl-event${i === 0 ? " wide" : ""}${w.id === "sne-bunker-068" ? " sne-bunker" : ""}${i > 0 && i === list.length - 1 && (list.length - 1) % 2 === 1 ? " full" : ""}`}
+            onClick={() => go("play", { world: w.id, stage: storynationIntro(w.id) ? "intro" : undefined })}>
             <Pic src={w.cover_url} />
             <span className="b">{w.genre && <span className="num">{t(w.genre)}</span>}<b>{t(w.name)}</b><span className="ln">{t(w.one)}</span></span>
           </button>
@@ -101,6 +108,7 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
   /* 내가 만든 세계 · 관리자는 운영 세계도 고칠 수 있다 */
   const { status, user } = useAuth();
   const canEdit = !!w.mine || (status === "authenticated" && user?.role === "ADMIN");
+  const intro = storynationIntro(w.id);
   const [who, setWho] = useState<PlayPerson | null>(null);
   return (
     <div className="pl-wrap">
@@ -128,9 +136,12 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
           )}
         </aside>
         <div className="pl-sec">
-          <h2 className="pl-h1">{t("어느 사건에 넣어 볼까요?")}</h2>
+          <div className={`pl-sec-head${intro ? " with-intro" : ""}`}>
+            <h2 className="pl-h1">{t("어느 사건에 넣어 볼까요?")}</h2>
+            {intro && <button type="button" className="pl-intro-replay" onClick={() => go("play", { world: w.id, stage: "intro" })}>{t("인트로 웹툰 다시 보기")}</button>}
+          </div>
           <div className="pl-listh"><b>{t("사건")}</b></div>
-          {w.events.map((e) => (
+          {w.events.filter((e) => !intro || e.no !== "EP 00").map((e) => (
             <button type="button" key={e.id} className="pl-eprow" onClick={() => go("play", { world: w.id, ep: e.id })}>
               <Pic src={e.image_url} />
               <span className="mid"><span className="no">{e.no}</span><b>{t(e.title)}</b><span className="hook">{t(e.line || e.situation)}</span></span>
@@ -149,6 +160,42 @@ function WorldDetail({ w, go }: { w: PlayWorld; go: Go }) {
         </div>
       )}
       {who && <CastView p={who} onClose={() => setWho(null)} />}
+    </div>
+  );
+}
+
+/* 스토리네이션 전달본의 인트로를 읽고 나서 사건을 고른다. EP 00 생성 결과와 혼동하지 않는다. */
+function StorynationIntro({ w, go }: { w: PlayWorld; go: Go }) {
+  const t = useT();
+  const intro = storynationIntro(w.id);
+  if (!intro) return <WorldDetail w={w} go={go} />;
+  const openWorld = () => go("play", { world: w.id });
+  return (
+    <div className="pl-intro">
+      <MTop back={t("세계관")} onBack={() => go("play")} title={t(w.name)} right={<button type="button" className="pl-intro-skip-mobile" onClick={openWorld}>{t("건너뛰기")}</button>} />
+      <div className="pl-intro-head">
+        <button type="button" className="pl-intro-back" onClick={() => go("play")}>{t("세계관")}</button>
+        <span aria-hidden="true">›</span>
+        <b>{t(w.name)}</b>
+        <button type="button" className="pl-intro-skip" onClick={openWorld}>{t("건너뛰기")}</button>
+      </div>
+      <div className="pl-intro-title">
+        <h1>{t(w.name)} · {t("인트로 웹툰")}</h1>
+        <p>{intro.credit}</p>
+      </div>
+      <div className="pl-intro-pages">
+        {Array.from({ length: intro.pages }, (_, i) => (
+          <Fragment key={i}>
+            {i > 0 && <div className="pl-intro-page-gap" style={{ paddingTop: `${EDITOR_GAP_RATIOS[1] * 100}%` }} aria-hidden="true" />}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={storynationIntroPage(intro.key, i + 1)} alt={t("{name} 인트로 웹툰 {n}쪽", { name: t(w.name), n: String(i + 1) })} loading={i === 0 ? "eager" : "lazy"} />
+          </Fragment>
+        ))}
+      </div>
+      <div className="pl-intro-finish">
+        <h2>{t("이제 내 캐릭터의 이야기를 시작해 볼까요?")}</h2>
+        <button type="button" className="pl-btn" onClick={openWorld}>{t("사건 고르기")}</button>
+      </div>
     </div>
   );
 }
@@ -620,9 +667,10 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
   const [who, setWho] = useState<Character | null>(null);
   useEffect(() => { if (run) void readResult(run).then(setResult).catch(() => {}); }, [run]);
   useEffect(() => { if (character) void readCharacter(character).then(setWho).catch(() => {}); }, [character]);
-  const idx = w.events.findIndex((v) => v.id === e.id);
-  const next = w.events[idx + 1];
-  const rest = w.events.filter((v) => v.id !== e.id && v.id !== next?.id);
+  const events = w.events.filter((v) => !storynationIntro(w.id) || v.no !== "EP 00");
+  const idx = events.findIndex((v) => v.id === e.id);
+  const next = events[idx + 1];
+  const rest = events.filter((v) => v.id !== e.id && v.id !== next?.id);
   const other = worlds.filter((v) => v.id !== w.id);
   const name = who ? (who.builtin ? t(who.name) : who.name) : "";
   /* 같은 사건에 다른 캐릭터를 넣은 만화 — 「얘라서 이렇게 됐다」를 나란히 보게 */
@@ -718,7 +766,7 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
         {other.length > 0 && (
           <section><h2>{t("다른 세계")}</h2>
             <div className="row">{other.map((v) => (
-              <button type="button" className="wc" key={v.id} onClick={() => { track("play_next", { where: "other_world", world: v.id }); go("play", { world: v.id }); }}>
+              <button type="button" className="wc" key={v.id} onClick={() => { track("play_next", { where: "other_world", world: v.id }); go("play", { world: v.id, stage: storynationIntro(v.id) ? "intro" : undefined }); }}>
                 <Pic src={v.cover_url} /><b>{t(v.name)}</b>
               </button>
             ))}</div>
@@ -742,7 +790,7 @@ function Comic({ worlds, w, e, run, character, go }: { worlds: PlayWorld[]; w: P
   );
 }
 
-export default function Play({ go, authenticated, world, ep, stage, job, run, character }: { go: Go; authenticated: boolean; world?: string; ep?: string; stage?: "char" | "making" | "done" | "stories"; job?: string; run?: string; character?: string }) {
+export default function Play({ go, authenticated, world, ep, stage, job, run, character }: { go: Go; authenticated: boolean; world?: string; ep?: string; stage?: "intro" | "char" | "making" | "done" | "stories"; job?: string; run?: string; character?: string }) {
   const t = useT();
   const phone = usePhone();
   const [worlds, setWorlds] = useState<PlayWorld[] | null>(null);
@@ -771,6 +819,7 @@ export default function Play({ go, authenticated, world, ep, stage, job, run, ch
   let found: { world: PlayWorld; event: PlayEvent } | undefined;
   for (const v of worlds) { const hit = v.events.find((x) => x.id === ep); if (hit) found = { world: v, event: hit }; }
   const w = found?.world || worlds.find((v) => v.id === world);
+  if (w && !found && stage === "intro") return <div className="pl"><StorynationIntro w={w} go={go} /></div>;
   if (found && stage === "char") return <div className="pl"><PickChar w={found.world} e={found.event} go={go} authenticated={authenticated} preset={character} /></div>;
   if (found && stage === "making") return <div className="pl"><Making w={found.world} e={found.event} job={job} character={character} go={go} /></div>;
   if (found && stage === "stories") return <div className="pl"><Stories w={found.world} e={found.event} go={go} /></div>;
