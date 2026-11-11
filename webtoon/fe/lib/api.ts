@@ -556,11 +556,19 @@ export function notifyByEmail(id: string, email: string): Promise<{ email: strin
   return post(`/nh/jobs/${encodeURIComponent(id)}/notify`, { email });
 }
 
+/* DEV 화면의 진행 단계 미리보기(`fixture-…`, Progress.tsx)는 서버에 없는 작업이라 그림을 빌려 온다 —
+   시트는 소개 페이지의 시트 견본, 장은 예시 작품의 장. */
+const FIXTURE_SHEET = "/about/img/sheet-jia.jpg";
+const FIXTURE_RUN = "20261003T213320-5297d4";
+const isFixtureJob = (jobId: string) => jobId.startsWith("fixture-");
+
 export function sheetImageUrl(jobId: string, v: number | string = ""): string {
+  if (isFixtureJob(jobId)) return FIXTURE_SHEET;
   return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet.png${v ? `?v=${v}` : ""}`;
 }
 /** v 번째 옛 시트 그림(#548). */
 export function sheetVersionUrl(jobId: string, v: number, who?: string | null): string {
+  if (isFixtureJob(jobId)) return FIXTURE_SHEET;
   return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/sheet-v${v}.png${who ? `?who=${encodeURIComponent(who)}` : ""}`;
 }
 /** v 번째 옛 시트를 현재 시트로 되돌린다(#548). who 가 있으면 그 함께 주인공의 시트(#899). */
@@ -570,6 +578,7 @@ export function restoreSheet(id: string, v: number, who?: string | null) {
 
 /** 조연 시트 그림(#548). */
 export function castSheetImageUrl(jobId: string, name: string, v: number | string = ""): string {
+  if (isFixtureJob(jobId)) return FIXTURE_SHEET;
   return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/cast-sheet/${encodeURIComponent(name)}.png${v ? `?v=${v}` : ""}`;
 }
 
@@ -579,6 +588,8 @@ export function requestCastSheet(id: string, name: string) {
 }
 
 export function jobPageUrl(jobId: string, no: number, width = 260): string {
+  // 완성본 장은 320 · 1080 두 폭만 있다
+  if (isFixtureJob(jobId)) return `${BASE}/runs/${FIXTURE_RUN}/page/${no}?w=${width <= 320 ? 320 : 1080}`;
   return `${BASE}/nh/jobs/${encodeURIComponent(jobId)}/page/${no}.png?w=${width}`;
 }
 
