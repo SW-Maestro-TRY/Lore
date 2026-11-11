@@ -327,6 +327,35 @@ function mockScenesJob(id: string): NhJob {
   };
 }
 
+/* 진행 단계 미리보기(DEV 화면의 「진행 화면」) — `fixture-<단계>` 작업은 서버 없이 이 자리에서 만든다.
+   예전에는 로컬 검증 서버(qa/fixture-api.py)가 떠 있어야 해서 dev 서버에서는 「그런 작업이 없습니다」만
+   떴다(2026-11-11). 글은 mockScenesJob 의 실제 작품, 그림은 예시 작품(FIXTURE_RUN)의 장과 시트 견본을 빌린다. */
+const FIXTURE_RUN = "20261003T213320-5297d4";
+function fixtureJob(id: string): NhJob {
+  const phase = id.replace(/^fixture-(long-)?/, "");
+  const out: NhJob = { ...mockScenesJob("mock-scenes-own"), id, status: "running", run_id: FIXTURE_RUN, cast_kind: "confirm",
+    pick: 1, stage: "story", stage_index: 0, stage_label: "", minutes_left: 6, pct: 10, sheet_ready: true, elapsed: 120 };
+  const none = { story: null, scenes: [], pick: null, sheet_ready: false };
+  switch (phase) {
+    case "queued": return { ...out, ...none, status: "queued", queue: { ahead: 3, minutes: 12, line: "" }, pct: 0 };
+    case "writing": return { ...out, ...none };
+    case "story": return { ...out, status: "awaiting_pick", pick: null, pct: 20 };
+    case "cast": return { ...out, status: "awaiting_cast", pct: 25 };
+    case "casting": return { ...out, stage: "sheet", stage_index: 1, pct: 35, sheet_ready: false };
+    case "sheet": case "blocked":
+      return { ...out, status: "awaiting_sheet", stage: "sheet", stage_index: 1, pct: 40, sheet_blocked: phase === "blocked",
+               sheet_fix_left: 2, error: phase === "blocked" ? "캐릭터 이미지 확인이 필요합니다." : null };
+    case "scenes": return { ...out, status: "awaiting_scenes", stage: "pages", pct: 45 };
+    case "drawing": return { ...out, stage: "pages", stage_index: 2, pct: 60, art: { done: 3, total: 8, pages: [1, 2, 3] } };
+    case "review": case "redrawing":
+      return { ...out, stage: "bind", stage_index: 3, pct: 93, minutes_left: 1, art: { done: 8, total: 8, pages: [1, 2, 3, 4, 5, 6, 7, 8] },
+               redraw: phase === "redrawing" ? { pages: [4, 7], done: 1 } : null };
+    case "error": return { ...out, status: "error", error: "이미지 생성 중 연결이 끊겼습니다.", refunded: "credit", pct: 43 };
+    case "done": return { ...out, status: "done", pct: 100 };
+    default: return { ...out, status: "awaiting_scenes", stage: "pages", pct: 45 };
+  }
+}
+
 function CheckIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -369,10 +398,11 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
     return () => clearInterval(id);
   }, []);
 
-  const isMock = MOCK_IDS.includes(jobId);
+  const isFixture = jobId.startsWith("fixture-");
+  const isMock = MOCK_IDS.includes(jobId) || isFixture;
   const pull = useCallback(async () => {
     if (isMock) {
-      const mock = mockScenesJob(jobId);
+      const mock = isFixture ? fixtureJob(jobId) : mockScenesJob(jobId);
       if (pickDeadline.current == null && mock.pick_seconds_left != null) pickDeadline.current = Date.now() + mock.pick_seconds_left * 1000;
       setJob((prev) => prev ?? mock);
       stopped.current = true;
@@ -395,7 +425,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
       setMisses((n) => n + 1);
       setLoadErr(e instanceof Error ? e.message : t("상태를 받지 못했습니다"));
     }
-  }, [jobId, t, isMock]);
+  }, [jobId, t, isMock, isFixture]);
 
   useEffect(() => {
     stopped.current = false;
@@ -405,7 +435,7 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
   }, [pull]);
 
   /* 이 화면을 떠나도 오른쪽 아래 동그라미가 이 작업을 따라간다(ui/RunningBubble). */
-  useEffect(() => { watchJob(jobId); }, [jobId]);
+  useEffect(() => { if (!isFixture) watchJob(jobId); }, [jobId, isFixture]);
   /* 결과를 이 화면에서 봤으면 더 지켜볼 것이 없다 — 완성은 곧 완성본으로 넘어가고, 실패는 여기 떴다. */
   useEffect(() => {
     if (job?.status === "done" || job?.status === "error") unwatchJob(jobId);
@@ -413,8 +443,8 @@ export default function Progress({ jobId, go }: { jobId: string; go: Go }) {
 
   useEffect(() => {
     // 내 작품으로 기억 — 완성본의 내려받기·편집실이 이걸 본다. 넘어가는 것은 완성 카드의 단추로(확정 시안).
-    if (job?.status === "done" && job.run_id) rememberMyRun(job.run_id);
-  }, [job?.status, job?.run_id]);
+    if (job?.status === "done" && job.run_id && !isFixture) rememberMyRun(job.run_id);
+  }, [job?.status, job?.run_id, isFixture]);
 
   const send = async (fn: () => Promise<unknown>) => {
     setBusy(true);
