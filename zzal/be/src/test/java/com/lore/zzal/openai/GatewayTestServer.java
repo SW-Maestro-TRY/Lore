@@ -21,6 +21,8 @@ final class GatewayTestServer implements AutoCloseable {
     final AtomicInteger requests = new AtomicInteger();
     final List<String> arrivals = new CopyOnWriteArrayList<>();
     volatile long delayMs = 0;
+    /** 요청 꼬리표(쿼리)별 지연. 있으면 {@link #delayMs} 대신 쓴다. */
+    final Map<String, Long> delayByTag = new ConcurrentHashMap<>();
     volatile int status = 200;
     volatile String body = "{\"id\":\"r\",\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1},\"choices\":[{\"message\":{\"content\":\"{}\"}}]}";
     final Map<String, String> headers = new ConcurrentHashMap<>();
@@ -35,7 +37,8 @@ final class GatewayTestServer implements AutoCloseable {
             maxInFlight.accumulateAndGet(now, Math::max);
             try {
                 e.getRequestBody().readAllBytes();
-                if (delayMs > 0) Thread.sleep(delayMs);
+                long delay = delayByTag.getOrDefault(String.valueOf(e.getRequestURI().getQuery()), delayMs);
+                if (delay > 0) Thread.sleep(delay);
                 byte[] b = body.getBytes();
                 headers.forEach((k, v) -> e.getResponseHeaders().add(k, v));
                 e.sendResponseHeaders(status, b.length);
