@@ -118,4 +118,23 @@ class StepDeadlineAfterLaneTest {
             holder.get();
         }
     }
+
+    @Test
+    @DisplayName("★ 안전망 — 자리 대기는 상한(설정 lane-wait-cap-seconds)까지만 빼 준다. 넘으면 TIMEOUT")
+    void laneWaitBeyondCapTimesOut() throws Exception {
+        try (var server = new GatewayTestServer(); var gateway = new OpenAiGateway(oneImageSeat())) {
+            server.delayByTag.put("step", 100L);
+            Future<?> holder = holdSeat(gateway, server, 4_000);
+            GenerationRunner runner = runner(gateway);
+            ReflectionTestUtils.setField(runner, "laneWaitCapSeconds", 1);
+
+            long t0 = System.nanoTime();
+            RunResult r = bake(runner, imageStep(gateway, server, "step", 1));
+            long tookMs = (System.nanoTime() - t0) / 1_000_000;
+
+            assertThat(r.errorCode()).isEqualTo(GenErrorCode.TIMEOUT);
+            assertThat(tookMs).as("제한 1초 + 대기 상한 1초 근처").isBetween(1_800L, 3_500L);
+            holder.get();
+        }
+    }
 }

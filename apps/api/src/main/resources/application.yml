@@ -498,6 +498,9 @@ app:
       # 가짜 이미지 클라이언트가 '격자' 자리에 내놓을 실제 파일.
       # 후처리를 과금 없이 검증하려면 진짜 격자가 필요하다.
       fake-grid-key: ${ZZAL_FAKE_GRID_KEY:}
+      # 단계 시간 제한은 OpenAI 줄 자리를 얻은 뒤부터 센다(P1 검토 표 2번). 자리 대기는 이 초까지만 빼 준다 —
+      #   넘으면 TIMEOUT(자리 누수·줄 막힘이 부화 스레드를 영영 묶지 않게 하는 안전망). 300 = 90초 호출 세 바퀴.
+      lane-wait-cap-seconds: ${ZZAL_GENERATION_LANE_WAIT_CAP_SECONDS:300}
       # 명시 local-existing-assets 프로필에서만 기존 샘플 기본8을 저장한다. 실제 생성과 동시 사용 금지.
       local-fixture:
         enabled: ${ZZAL_LOCAL_FIXTURE_ENABLED:false}

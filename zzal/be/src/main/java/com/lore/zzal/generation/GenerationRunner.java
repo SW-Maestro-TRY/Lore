@@ -61,6 +61,14 @@ public class GenerationRunner {
     private int limitOverrideSeconds;
 
     /**
+     * 줄 자리 대기를 단계 기한에서 빼 주는 상한(초). 단계 제한은 자리를 얻은 뒤부터 세지만(P1 검토 표 2번),
+     * 자리 대기 자체가 끝없이 길어지면(자리 누수·줄 막힘) 부화 스레드가 영영 묶이므로 여기까지만 빼 준다.
+     * 기본 300초 = 그림 요청 제한(90초)짜리 호출 세 바퀴. 그보다 길면 TIMEOUT 으로 드러나게 한다.
+     */
+    @org.springframework.beans.factory.annotation.Value("${app.zzal.generation.lane-wait-cap-seconds:300}")
+    private int laneWaitCapSeconds = 300;
+
+    /**
      * 시험 전용 — 창구 없이 혼자 쓰는 가상 스레드 실행기. 이 실행기는 HTTP 를 보내지 않는다(단계가 쓰는 클라이언트가
      * 창구를 거친다). 운영 빈은 아래 창구 생성자만 쓴다.
      */
@@ -182,8 +190,37 @@ public class GenerationRunner {
     private record Pending(GenerationStep step, int seq) {
     }
 
-    /** 돌고 있는 단계 — 기록 번호와 제 시간 제한을 함께 들고 있는다. */
-    private record Running(GenerationStep step, Long stepId, Future<StepResult> future, long deadlineNanos) {
+    /**
+     * 돌고 있는 단계 — 기록 번호, 제출 시각과 제 시간 제한, 줄 자리 대기 시계를 함께 들고 있는다.
+     * 기한 = 제출 시각 + 제한 + 자리 대기(상한까지). 자리를 기다린 시간은 기한에 넣지 않는다(P1 검토 표 2번).
+     */
+    private record Running(GenerationStep step, Long stepId, Future<StepResult> future,
+                           long startNanos, long limitNanos, com.lore.zzal.openai.LaneWaitClock clock) {
+    }
+
+    /** 이 단계의 지금 기한(nanoTime). */
+    private long deadline(Running r, long now) {
+        long excluded = Math.min(r.clock().waitedNanos(now), TimeUnit.SECONDS.toNanos(Math.max(0, laneWaitCapSeconds)));
+        return r.startNanos() + r.limitNanos() + excluded;
+    }
+
+    /**
+     * 기한까지 결과를 기다린다. 기다리는 사이 단계가 줄 자리를 기다렸으면 기한이 그만큼 늦춰지므로 다시 기다린다.
+     *
+     * @throws TimeoutException 자리를 얻은 뒤의 시간이 제한을 넘었다(또는 자리 대기가 상한을 넘었다)
+     */
+    private StepResult await(Running r) throws InterruptedException, ExecutionException, TimeoutException {
+        while (true) {
+            long left = deadline(r, System.nanoTime()) - System.nanoTime();
+            try {
+                return r.future().get(Math.max(0, left), TimeUnit.NANOSECONDS);
+            } catch (TimeoutException e) {
+                if (deadline(r, System.nanoTime()) - System.nanoTime() <= 0) {
+                    throw e;
+                }
+                // 기다리는 사이 자리 대기만큼 기한이 늦춰졌다 — 남은 만큼 더 기다린다.
+            }
+        }
     }
 
     /**
@@ -216,8 +253,10 @@ public class GenerationRunner {
             // 그림 줄 차례(부화 먼저)는 스레드에 붙어 있어 단계 스레드에서 다시 연다.
             com.lore.zzal.openai.CallPriority priority = com.lore.zzal.openai.CallPriority.current();
             boolean cpu = POSTPROCESS_STEPS.contains(p.step().name());
+            var clock = new com.lore.zzal.openai.LaneWaitClock();
             Callable<StepResult> task = () -> {
                 try (var order = com.lore.zzal.openai.CallPriority.open(priority);
+                     var waits = com.lore.zzal.openai.LaneWaitClock.open(clock);
                      var usage = com.lore.zzal.generation.client.ProviderUsageContext.open(
                         "generation_" + p.step().name(), ctx.petId(), jobId, "step-" + stepId, 1)) {
                     if (!cpu) {
@@ -246,8 +285,7 @@ public class GenerationRunner {
                 return new StageOutcome(BigDecimal.ZERO, GenErrorCode.INTERRUPTED, false, false, false, null,
                         "실행기 닫힘 — " + p.step().name(), true);
             }
-            running.add(new Running(p.step(), stepId, future,
-                    System.nanoTime() + TimeUnit.SECONDS.toNanos(limit)));
+            running.add(new Running(p.step(), stepId, future, System.nanoTime(), TimeUnit.SECONDS.toNanos(limit), clock));
         }
         if (running.size() > 1) {
             log.info("나란히 굽기 {}개 — jobId={} steps={}", running.size(), jobId,
@@ -273,8 +311,7 @@ public class GenerationRunner {
                 continue;
             }
             try {
-                long left = Math.max(0, r.deadlineNanos() - System.nanoTime());
-                StepResult result = r.future().get(left, TimeUnit.NANOSECONDS);
+                StepResult result = await(r);
                 recorder.succeedStep(r.stepId(), result);
                 done.add(result);
                 cost = cost.add(result.costUsd());

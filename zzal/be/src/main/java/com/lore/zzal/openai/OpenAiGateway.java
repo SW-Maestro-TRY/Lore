@@ -271,7 +271,16 @@ public class OpenAiGateway implements AutoCloseable {
             refuseIfBlocked();
             LaneConfig c = configs.get(lane);
             long t0 = System.nanoTime();
-            if (!permits.get(lane).acquire(CallPriority.current(), c.maxWaitMs())) {
+            // 단계 시계(있으면)에 "자리 기다리는 중"을 적는다 — 러너가 이 시간을 단계 기한에서 뺀다(P1 검토 표 2번).
+            LaneWaitClock clock = LaneWaitClock.current();
+            if (clock != null) clock.waitStarted();
+            boolean got;
+            try {
+                got = permits.get(lane).acquire(CallPriority.current(), c.maxWaitMs());
+            } finally {
+                if (clock != null) clock.waitEnded();
+            }
+            if (!got) {
                 long waited = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0);
                 log.warn("OpenAI 줄 자리 없음 — lane={} waited={}ms model={}", lane.key(), waited, model);
                 throw new LaneBusyException(lane, waited);
