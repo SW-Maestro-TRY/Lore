@@ -146,4 +146,22 @@ class GenerationRunnerCancelPropagationTest {
             t.join(5_000);
         }
     }
+
+    @Test
+    @DisplayName("★ 창구 실행기가 먼저 닫혔으면(종료 순서) 단계 제출 거부를 INTERRUPTED 로 적고 돌아간다 — 잡이 RUNNING 고아로 남지 않는다")
+    void rejectedSubmitIsRecordedAsInterrupted() {
+        var gateway = new com.lore.zzal.openai.OpenAiGateway(com.lore.zzal.openai.LaneConfig.defaults());
+        gateway.close();
+        GenerationRunner closed = new GenerationRunner(recorder, mock(ZzalAlerts.class), gateway);
+        ReflectionTestUtils.setField(closed, "limitOverrideSeconds", 0);
+        GenerationStep never = step("grid", 60, () -> StepResult.image("grid", "grid.png", "m", BigDecimal.ONE));
+
+        RunResult result = closed.run(JOB, new StepContext(7L, "여울", null, "v1"), List.of(List.of(never)), List.of());
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.errorCode().name()).isEqualTo("INTERRUPTED");
+        verify(recorder).failStep(eq(1L), eq(GenErrorCode.INTERRUPTED), eq(BigDecimal.ZERO));
+        verify(recorder).failJob(eq(JOB), eq(GenErrorCode.INTERRUPTED), org.mockito.ArgumentMatchers.any());
+        assertThat(Thread.interrupted()).as("종료 중이라는 표시를 부르는 쪽에 남긴다").isTrue();
+    }
 }
