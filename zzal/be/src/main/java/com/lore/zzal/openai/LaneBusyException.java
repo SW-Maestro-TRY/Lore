@@ -1,8 +1,8 @@
 package com.lore.zzal.openai;
 
 /**
- * 자리 대기 상한(급한 대사 1초)을 넘었다 — OpenAI 로는 보내지 않았다. 돈은 나가지 않았다.
- * 대사 쪽은 이 실패를 다른 실패와 같이 받아 대체 대사로 간다.
+ * 자리 대기 상한(급한 대사 2초)을 넘었다 — OpenAI 로는 보내지 않았다. 돈은 나가지 않았다.
+ * 대사 쪽은 다시 부르지 않고 대체 대사로 간다(실패 사유 {@code lane_busy}, 시도 횟수에 안 셈).
  */
 public class LaneBusyException extends Exception {
     private final Lane lane;

@@ -530,14 +530,15 @@ app:
       identity-reasoning-effort-by-attempt: ${ZZAL_OPENAI_IDENTITY_REASONING_EFFORT_BY_ATTEMPT:,low,minimal}
       # OpenAI 창구 줄(설계 2-1, 계획서 P1-3). 모든 OpenAI 요청은 줄 하나에서 자리를 얻어야 나간다.
       #   상한은 서버 1대 기준 — 2대가 되면 키 전체로는 두 배(값을 반으로 줄일지는 운영 판단).
-      #   max-wait-ms 0 = 자리가 날 때까지 기다린다. 급한 대사는 1초 넘으면 대체 대사.
+      #   max-wait-ms 0 = 자리가 날 때까지 기다린다. 급한 대사는 한 번만 2초 기다리고 못 얻으면 대체 대사
+      #   (상훈님 결정 안 "다", 2026-11-11 — 대사 사슬이 다시 줄을 서지 않는다. 운영 queue_wait_ms 를 본 뒤 조정).
       lanes:
         image:                 # 부화 시트·정체성 글·격자, 맞춤 격자, 심화 행동
           max-concurrent: ${ZZAL_OPENAI_LANE_IMAGE_MAX:3}
           max-wait-ms: ${ZZAL_OPENAI_LANE_IMAGE_WAIT_MS:0}
         dialogue-urgent:       # 채팅, 튜토리얼 묶음
           max-concurrent: ${ZZAL_OPENAI_LANE_URGENT_MAX:10}
-          max-wait-ms: ${ZZAL_OPENAI_LANE_URGENT_WAIT_MS:1000}
+          max-wait-ms: ${ZZAL_OPENAI_LANE_URGENT_WAIT_MS:2000}
         dialogue-background:   # 일기, 맞춤 기획
           max-concurrent: ${ZZAL_OPENAI_LANE_BACKGROUND_MAX:1}
           max-wait-ms: ${ZZAL_OPENAI_LANE_BACKGROUND_WAIT_MS:0}

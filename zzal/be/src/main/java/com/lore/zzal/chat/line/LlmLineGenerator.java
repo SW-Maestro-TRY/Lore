@@ -90,6 +90,13 @@ public class LlmLineGenerator implements LineGenerator {
                     OpenAiChatLineClient.estimate(model, promptChars), "timeout", ms(t0));
         } catch (ChatLineClient.BilledException e) {
             return LineAttempt.fail(NAME, model, e.costUsd(), "parse", ms(t0));
+        } catch (com.lore.zzal.openai.LaneBusyException e) {
+            // 우리 줄이 꽉 찼다 — 보내지 않았다(P1 검토 표 10번). "OpenAI 오류"와 가른다.
+            return LineAttempt.fail(NAME, model, BigDecimal.ZERO, LineChain.LANE_BUSY, ms(t0));
+        } catch (com.lore.zzal.openai.ProviderQuotaException e) {
+            // 줄 차단(보내지 않음, 상태 0) / OpenAI 가 한도로 거절(보냄, 429 등).
+            return LineAttempt.fail(NAME, model, BigDecimal.ZERO,
+                    e.status() == 0 ? LineChain.QUOTA : LineChain.QUOTA_PROVIDER, ms(t0));
         } catch (Exception e) {
             return LineAttempt.fail(NAME, model, BigDecimal.ZERO, "error", ms(t0));
         }

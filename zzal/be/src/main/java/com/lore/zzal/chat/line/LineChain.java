@@ -56,6 +56,26 @@ public class LineChain {
     /** 중립 닫는 말을 낸 곳의 이름(턴·판의 generator 칸). */
     public static final String FIXED = "fixed";
 
+    /**
+     * 실패 사유 — 급한 대사 줄 자리를 대기 상한 안에 못 얻었다. OpenAI 로 <b>보내지 않았다</b>(P1 검토 표 4·10번).
+     * ★ 다시 부르지 않는다(상훈님 결정 안 "다") — 다시 줄을 서면 맨 뒤로 가 늦게 온 손님이 먼저 가고, 기다림만 길어진다.
+     */
+    public static final String LANE_BUSY = "lane_busy";
+    /** 실패 사유 — 앞선 429 로 줄이 막혀 있어 <b>보내지 않았다</b>. 다시 불러도 또 막히므로 다시 부르지 않는다. */
+    public static final String QUOTA = "quota";
+    /** 실패 사유 — 이번 요청에 OpenAI 가 한도(429·잔액)로 거절했다(보냈다). 같은 줄이 막히므로 다시 부르지 않는다. */
+    public static final String QUOTA_PROVIDER = "quota_provider";
+
+    /** 보내지 않은 시도 — 시도 횟수({@link GeneratedLine#attempts()})로 세지 않는다. */
+    static boolean notSent(LineAttempt a) {
+        return LANE_BUSY.equals(a.failReason()) || QUOTA.equals(a.failReason());
+    }
+
+    /** 이 실패 뒤에는 같은 요청 안에서 다시 부르지 않는다. 진짜 OpenAI 오류·시간 초과는 지금대로 다시 부른다. */
+    static boolean stopsRetry(LineAttempt a) {
+        return notSent(a) || QUOTA_PROVIDER.equals(a.failReason());
+    }
+
     private final LineGenerator llm;   // null 이면 꺼짐
     private final ChatLineEvents events;
     private final int maxAttempts;
@@ -170,6 +190,7 @@ public class LineChain {
     }
 
     private Tries tries(ChatContext ctx, int max) {
+        int sent = 0;
         long ms = 0;
         BigDecimal cost = BigDecimal.ZERO;
         String fails = null;
@@ -184,12 +205,18 @@ public class LineChain {
             ms += a.millis();
             cost = cost.add(nz(a.costUsd()));
             model = a.model();
+            if (!notSent(a)) {
+                sent++;
+            }
             if (a.ok()) {
-                return new Tries(a, i, ms, cost, fails, model);
+                return new Tries(a, sent, ms, cost, fails, model);
             }
             fails = fails == null ? a.failReason() : fails + "/" + a.failReason();
+            if (stopsRetry(a)) {
+                break;
+            }
         }
-        return new Tries(null, max, ms, cost, fails, model);
+        return new Tries(null, sent, ms, cost, fails, model);
     }
 
     private GeneratedLine success(ChatContext ctx, Tries t, Long userId) {

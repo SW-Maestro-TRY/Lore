@@ -102,7 +102,7 @@ public class OpenAiChatLineClient implements ChatLineClient {
 
     @Override
     public Completion complete(String system, List<Message> history, String userText, String model, Duration timeout) throws Exception {
-        // ★ 기록·자리·429 는 창구가 맡는다. 급한 대사 줄은 자리 대기 1초를 넘으면 LaneBusyException → 대체 대사.
+        // ★ 기록·자리·429 는 창구가 맡는다. 급한 대사 줄은 자리 대기 2초를 넘으면 LaneBusyException → 다시 부르지 않고 대체 대사.
         try (var call = gateway.call(lane, model, usageRecorder)) {
         ObjectNode body = json.createObjectNode();
         body.put("model", model);

@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * P1-3 (설계 2-1): 줄마다 동시 실행 상한. 그림 3 · 급한 대사 10(자리 대기 1초) · 느긋한 대사 1.
  */
-@DisplayName("창구 줄 — 동시 실행 상한과 급한 대사 자리 대기 1초")
+@DisplayName("창구 줄 — 동시 실행 상한과 급한 대사 자리 대기 2초")
 class OpenAiGatewayLaneTest {
 
     @Test
@@ -39,10 +39,10 @@ class OpenAiGatewayLaneTest {
     }
 
     @Test
-    @DisplayName("급한 대사 11번째는 1초 기다린 뒤 자리 없음 예외 — OpenAI 로는 나가지 않는다")
-    void urgentEleventhGivesUpAfterOneSecond() throws Exception {
+    @DisplayName("급한 대사 11번째는 2초 기다린 뒤 자리 없음 예외 — OpenAI 로는 나가지 않는다(안 \"다\", 2026-11-11)")
+    void urgentEleventhGivesUpAfterTwoSeconds() throws Exception {
         try (var server = new GatewayTestServer(); var gateway = new OpenAiGateway(LaneConfig.defaults())) {
-            server.delayMs = 3_000;
+            server.delayMs = 4_000;
             List<Future<Integer>> held = new ArrayList<>();
             for (int i = 0; i < 10; i++) {
                 int n = i;
@@ -63,7 +63,7 @@ class OpenAiGatewayLaneTest {
                 }
             }).isInstanceOf(LaneBusyException.class);
             long waitedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0);
-            assertThat(waitedMs).isBetween(900L, 2_000L);
+            assertThat(waitedMs).isBetween(1_900L, 3_000L);
             assertThat(server.arrivals).doesNotContain("chat-11");
             for (var c : held) assertThat(c.get(10, TimeUnit.SECONDS)).isEqualTo(200);
         }
@@ -109,6 +109,31 @@ class OpenAiGatewayLaneTest {
             }
             assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0)).isLessThan(1_800L);
             for (var c : images) c.get(10, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    @DisplayName("★ 급한 대사 줄이 차면 온 순서대로 자리를 얻는다 — 늦게 온 손님이 먼저 가지 않는다")
+    void urgentSeatsGoInArrivalOrder() throws Exception {
+        java.util.Map<Lane, LaneConfig> lanes = new java.util.EnumMap<>(LaneConfig.defaults());
+        lanes.put(Lane.DIALOGUE_URGENT, new LaneConfig(1, 5_000, java.time.Duration.ofSeconds(2)));
+        try (var server = new GatewayTestServer(); var gateway = new OpenAiGateway(lanes)) {
+            server.delayMs = 300;
+            List<Future<Integer>> calls = new ArrayList<>();
+            for (int i = 0; i < 5; i++) {
+                int n = i;
+                calls.add(gateway.executor().submit(() -> {
+                    try (var call = gateway.call(Lane.DIALOGUE_URGENT, "gpt-5-mini", ProviderUsageRecorder.NO_OP)) {
+                        return call.send(server.request("chat-" + n)).statusCode();
+                    }
+                }));
+                // 다음 손님은 앞 손님이 줄에 선(또는 나간) 뒤에 온다.
+                long until = System.currentTimeMillis() + 3_000;
+                while (gateway.waiting(Lane.DIALOGUE_URGENT) + server.requests.get() < i + 1
+                        && System.currentTimeMillis() < until) Thread.sleep(5);
+            }
+            for (var c : calls) assertThat(c.get(10, TimeUnit.SECONDS)).isEqualTo(200);
+            assertThat(server.arrivals).containsExactly("chat-0", "chat-1", "chat-2", "chat-3", "chat-4");
         }
     }
 }

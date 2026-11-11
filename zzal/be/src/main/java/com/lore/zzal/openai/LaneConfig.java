@@ -21,11 +21,14 @@ public record LaneConfig(int maxConcurrent, long maxWaitMs, Duration connectTime
         java.util.Objects.requireNonNull(connectTimeout);
     }
 
-    /** 설계 2-1 시작값: 그림 3 · 급한 대사 10(대기 1초) · 느긋한 대사 1. */
+    /**
+     * 설계 2-1 시작값: 그림 3 · 급한 대사 10(대기 2초) · 느긋한 대사 1.
+     * 급한 대사 대기 2초 = 상훈님 결정 안 "다"(2026-11-11) — 한 번만 기다리고 못 얻으면 대체 대사. 운영 수치를 본 뒤 조정.
+     */
     public static Map<Lane, LaneConfig> defaults() {
         Map<Lane, LaneConfig> m = new EnumMap<>(Lane.class);
         m.put(Lane.IMAGE, new LaneConfig(3, 0, Duration.ofSeconds(20)));
-        m.put(Lane.DIALOGUE_URGENT, new LaneConfig(10, 1_000, Duration.ofSeconds(2)));
+        m.put(Lane.DIALOGUE_URGENT, new LaneConfig(10, 2_000, Duration.ofSeconds(2)));
         m.put(Lane.DIALOGUE_BACKGROUND, new LaneConfig(1, 0, Duration.ofSeconds(2)));
         return m;
     }

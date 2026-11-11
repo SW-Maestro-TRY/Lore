@@ -13,7 +13,7 @@ import java.math.BigDecimal;
  * @param failReason 실패가 있었으면 그 사유(재호출로 살렸어도 첫 사유를 남긴다. 둘 다 실패면 "첫/둘째"), 없으면 null
  * @param outcome    어떻게 나왔나
  * @param latencyMs  걸린 시간(재호출까지 합)
- * @param attempts   부른 횟수(0~2 — LLM 꺼짐이면 0, BABY 재시도는 1)
+ * @param attempts   OpenAI 로 보낸 횟수(0~2 — LLM 꺼짐·자리 없음·줄 차단으로 안 보냈으면 0, BABY 재시도는 1)
  * @param extract    추출 칸(실패면 {@link LineExtract#NONE})
  */
 public record GeneratedLine(String text, String motion, String generator, String model, BigDecimal costUsd,
