@@ -22,6 +22,8 @@ import java.time.Instant;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -45,6 +47,11 @@ import org.springframework.web.util.ContentCachingRequestWrapper;
  */
 @Component
 public class ApiLogFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(ApiLogFilter.class);
+
+    /** 이보다 오래 걸린 요청은 서버 로그에도 한 줄 남긴다(#1028) — DB 기록은 연결이 바닥나면 같이 밀린다. */
+    static final long SLOW_MS = 5000;
 
     static final int BODY_MAX = 8000;
     static final int RESPONSE_MAX = 2000;
@@ -98,6 +105,9 @@ public class ApiLogFilter extends OncePerRequestFilter {
         }
         int status = failed != null && res.getStatus() < 400 ? 500 : res.getStatus();
         String path = req.getRequestURI();
+        if (ms >= SLOW_MS) {
+            log.warn("오래 걸린 요청 {} {} → {} ({}ms)", req.getMethod(), shape(path), status, ms);
+        }
         ApiLog row = new ApiLog(Instant.now(), ApiLog.API, req.getMethod(), path, shape(path));
         row.query = ApiLog.cut(redactQuery(req.getQueryString()), 500);
         row.status = status;
