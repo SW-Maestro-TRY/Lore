@@ -193,6 +193,15 @@ function WebtoonScreens() {
     ev.preventDefault();
   };
 
+  /* 화면이 바뀌면 늘 맨 위에서 시작한다. ★ 브라우저의 스크롤 복원은 끈다 — 켜 두면 웹툰을 끝까지
+     읽고 뒤로 가기로 둘러보기에 돌아왔을 때, 아래 scrollTo 가 먼저 돌고 목록이 다 뜬 뒤에
+     브라우저가 기억해 둔 자리(읽던 웹툰의 아래쪽)로 다시 내려 버렸다(운영에서 실제로 그랬다).
+     웹툰 화면을 떠나면 원래 값으로 돌려놓는다. */
+  useEffect(() => {
+    const before = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    return () => { window.history.scrollRestoration = before; };
+  }, []);
   useEffect(() => {
     window.scrollTo({ top: 0 });
   }, [route.view, route.step, route.id, route.run, route.job, route.world, route.ep, route.stage]);
