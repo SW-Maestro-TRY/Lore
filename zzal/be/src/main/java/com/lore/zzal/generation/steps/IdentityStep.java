@@ -201,8 +201,9 @@ public class IdentityStep implements GenerationStep {
             return StepResult.text(NAME, r.text(), spec.model(), r.costUsd());
         }
         // 재요청은 하지 않는다(상훈님 2026-10-07 정정) — 바로 빈 문단으로 진행한다.
-        // ★ error_code 에 IDENTITY_BLANK 를 넣지 않는 이유 — zzal_gen_step.error_code 에 CHECK 제약
-        //   (TIMEOUT · MODERATION_BLOCKED · UNKNOWN)이 있어 넣으면 저장이 터진다. 로그로만 남긴다.
+        // ★ IDENTITY_BLANK 는 실패 코드가 아니다 — 이 단계는 빈 문단으로 <b>성공</b>하므로 error_code 를 쓰지 않고
+        //   로그로만 남긴다. (error_code 값 목록은 CHECK 제약에 묶여 있어, 실패 코드로 기록하려면
+        //   GenErrorCode 와 마이그레이션을 함께 늘려야 한다 — V20261111_0337 이 5종을 그렇게 더했다.)
         log.warn("정체성 문단 거부 — IDENTITY_BLANK, 빈 문단으로 진행 — petId={} attempt={} effort={} 사유={} 앞60자={}",
                 ctx.petId(), attempt, effortLabel, reason, head60(r.text()));
         return StepResult.text(NAME, "", spec.model(), r.costUsd());
