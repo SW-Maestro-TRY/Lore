@@ -326,16 +326,21 @@ public class CharacterService {
 
     /**
      * 기억해 둔 시트를 새 작품의 run 폴더에 심는다(sheet.png · sheet_spec.json). 하네스는 둘이 있으면
-     * 사양도 그림도 다시 만들지 않는다(run.py _sheet_attempt 의 「이미 있습니다」). 세계관 체험(play)은
-     * 옷을 세계에 맞게 새로 그려야 하므로 심지 않는다. 심었으면 참.
+     * 사양도 그림도 다시 만들지 않는다(run.py _sheet_attempt 의 「이미 있습니다」). 사양 없이 그림만 있으면
+     * 사양만 적고 그림은 안 그린다. 세계관 체험(play)은 옷을 세계에 맞게 새로 그려야 하므로 심지 않는다 —
+     * 단 짤에서 캐릭터 시트째 가져온 캐릭터(sheet_mode = zzal)는 그 시트를 그대로 쓴다(2026-11-11 결정,
+     * 체험에서도 시트 그리기 3분을 건너뛴다). 심었으면 참.
      */
     @Transactional(readOnly = true)
     public boolean seedSheet(String characterPublicId, boolean play, Path runDir) {
-        if (play || characterPublicId == null || characterPublicId.isBlank() || runDir == null) {
+        if (characterPublicId == null || characterPublicId.isBlank() || runDir == null) {
             return false;
         }
         WebtoonCharacter one = characters.findByPublicId(characterPublicId).orElse(null);
         if (one == null || !one.hasSheet()) {
+            return false;
+        }
+        if (play && !ZzalCharacterImport.SHEET_MODE.equals(one.getSheetMode())) {
             return false;
         }
         try {
