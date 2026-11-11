@@ -1,20 +1,24 @@
 "use client";
 
-/* 둘러보기 맨 위 띠 — 대표작(슈퍼 세컨드브레인)과 LORE 앱 설치를 번갈아 보인다(2026-11-06).
+/* 둘러보기 맨 위 띠 — LORE 앱 설치와 대표작(슈퍼 세컨드브레인)을 번갈아 보인다(2026-11-06).
+ * 대표작은 2번째 장이다(2026-11-11 요청 — 그 전에는 1번째).
  * 두 장을 같은 칸에 겹쳐 두고 보이는 장만 바꾼다 — 높이는 큰 쪽에 맞는다.
  * 7초마다 넘기고, 마우스를 올리거나 창이 열려 있으면 멈춘다. 폰은 옆으로 밀어 넘긴다.
- * 주소에 ?banner=app 이면 앱 띠부터 보인다. */
+ * 앱 띠가 첫 장이라 주소의 ?banner=app 은 기본과 같다. */
 import { useEffect, useRef, useState } from "react";
 import { track } from "../../lib/track";
 import { useT } from "../../lib/i18n";
+import type { Go } from "../../lib/nav";
 import AppInstallDialog, { type AppDevice } from "../../ui/AppInstallDialog";
 import AppBanner from "./AppBanner";
 import FeaturedBanner from "./FeaturedBanner";
 import "./TopBanners.css";
 
 const SLIDES = 2;
+const APP = 0;
+const FEATURED = 1;
 
-export default function TopBanners() {
+export default function TopBanners({ go }: { go: Go }) {
   const t = useT();
   const [cur, setCur] = useState(0);
   const [hold, setHold] = useState(false);
@@ -27,14 +31,14 @@ export default function TopBanners() {
     try {
       const q = new URLSearchParams(location.search);
       const s = q.get("banner");
-      if (s === "app") setCur(1);
-      if (q.get("appedit") === "1") { setCur(1); setHold(true); setPin(true); }
+      if (s === "app") setCur(APP);
+      if (q.get("appedit") === "1") { setCur(APP); setHold(true); setPin(true); }
     } catch { /* 기본값 */ }
   }, []);
   /* 앱 설치 띠가 처음 보인 때 한 번 센다(#981) — 누른 횟수와 나눠 누름률을 본다 */
   const appSeen = useRef(false);
   useEffect(() => {
-    if (cur === 1 && !appSeen.current) { appSeen.current = true; track("app_banner_view", { where: "works_banner" }); }
+    if (cur === APP && !appSeen.current) { appSeen.current = true; track("app_banner_view", { where: "works_banner" }); }
   }, [cur]);
   useEffect(() => {
     if (hold || pin || dialog) return;
@@ -53,8 +57,8 @@ export default function TopBanners() {
                if (Math.abs(dx) > 40) setCur((c) => (c + (dx < 0 ? 1 : SLIDES - 1)) % SLIDES);
              }}>
       <div className="wt-topb-track">
-        <div className={`wt-topb-slide${cur === 0 ? " on" : ""}`} aria-hidden={cur !== 0} inert={cur !== 0 ? true : undefined}><FeaturedBanner /></div>
-        <div className={`wt-topb-slide${cur === 1 ? " on" : ""}`} aria-hidden={cur !== 1} inert={cur !== 1 ? true : undefined}><AppBanner onOpen={setDialog} /></div>
+        <div className={`wt-topb-slide${cur === APP ? " on" : ""}`} aria-hidden={cur !== APP} inert={cur !== APP ? true : undefined}><AppBanner onOpen={setDialog} /></div>
+        <div className={`wt-topb-slide${cur === FEATURED ? " on" : ""}`} aria-hidden={cur !== FEATURED} inert={cur !== FEATURED ? true : undefined}><FeaturedBanner go={go} /></div>
       </div>
       <div className="wt-topb-dots">
         {Array.from({ length: SLIDES }, (_, i) => (
