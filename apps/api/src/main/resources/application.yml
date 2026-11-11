@@ -22,6 +22,11 @@ spring:
     username: ${DB_USERNAME:lore}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      # ★ 연결을 20초 넘게 쥐고 있으면 빌려 간 자리(호출 경로)를 경고로 남긴다 — 끊지는 않는다(#1028).
+      #   2026-11-11 운영에서 연결 10개가 30초 넘게 묶여 요청 11건이 한꺼번에 실패했는데, 누가 쥐고
+      #   있었는지 남은 기록이 없었다. 0 이면 끈다.
+      leak-detection-threshold: ${DB_LEAK_DETECTION_MS:20000}
 
   # ── 스키마 이력 ───────────────────────────────────────────────────────
   #
@@ -50,6 +55,11 @@ spring:
     locations: classpath:db/migration
 
   jpa:
+    # ★ 요청 끝까지 DB 연결을 쥐는 open-in-view 를 스프링이 자동으로 켜지 않게 한다(#1028).
+    #   웹툰 API(/api/webtoon/**)는 끈 채로 두고, 다른 도메인은 WebtoonOpenInView 가 예전처럼 다시 켠다 —
+    #   다른 도메인의 동작은 그대로다. 켜져 있으면 그림·외부 호출처럼 오래 걸리는 요청이 그동안 연결을
+    #   붙잡아, 겹치면 풀(10개)이 바닥난다.
+    open-in-view: false
     hibernate:
       # ★ validate = 표를 만들지 않는다. 엔티티와 DB 가 다르면 <b>기동을 막는다</b>.
       #
