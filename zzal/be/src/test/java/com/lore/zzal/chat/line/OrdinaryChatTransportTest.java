@@ -51,7 +51,7 @@ class OrdinaryChatTransportTest {
         });
         server.start();
         try {
-            var client = new OpenAiChatLineClient("stub-not-real", "none", HttpClient.newHttpClient(),
+            var client = new OpenAiChatLineClient("stub-not-real", "none", com.lore.zzal.openai.TestGateways.over(HttpClient.newHttpClient()),
                     URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/chat"));
             var generator = new LlmLineGenerator(client, "gpt-5.6-luna", Duration.ofSeconds(2), new SystemPromptCache());
             var ordinary = generator.generate(context());

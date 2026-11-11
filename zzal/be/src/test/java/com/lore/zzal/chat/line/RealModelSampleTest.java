@@ -44,7 +44,8 @@ class RealModelSampleTest {
         ObjectMapper json = new ObjectMapper();
         JsonNode pets = json.readTree(Files.readString(Path.of(System.getenv("CHAT_V1_SAMPLE_IN"))));
         OpenAiChatLineClient client = new OpenAiChatLineClient(System.getenv("CHAT_V1_SAMPLE_KEY"),
-                System.getenv().getOrDefault("CHAT_V1_SAMPLE_EFFORT", "minimal"));
+                System.getenv().getOrDefault("CHAT_V1_SAMPLE_EFFORT", "minimal"), null,
+                com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP, null, com.lore.zzal.openai.TestGateways.lanes(), com.lore.zzal.openai.Lane.DIALOGUE_URGENT);
         LlmLineGenerator gen = new LlmLineGenerator(client, model, Duration.ofSeconds(30), new SystemPromptCache());
         ArrayNode out = json.createArrayNode();
         BigDecimal total = BigDecimal.ZERO;

@@ -43,11 +43,11 @@ class OpenAiBaseUrlTest {
         try {
             String base = "http://127.0.0.1:" + server.getAddress().getPort();
             var storage = mock(com.lore.common.s3.S3Storage.class);
-            assertThatCode(() -> new OpenAiImageClient(storage, "SYNTHETIC_NOT_A_KEY", 5, ProviderUsageRecorder.NO_OP, base)
+            assertThatCode(() -> new OpenAiImageClient(storage, "SYNTHETIC_NOT_A_KEY", 5, ProviderUsageRecorder.NO_OP, base, com.lore.zzal.openai.TestGateways.lanes())
                     .generate("p", List.of(), "images/t.png", ModelSpec.of("gpt-image-2"))).doesNotThrowAnyException();
-            new OpenAiTextClient(null, "SYNTHETIC_NOT_A_KEY", 64, ProviderUsageRecorder.NO_OP, base)
+            new OpenAiTextClient(null, "SYNTHETIC_NOT_A_KEY", 64, ProviderUsageRecorder.NO_OP, base, com.lore.zzal.openai.TestGateways.lanes())
                     .generate("p", List.of(), ModelSpec.of("gpt-5"));
-            new OpenAiChatLineClient("SYNTHETIC_NOT_A_KEY", "minimal", 64, ProviderUsageRecorder.NO_OP, base)
+            new OpenAiChatLineClient("SYNTHETIC_NOT_A_KEY", "minimal", 64, ProviderUsageRecorder.NO_OP, base, com.lore.zzal.openai.TestGateways.lanes(), com.lore.zzal.openai.Lane.DIALOGUE_URGENT)
                     .complete("s", "u", "gpt-5-mini", Duration.ofSeconds(5));
             assertThat(paths).containsExactly("/v1/images/edits", "/v1/chat/completions", "/v1/chat/completions");
         } finally {

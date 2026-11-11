@@ -35,7 +35,7 @@ class ChatLine429FallbackTest {
         server.start();
         try {
             var client = new OpenAiChatLineClient("SYNTHETIC_NOT_A_KEY", "minimal", 64, ProviderUsageRecorder.NO_OP,
-                    "http://127.0.0.1:" + server.getAddress().getPort());
+                    "http://127.0.0.1:" + server.getAddress().getPort(), com.lore.zzal.openai.TestGateways.lanes(), com.lore.zzal.openai.Lane.DIALOGUE_URGENT);
             var chain = new LineChain(new LlmLineGenerator(client, "gpt-5.6-luna", Duration.ofSeconds(4), new SystemPromptCache()), null, 2);
             GeneratedLine out = chain.generate(LlmLineGeneratorTest.reply(), 1L);
 

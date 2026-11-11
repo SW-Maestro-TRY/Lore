@@ -22,7 +22,13 @@ import static org.mockito.Mockito.when;
 @DisplayName("채팅 — 스위치·이벤트")
 class ChatLineConfigTest {
 
-    private final ChatLineConfig config = new ChatLineConfig();
+    private final ChatLineConfig config = withGateway(new ChatLineConfig());
+
+    /** 운영은 창구 빈이 필수다(P1 검토 표 3번) — 직접 만든 설정에는 시험 창구를 넣는다. */
+    static ChatLineConfig withGateway(ChatLineConfig config) {
+        org.springframework.test.util.ReflectionTestUtils.setField(config, "openAiGateway", com.lore.zzal.openai.TestGateways.lanes());
+        return config;
+    }
 
     private static ChatLineEvents events(AnalyticsService analytics) {
         PlatformTransactionManager tx = mock(PlatformTransactionManager.class);

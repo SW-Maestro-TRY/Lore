@@ -57,47 +57,29 @@ public class OpenAiChatLineClient implements ChatLineClient {
     private final URI endpoint;
     private final Integer maxCompletionTokens;
     private final ProviderUsageRecorder usageRecorder;
-    private static HttpClient defaultHttp() { return HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(2))
-            .followRedirects(HttpClient.Redirect.NEVER)
-            .build(); }
     private final ObjectMapper json = new ObjectMapper();
 
-    public OpenAiChatLineClient(String apiKey, String reasoningEffort) {
-        this(apiKey, reasoningEffort, null);
-    }
-
-    public OpenAiChatLineClient(String apiKey, String reasoningEffort, Integer maxCompletionTokens) {
-        this(apiKey,reasoningEffort,maxCompletionTokens,ProviderUsageRecorder.NO_OP);
-    }
-    public OpenAiChatLineClient(String apiKey,String reasoningEffort,Integer maxCompletionTokens,ProviderUsageRecorder recorder) {
-        this(apiKey, reasoningEffort, maxCompletionTokens, recorder, null);
-    }
-    /** baseUrl = 설정 {@code app.zzal.openai.base-url}. 비면 실제 OpenAI 주소. 창구 없이 혼자 쓰는 옛 생성자(급한 대사 줄). */
-    public OpenAiChatLineClient(String apiKey,String reasoningEffort,Integer maxCompletionTokens,ProviderUsageRecorder recorder,String baseUrl) {
-        this(apiKey, reasoningEffort, maxCompletionTokens, recorder, baseUrl, null, Lane.DIALOGUE_URGENT);
-    }
-
     /**
-     * 운영 생성자 — 스프링의 창구 빈과 줄을 받는다. 창구가 null 이면 혼자 쓰는 창구(시험·직접 생성용, 예전 HttpClient 설정 그대로).
+     * 운영 생성자 — 스프링의 창구 빈과 줄을 받는다. baseUrl = 설정 {@code app.zzal.openai.base-url}(비면 실제 OpenAI 주소).
+     * ★ 창구는 필수다(P1 검토 표 3번). 없으면 줄 상한·429 차단 밖으로 조용히 나가므로 여기서 멈춘다.
      */
     public OpenAiChatLineClient(String apiKey,String reasoningEffort,Integer maxCompletionTokens,ProviderUsageRecorder recorder,String baseUrl,
                                 OpenAiGateway gateway, Lane lane) {
-        this(apiKey, reasoningEffort, gateway != null ? gateway : OpenAiGateway.standalone(defaultHttp()), lane,
+        this(apiKey, reasoningEffort, java.util.Objects.requireNonNull(gateway, "OpenAI 창구 빈이 없습니다(OpenAiGatewayConfig)"), lane,
                 com.lore.zzal.generation.client.OpenAiBaseUrl.endpoint(baseUrl, PATH), maxCompletionTokens, recorder);
     }
 
-    /** Package-only HTTP seam for loopback contract tests; production endpoint is fixed. */
-    OpenAiChatLineClient(String apiKey, String reasoningEffort, HttpClient http, URI endpoint) {
-        this(apiKey, reasoningEffort, http, endpoint, null);
+    /** 시험 이음새(같은 패키지) — 흉내 주소로 보낸다. 창구는 시험이 만든다(시험 쪽 {@code TestGateways}). */
+    OpenAiChatLineClient(String apiKey, String reasoningEffort, OpenAiGateway gateway, URI endpoint) {
+        this(apiKey, reasoningEffort, gateway, endpoint, null);
     }
 
-    OpenAiChatLineClient(String apiKey, String reasoningEffort, HttpClient http, URI endpoint,
+    OpenAiChatLineClient(String apiKey, String reasoningEffort, OpenAiGateway gateway, URI endpoint,
                          Integer maxCompletionTokens) {
-        this(apiKey,reasoningEffort,http,endpoint,maxCompletionTokens,ProviderUsageRecorder.NO_OP);
+        this(apiKey,reasoningEffort,gateway,endpoint,maxCompletionTokens,ProviderUsageRecorder.NO_OP);
     }
-    OpenAiChatLineClient(String apiKey,String reasoningEffort,HttpClient http,URI endpoint,Integer maxCompletionTokens,ProviderUsageRecorder recorder) {
-        this(apiKey, reasoningEffort, OpenAiGateway.standalone(http), Lane.DIALOGUE_URGENT, endpoint, maxCompletionTokens, recorder);
+    OpenAiChatLineClient(String apiKey,String reasoningEffort,OpenAiGateway gateway,URI endpoint,Integer maxCompletionTokens,ProviderUsageRecorder recorder) {
+        this(apiKey, reasoningEffort, gateway, Lane.DIALOGUE_URGENT, endpoint, maxCompletionTokens, recorder);
     }
 
     OpenAiChatLineClient(String apiKey,String reasoningEffort,OpenAiGateway gateway,Lane lane,URI endpoint,Integer maxCompletionTokens,ProviderUsageRecorder recorder) {

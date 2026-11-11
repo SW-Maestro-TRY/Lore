@@ -94,7 +94,7 @@ class FirstMeetingTimeoutTest {
     }
 
     @Test void configurationDefaultsAndOverrideWireSeparateBudgetsAndRejectNonPositiveValues() throws Exception {
-        ChatLineConfig config = new ChatLineConfig();
+        ChatLineConfig config = ChatLineConfigTest.withGateway(new ChatLineConfig());
         assertThat(ChatLineConfig.class.getDeclaredField("firstMeetingTimeoutMs").getAnnotation(Value.class).value())
                 .isEqualTo("${app.zzal.chat.first-meeting-timeout-ms:12000}");
         assertBudgets(config, FIRST);

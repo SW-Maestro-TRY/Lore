@@ -26,7 +26,7 @@ class CustomPlannerTextClientTest {
         when(response.body()).thenReturn("{\"choices\":[{\"message\":{\"content\":\"{\\\"motions\\\":[]}\"}}],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":20}}");
         var sent=new java.util.concurrent.atomic.AtomicReference<HttpRequest>();
         when(http.sendAsync(any(HttpRequest.class),any(HttpResponse.BodyHandler.class))).thenAnswer(inv->{sent.set(inv.getArgument(0));return CompletableFuture.completedFuture(response);});
-        var adapter=new CustomPlannerTextClient(new OpenAiChatLineClient("SYNTHETIC_NOT_A_KEY","none",http,URI.create("https://never-executed.invalid/"),6144),Duration.ofSeconds(90));
+        var adapter=new CustomPlannerTextClient(new OpenAiChatLineClient("SYNTHETIC_NOT_A_KEY","none",com.lore.zzal.openai.TestGateways.over(http),URI.create("https://never-executed.invalid/"),6144),Duration.ofSeconds(90));
         var result=adapter.generate("SYNTHETIC_PLAN_DATA",List.of(),ModelSpec.of("gpt-5.6-luna"));
         var bytes=new ByteArrayOutputStream();
         sent.get().bodyPublisher().orElseThrow().subscribe(new Flow.Subscriber<ByteBuffer>(){
@@ -51,7 +51,7 @@ class CustomPlannerTextClientTest {
     }
     @Test void productionWiringUsesDedicatedPlannerWithoutTouchingSharedIdentityClient() {
         var env=valid(); var shared=mock(TextClient.class);var publication=mock(CustomBundlePublicationService.class);
-        var service=new CustomProviderConfiguration().realCustomBundleService(env,mock(CustomPlanningService.class),mock(BundleJobWorker.class),shared,mock(ImageClient.class),mock(PostProcessor.class),mock(com.lore.common.s3.S3Storage.class),publication);
+        var service=withGateway(new CustomProviderConfiguration()).realCustomBundleService(env,mock(CustomPlanningService.class),mock(BundleJobWorker.class),shared,mock(ImageClient.class),mock(PostProcessor.class),mock(com.lore.common.s3.S3Storage.class),publication);
         var planner=ReflectionTestUtils.getField(service,"text");assertThat(planner).isInstanceOf(CustomPlannerTextClient.class);
         var client=ReflectionTestUtils.getField(planner,"client");
         assertThat(ReflectionTestUtils.getField(client,"reasoningEffort")).isEqualTo("none");
@@ -61,12 +61,12 @@ class CustomPlannerTextClientTest {
     }
     @Test void incompleteOrInvalidPlannerSettingsFailBeforeProviderInvocation() {
         var env=valid();env.setProperty("app.zzal.openai.api-key","");
-        assertThatThrownBy(()->new CustomProviderConfiguration().realCustomBundleService(env,null,null,null,mock(ImageClient.class),null,null,mock(CustomBundlePublicationService.class))).hasMessageContaining("app.zzal.openai.api-key");
+        assertThatThrownBy(()->withGateway(new CustomProviderConfiguration()).realCustomBundleService(env,null,null,null,mock(ImageClient.class),null,null,mock(CustomBundlePublicationService.class))).hasMessageContaining("app.zzal.openai.api-key");
         env.setProperty("app.zzal.openai.api-key","SYNTHETIC_NOT_A_KEY");env.setProperty("app.zzal.custom.planner-max-completion-tokens","0");
-        assertThatThrownBy(()->new CustomProviderConfiguration().realCustomBundleService(env,null,null,null,mock(ImageClient.class),null,null,mock(CustomBundlePublicationService.class))).hasMessageContaining("positive");
+        assertThatThrownBy(()->withGateway(new CustomProviderConfiguration()).realCustomBundleService(env,null,null,null,mock(ImageClient.class),null,null,mock(CustomBundlePublicationService.class))).hasMessageContaining("positive");
     }
     @Test void identityCapBindingIsOptionalAndTransmittedWithoutChangingTheModel() throws Exception {
-        var runner=new org.springframework.boot.test.context.runner.ApplicationContextRunner().withBean(com.lore.zzal.generation.client.PersistentProviderUsageRecorder.class, () -> { var r=org.mockito.Mockito.mock(com.lore.zzal.generation.client.PersistentProviderUsageRecorder.class); org.mockito.Mockito.when(r.forFeature(org.mockito.ArgumentMatchers.anyString())).thenReturn(com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP); return r; }).withBean(com.lore.zzal.generation.client.ProviderUsageSpool.class, () -> org.mockito.Mockito.mock(com.lore.zzal.generation.client.ProviderUsageSpool.class)).withUserConfiguration(IdentityBinding.class);
+        var runner=new org.springframework.boot.test.context.runner.ApplicationContextRunner().withBean(com.lore.zzal.generation.client.PersistentProviderUsageRecorder.class, () -> { var r=org.mockito.Mockito.mock(com.lore.zzal.generation.client.PersistentProviderUsageRecorder.class); org.mockito.Mockito.when(r.forFeature(org.mockito.ArgumentMatchers.anyString())).thenReturn(com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP); return r; }).withBean(com.lore.zzal.generation.client.ProviderUsageSpool.class, () -> org.mockito.Mockito.mock(com.lore.zzal.generation.client.ProviderUsageSpool.class)).withUserConfiguration(IdentityBinding.class, com.lore.zzal.openai.OpenAiGatewayConfig.class);
         runner.withPropertyValues("app.zzal.openai.identity-max-completion-tokens=${ZZAL_OPENAI_IDENTITY_MAX_COMPLETION_TOKENS:}").run(ctx->{
             var owner=ctx.getBean(com.lore.zzal.generation.GenerationConfig.class);
             var client=owner.textClient(true,0,"SYNTHETIC_NOT_A_KEY",mock(com.lore.common.s3.S3Storage.class));
@@ -81,7 +81,7 @@ class CustomPlannerTextClientTest {
             when(response.body()).thenReturn("{\"choices\":[{\"message\":{\"content\":\"synthetic identity\"}}],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":20}}");
             var request=new java.util.concurrent.atomic.AtomicReference<HttpRequest>();
             when(http.send(any(HttpRequest.class),any(HttpResponse.BodyHandler.class))).thenAnswer(inv->{request.set(inv.getArgument(0));return response;});
-            ReflectionTestUtils.setField(client,"http",http);
+            ReflectionTestUtils.setField(client,"gateway",com.lore.zzal.openai.TestGateways.over(http));
             client.generate("synthetic identity prompt",List.of(),ModelSpec.of("gpt-5"));
             var data=new ByteArrayOutputStream();request.get().bodyPublisher().orElseThrow().subscribe(new Flow.Subscriber<ByteBuffer>(){
                 public void onSubscribe(Flow.Subscription sub){sub.request(Long.MAX_VALUE);}public void onNext(ByteBuffer b){byte[] a=new byte[b.remaining()];b.get(a);data.writeBytes(a);}public void onError(Throwable t){throw new AssertionError(t);}public void onComplete(){}
@@ -96,4 +96,9 @@ class CustomPlannerTextClientTest {
         @org.springframework.context.annotation.Bean com.lore.zzal.generation.GenerationConfig owner(){return new com.lore.zzal.generation.GenerationConfig();}
     }
     private MockEnvironment valid(){return new MockEnvironment().withProperty("app.zzal.generation.real","true").withProperty("app.zzal.generation.real-postprocess","true").withProperty("app.zzal.attendance.cli-enabled","true").withProperty("app.zzal.openai.api-key","SYNTHETIC_NOT_A_KEY").withProperty("app.zzal.custom.planner-model","gpt-5.6-luna").withProperty("app.zzal.custom.provider","api").withProperty("app.zzal.custom.image-model","gpt-image-2").withProperty("app.zzal.custom.image-size","1248x1248").withProperty("app.zzal.custom.postprocess-version","v1");}
+    /** 운영은 창구 빈이 필수다(P1 검토 표 3번) — 직접 만든 설정에는 시험 창구를 넣는다. */
+    private static CustomProviderConfiguration withGateway(CustomProviderConfiguration c) {
+        org.springframework.test.util.ReflectionTestUtils.setField(c, "openAiGateway", com.lore.zzal.openai.TestGateways.lanes());
+        return c;
+    }
 }

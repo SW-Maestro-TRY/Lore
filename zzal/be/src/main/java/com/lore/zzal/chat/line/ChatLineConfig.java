@@ -50,8 +50,8 @@ public class ChatLineConfig {
     @Value("${app.zzal.openai.base-url:}")
     private String openAiBaseUrl;
 
-    /** OpenAI 창구(설계 2-4) — 채팅은 급한 대사 줄. 없으면(빈을 안 둔 시험 문맥) 혼자 쓰는 창구. */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    /** OpenAI 창구(설계 2-4) — 채팅은 급한 대사 줄. 필수(없으면 기동 실패, P1 검토 표 3번). */
+    @org.springframework.beans.factory.annotation.Autowired
     private com.lore.zzal.openai.OpenAiGateway openAiGateway;
 
     @Value("${app.zzal.chat.max-attempts:2}")

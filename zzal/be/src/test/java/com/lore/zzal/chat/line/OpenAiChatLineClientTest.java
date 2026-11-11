@@ -21,7 +21,7 @@ class OpenAiChatLineClientTest {
             exchange.getResponseHeaders().set("Content-Type","application/json");exchange.sendResponseHeaders(200,body.length);exchange.getResponseBody().write(body);exchange.close();
         });server.start();
         try {
-            var client=new OpenAiChatLineClient("stub-not-real","minimal",HttpClient.newHttpClient(),URI.create("http://127.0.0.1:"+server.getAddress().getPort()+"/chat"));
+            var client=new OpenAiChatLineClient("stub-not-real","minimal",com.lore.zzal.openai.TestGateways.over(HttpClient.newHttpClient()),URI.create("http://127.0.0.1:"+server.getAddress().getPort()+"/chat"));
             var result=client.complete("authored6·호칭=별님·language=Japanese·USER기억은USER", "원문 그대로", "gpt-5-mini",Duration.ofSeconds(2));
             var req=new ObjectMapper().readTree(captured.get());
             assertThat(count.get()).isEqualTo(1);assertThat(req.path("model").asText()).isEqualTo("gpt-5-mini");
@@ -35,7 +35,7 @@ class OpenAiChatLineClientTest {
         var count=new AtomicInteger();var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
         server.createContext("/chat",x->{count.incrementAndGet();x.sendResponseHeaders(503,-1);x.close();});server.start();
         try {
-            var client=new OpenAiChatLineClient("stub-not-real",null,HttpClient.newHttpClient(),URI.create("http://127.0.0.1:"+server.getAddress().getPort()+"/chat"));
+            var client=new OpenAiChatLineClient("stub-not-real",null,com.lore.zzal.openai.TestGateways.over(HttpClient.newHttpClient()),URI.create("http://127.0.0.1:"+server.getAddress().getPort()+"/chat"));
             assertThatThrownBy(()->client.complete("system","user","gpt-5-mini",Duration.ofSeconds(2))).hasMessageContaining("HTTP 503");
             assertThat(count.get()).isEqualTo(1);
         } finally {server.stop(0);}

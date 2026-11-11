@@ -52,7 +52,7 @@ class OpenAiTextClientReasoningEffortTest {
 
     private OpenAiTextClient client() {
         return new OpenAiTextClient(null, "SYNTHETIC_NOT_A_KEY", null,
-                HttpClient.newHttpClient(), endpoint, Duration.ofSeconds(2), ProviderUsageRecorder.NO_OP);
+                com.lore.zzal.openai.TestGateways.over(HttpClient.newHttpClient()), endpoint, Duration.ofSeconds(2), ProviderUsageRecorder.NO_OP);
     }
 
     // ───────────── 클라이언트: 요청 본문 ─────────────
@@ -163,7 +163,7 @@ class OpenAiTextClientReasoningEffortTest {
             }).when(storage).download(anyString(), any(java.nio.file.Path.class));
         } catch (Exception e) { throw new AssertionError(e); }
         var c = new OpenAiTextClient(storage, "SYNTHETIC_NOT_A_KEY", null,
-                HttpClient.newHttpClient(), endpoint, Duration.ofSeconds(2), ProviderUsageRecorder.NO_OP);
+                com.lore.zzal.openai.TestGateways.over(HttpClient.newHttpClient()), endpoint, Duration.ofSeconds(2), ProviderUsageRecorder.NO_OP);
         PromptLoader prompts = mock(PromptLoader.class);
         when(prompts.prompt(anyString(), anyString())).thenReturn("synthetic identity prompt");
         when(prompts.model(anyString(), anyString())).thenReturn(ModelSpec.of("gpt-5"));

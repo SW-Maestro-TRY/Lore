@@ -68,8 +68,8 @@ public class GenerationConfig {
     @Value("${app.zzal.openai.base-url:}")
     private String openAiBaseUrl;
 
-    /** OpenAI 창구(설계 2-4). 그림·문단 클라이언트가 이걸 거쳐서만 보낸다. 없으면(직접 만든 시험) 혼자 쓰는 창구. */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    /** OpenAI 창구(설계 2-4). 그림·문단 클라이언트가 이걸 거쳐서만 보낸다. 필수(없으면 기동 실패, P1 검토 표 3번). */
+    @org.springframework.beans.factory.annotation.Autowired
     private com.lore.zzal.openai.OpenAiGateway openAiGateway;
 
     @Bean

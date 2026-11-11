@@ -60,35 +60,20 @@ public class OpenAiTextClient implements TextClient {
     private final ProviderUsageRecorder usageRecorder;
     private final ObjectMapper json = new ObjectMapper();
 
-    public OpenAiTextClient(S3Storage storage, String apiKey) {
-        this(storage, apiKey, null);
-    }
-
-    /** Optional verification bound; null preserves the existing request contract. */
-    public OpenAiTextClient(S3Storage storage, String apiKey, Integer maxCompletionTokens) {
-        this(storage, apiKey, maxCompletionTokens, ProviderUsageRecorder.NO_OP);
-    }
-    public OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,ProviderUsageRecorder recorder) {
-        this(storage, apiKey, maxCompletionTokens, recorder, null);
-    }
-    /** baseUrl = 설정 {@code app.zzal.openai.base-url}. 비면 실제 OpenAI 주소. 창구 없이 혼자 쓰는 옛 생성자. */
-    public OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,ProviderUsageRecorder recorder,String baseUrl) {
-        this(storage, apiKey, maxCompletionTokens, recorder, baseUrl, null);
-    }
-    /** 운영 생성자 — 스프링의 창구 빈을 받는다. null 이면 혼자 쓰는 창구(예전 HttpClient 설정 그대로). */
+    /**
+     * 운영 생성자 — 스프링의 창구 빈을 받는다. baseUrl = 설정 {@code app.zzal.openai.base-url}(비면 실제 OpenAI 주소).
+     * ★ 창구는 필수다(P1 검토 표 3번). 없으면 줄 상한·429 차단 밖으로 조용히 나가므로 여기서 멈춘다.
+     */
     public OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,ProviderUsageRecorder recorder,String baseUrl,
                             OpenAiGateway gateway) {
-        this(storage, apiKey, maxCompletionTokens, gateway != null ? gateway : OpenAiGateway.standalone(HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(20)).followRedirects(HttpClient.Redirect.NEVER).build()),
+        this(storage, apiKey, maxCompletionTokens, java.util.Objects.requireNonNull(gateway, "OpenAI 창구 빈이 없습니다(OpenAiGatewayConfig)"),
                 OpenAiBaseUrl.endpoint(baseUrl, PATH), Duration.ofSeconds(120), recorder);
     }
 
+    /** 시험 이음새(같은 패키지) — 흉내 주소로 보낸다. 창구는 시험이 만든다(시험 쪽 {@code TestGateways}). */
     OpenAiTextClient(S3Storage storage, String apiKey, Integer maxCompletionTokens,
-                     HttpClient http, URI endpoint, Duration timeout) {
-        this(storage,apiKey,maxCompletionTokens,http,endpoint,timeout,ProviderUsageRecorder.NO_OP);
-    }
-    OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,HttpClient http,URI endpoint,Duration timeout,ProviderUsageRecorder recorder) {
-        this(storage, apiKey, maxCompletionTokens, OpenAiGateway.standalone(http), endpoint, timeout, recorder);
+                     OpenAiGateway gateway, URI endpoint, Duration timeout) {
+        this(storage,apiKey,maxCompletionTokens,gateway,endpoint,timeout,ProviderUsageRecorder.NO_OP);
     }
     OpenAiTextClient(S3Storage storage,String apiKey,Integer maxCompletionTokens,OpenAiGateway gateway,URI endpoint,Duration timeout,ProviderUsageRecorder recorder) {
         this.usageRecorder=java.util.Objects.requireNonNull(recorder);

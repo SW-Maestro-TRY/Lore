@@ -10,8 +10,8 @@ import org.springframework.core.env.Environment;
 public class CustomProviderConfiguration {
     @org.springframework.beans.factory.annotation.Autowired
     private com.lore.zzal.generation.client.PersistentProviderUsageRecorder usageRecorder;
-    /** OpenAI 창구(설계 2-4) — 맞춤 기획은 느긋한 대사 줄. 없으면 혼자 쓰는 창구. */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    /** OpenAI 창구(설계 2-4) — 맞춤 기획은 느긋한 대사 줄. 필수(없으면 기동 실패, P1 검토 표 3번). */
+    @org.springframework.beans.factory.annotation.Autowired
     private com.lore.zzal.openai.OpenAiGateway openAiGateway;
     private com.lore.zzal.generation.client.ProviderUsageRecorder usage() {
         return usageRecorder == null ? com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP : usageRecorder.forFeature("custom_planner");

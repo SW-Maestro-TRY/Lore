@@ -80,10 +80,11 @@ public class OpenAiGateway implements AutoCloseable {
     }
 
     /**
-     * 혼자 쓰는 창구 — 클라이언트의 옛 생성자(시험용 HTTP 이음새)가 쓴다. 운영 빈은 이걸 쓰지 않는다.
-     * 줄 상한은 기본값, HttpClient 는 넘겨받은 것 하나.
+     * 시험 이음새 — 넘겨받은 HttpClient(흉내·목) 하나로 모든 줄을 보내는 창구. 줄 상한은 기본값.
+     * ★ 같은 패키지 전용이다(P1 검토 표 3번). 운영 코드는 스프링 창구 빈만 쓴다 — 다른 패키지의 시험은
+     *   시험 쪽 {@code com.lore.zzal.openai.TestGateways} 로 이걸 부른다.
      */
-    public static OpenAiGateway standalone(HttpClient http) {
+    static OpenAiGateway standalone(HttpClient http) {
         return new OpenAiGateway(LaneConfig.defaults(), DEFAULT_QUOTA_BLOCK, java.util.Objects.requireNonNull(http));
     }
 

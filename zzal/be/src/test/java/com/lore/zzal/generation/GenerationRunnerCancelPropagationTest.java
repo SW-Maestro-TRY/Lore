@@ -130,7 +130,7 @@ class GenerationRunnerCancelPropagationTest {
             srv.start();
 
             String base = "http://127.0.0.1:" + server.getLocalPort();
-            OpenAiTextClient client = new OpenAiTextClient(null, "SYNTHETIC_NOT_A_KEY", 64, ProviderUsageRecorder.NO_OP, base);
+            OpenAiTextClient client = new OpenAiTextClient(null, "SYNTHETIC_NOT_A_KEY", 64, ProviderUsageRecorder.NO_OP, base, com.lore.zzal.openai.TestGateways.lanes());
             GenerationStep identity = step("identity", 60, () -> {
                 var r = client.generate("p", List.of(), ModelSpec.of("gpt-5"));
                 return StepResult.text("identity", r.text(), "gpt-5", r.costUsd());

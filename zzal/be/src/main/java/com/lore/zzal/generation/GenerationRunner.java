@@ -60,21 +60,24 @@ public class GenerationRunner {
     @org.springframework.beans.factory.annotation.Value("${app.zzal.generation.limit-override-seconds:0}")
     private int limitOverrideSeconds;
 
-    /** 시험·직접 생성용 — 창구 없이 혼자 쓰는 가상 스레드 실행기. */
+    /**
+     * 시험 전용 — 창구 없이 혼자 쓰는 가상 스레드 실행기. 이 실행기는 HTTP 를 보내지 않는다(단계가 쓰는 클라이언트가
+     * 창구를 거친다). 운영 빈은 아래 창구 생성자만 쓴다.
+     */
     public GenerationRunner(GenerationRecorder recorder, ZzalAlerts alerts) {
-        this(recorder, alerts, (com.lore.zzal.openai.OpenAiGateway) null);
+        this(recorder, alerts, Executors.newVirtualThreadPerTaskExecutor());
     }
 
+    /** 운영 생성자. ★ 창구는 필수다(P1 검토 표 3번) — 없으면 기동이 실패한다. */
     @org.springframework.beans.factory.annotation.Autowired
-    public GenerationRunner(GenerationRecorder recorder, ZzalAlerts alerts,
-                            org.springframework.beans.factory.ObjectProvider<com.lore.zzal.openai.OpenAiGateway> gateways) {
-        this(recorder, alerts, gateways.getIfAvailable());
+    public GenerationRunner(GenerationRecorder recorder, ZzalAlerts alerts, com.lore.zzal.openai.OpenAiGateway gateway) {
+        this(recorder, alerts, java.util.Objects.requireNonNull(gateway, "OpenAI 창구 빈이 없습니다(OpenAiGatewayConfig)").executor());
     }
 
-    public GenerationRunner(GenerationRecorder recorder, ZzalAlerts alerts, com.lore.zzal.openai.OpenAiGateway gateway) {
+    private GenerationRunner(GenerationRecorder recorder, ZzalAlerts alerts, ExecutorService stepExecutor) {
         this.recorder = recorder;
         this.alerts = alerts;
-        this.stepExecutor = gateway != null ? gateway.executor() : Executors.newVirtualThreadPerTaskExecutor();
+        this.stepExecutor = stepExecutor;
     }
 
     /**

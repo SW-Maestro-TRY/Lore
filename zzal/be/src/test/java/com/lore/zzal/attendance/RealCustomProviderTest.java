@@ -56,14 +56,19 @@ class RealCustomProviderTest {
  }
  @Test void optInConfigurationIsAbsentByDefaultAndFailsClosedOnIncompleteFlags(){
   new ApplicationContextRunner().withUserConfiguration(CustomProviderConfiguration.class).run(c->assertThat(c).doesNotHaveBean(RealCustomBundleService.class));
-  assertThatThrownBy(()->new CustomProviderConfiguration().realCustomBundleService(new MockEnvironment(),null,null,null,null,null,null,null)).hasMessageContaining("explicit real-generation");
+  assertThatThrownBy(()->withGateway(new CustomProviderConfiguration()).realCustomBundleService(new MockEnvironment(),null,null,null,null,null,null,null)).hasMessageContaining("explicit real-generation");
  }
 
  @Test void productionConfigurationRequiresPublisherAndLegacyConstructorRemainsCompatible(){
   var env=new MockEnvironment().withProperty("app.zzal.generation.real","true").withProperty("app.zzal.generation.real-postprocess","true").withProperty("app.zzal.attendance.cli-enabled","true").withProperty("app.zzal.openai.api-key","SYNTHETIC_NOT_A_KEY").withProperty("app.zzal.custom.planner-model","gpt-5.6-luna").withProperty("app.zzal.custom.provider","api").withProperty("app.zzal.custom.image-model","SYNTHETIC").withProperty("app.zzal.custom.image-size","1024x1024").withProperty("app.zzal.custom.postprocess-version","v1");
   var planning=mock(CustomPlanningService.class);var worker=mock(BundleJobWorker.class);var text=mock(TextClient.class);var images=mock(ImageClient.class);var post=mock(PostProcessor.class);var storage=mock(S3Storage.class);var publication=mock(CustomBundlePublicationService.class);
-  var service=new CustomProviderConfiguration().realCustomBundleService(env,planning,worker,text,images,post,storage,publication);assertThat(org.springframework.test.util.ReflectionTestUtils.getField(service,"publication")).isSameAs(publication);assertThat(org.springframework.test.util.ReflectionTestUtils.getField(service,"text")).isInstanceOf(CustomPlannerTextClient.class);
-  assertThatThrownBy(()->new CustomProviderConfiguration().realCustomBundleService(env,planning,worker,text,images,post,storage,null)).hasMessage("Production custom publisher required");
+  var service=withGateway(new CustomProviderConfiguration()).realCustomBundleService(env,planning,worker,text,images,post,storage,publication);assertThat(org.springframework.test.util.ReflectionTestUtils.getField(service,"publication")).isSameAs(publication);assertThat(org.springframework.test.util.ReflectionTestUtils.getField(service,"text")).isInstanceOf(CustomPlannerTextClient.class);
+  assertThatThrownBy(()->withGateway(new CustomProviderConfiguration()).realCustomBundleService(env,planning,worker,text,images,post,storage,null)).hasMessage("Production custom publisher required");
   var legacy=new RealCustomBundleService(planning,worker,mock(GenerationExecutor.class),text,"SYNTHETIC");assertThat(org.springframework.test.util.ReflectionTestUtils.getField(legacy,"publication")).isNull();verifyNoInteractions(text,images,post,storage,publication);
  }
+    /** 운영은 창구 빈이 필수다(P1 검토 표 3번) — 직접 만든 설정에는 시험 창구를 넣는다. */
+    private static CustomProviderConfiguration withGateway(CustomProviderConfiguration c) {
+        org.springframework.test.util.ReflectionTestUtils.setField(c, "openAiGateway", com.lore.zzal.openai.TestGateways.lanes());
+        return c;
+    }
 }

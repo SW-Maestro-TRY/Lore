@@ -61,28 +61,16 @@ public class OpenAiImageClient implements ImageClient {
     private final int timeoutSeconds;
     private final ObjectMapper json = new ObjectMapper();
 
-    public OpenAiImageClient(S3Storage storage, String apiKey, int timeoutSeconds) {
-        this(storage,apiKey,timeoutSeconds,ProviderUsageRecorder.NO_OP);
-    }
-    public OpenAiImageClient(S3Storage storage, String apiKey, int timeoutSeconds, ProviderUsageRecorder recorder) {
-        this(storage,apiKey,timeoutSeconds,recorder,null);
-    }
-    /** baseUrl = 설정 {@code app.zzal.openai.base-url}. 비면 실제 OpenAI 주소. 창구 없이 혼자 쓰는 옛 생성자. */
-    public OpenAiImageClient(S3Storage storage, String apiKey, int timeoutSeconds, ProviderUsageRecorder recorder, String baseUrl) {
-        this(storage, apiKey, timeoutSeconds, recorder, baseUrl, null);
-    }
     /**
-     * 운영 생성자 — 스프링의 창구 빈을 받는다. null 이면 혼자 쓰는 창구(시험·직접 생성용, 예전 HttpClient 설정 그대로).
+     * 운영 생성자 — 스프링의 창구 빈을 받는다. baseUrl = 설정 {@code app.zzal.openai.base-url}(비면 실제 OpenAI 주소).
+     * ★ 창구는 필수다(P1 검토 표 3번). 없으면 줄 상한·429 차단 밖으로 조용히 나가므로 여기서 멈춘다.
      */
     public OpenAiImageClient(S3Storage storage, String apiKey, int timeoutSeconds, ProviderUsageRecorder recorder, String baseUrl,
                              OpenAiGateway gateway) {
-        this(storage, apiKey, timeoutSeconds, gateway != null ? gateway : OpenAiGateway.standalone(HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(20)).followRedirects(HttpClient.Redirect.NEVER).build()),
+        this(storage, apiKey, timeoutSeconds, java.util.Objects.requireNonNull(gateway, "OpenAI 창구 빈이 없습니다(OpenAiGatewayConfig)"),
                 OpenAiBaseUrl.endpoint(baseUrl, PATH), recorder);
     }
-    OpenAiImageClient(S3Storage storage,String apiKey,int timeoutSeconds,HttpClient http,URI endpoint,ProviderUsageRecorder recorder){
-        this(storage, apiKey, timeoutSeconds, OpenAiGateway.standalone(http), endpoint, recorder);
-    }
+    /** 시험 이음새(같은 패키지) — 흉내 주소로 보낸다. 창구는 시험이 만든다(시험 쪽 {@code TestGateways}). */
     OpenAiImageClient(S3Storage storage,String apiKey,int timeoutSeconds,OpenAiGateway gateway,URI endpoint,ProviderUsageRecorder recorder){
         this.storage=storage;this.apiKey=apiKey;this.timeoutSeconds=timeoutSeconds;
         this.gateway=java.util.Objects.requireNonNull(gateway);this.endpoint=java.util.Objects.requireNonNull(endpoint);

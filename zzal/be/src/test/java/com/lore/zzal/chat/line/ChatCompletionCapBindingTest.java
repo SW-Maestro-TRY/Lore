@@ -23,7 +23,7 @@ class ChatCompletionCapBindingTest {
                     org.mockito.Mockito.when(r.forFeature(org.mockito.ArgumentMatchers.anyString())).thenReturn(com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP); return r;
                 });
                 context.registerBean(com.lore.zzal.generation.client.ProviderUsageSpool.class, () -> mock(com.lore.zzal.generation.client.ProviderUsageSpool.class));
-                context.register(ChatLineConfig.class);
+                context.register(ChatLineConfig.class, com.lore.zzal.openai.OpenAiGatewayConfig.class);
                 context.refresh();
                 var generator = ReflectionTestUtils.getField(context.getBean(LineChain.class), "llm");
                 var client = ReflectionTestUtils.getField(generator, "client");

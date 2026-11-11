@@ -12,8 +12,8 @@ public class DiaryModelConfiguration {
     /** OpenAI 기본 주소(비면 실제 주소). dev 벤치마크 흉내 서버용 — {@link com.lore.zzal.generation.client.OpenAiBaseUrl}. */
     @Value("${app.zzal.openai.base-url:}")
     private String openAiBaseUrl;
-    /** OpenAI 창구(설계 2-4) — 일기는 느긋한 대사 줄. 없으면 혼자 쓰는 창구. */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    /** OpenAI 창구(설계 2-4) — 일기는 느긋한 대사 줄. 필수(없으면 기동 실패, P1 검토 표 3번). */
+    @org.springframework.beans.factory.annotation.Autowired
     private com.lore.zzal.openai.OpenAiGateway openAiGateway;
     private com.lore.zzal.generation.client.ProviderUsageRecorder usage() {
         return usageRecorder == null ? com.lore.zzal.generation.client.ProviderUsageRecorder.NO_OP : usageRecorder.forFeature("diary");
