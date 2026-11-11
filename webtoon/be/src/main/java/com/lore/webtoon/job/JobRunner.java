@@ -606,7 +606,8 @@ public class JobRunner {
 
     /**
      * 기억해 둔 캐릭터 시트가 있으면 run 폴더에 심어 시트 단계를 건너뛴다(2026-11-08). 세계관 체험은 옷을
-     * 세계에 맞게 새로 그려야 해서 안 심는다. 못 심으면 예전처럼 새로 그린다.
+     * 세계에 맞게 새로 그려야 해서 안 심는다 — 짤에서 시트째 가져온 캐릭터만 체험에서도 심는다(2026-11-11).
+     * 못 심으면 예전처럼 새로 그린다.
      */
     private void seedSheet(WebtoonJob job, String runId) {
         try {
@@ -619,8 +620,25 @@ public class JobRunner {
         }
     }
 
-    /** 세계관 체험 작업인가 — run 의 input.json(play=true). 못 읽으면 아니다(예전과 같다). */
+    /**
+     * 세계관 체험 작업인가 — 작업 입력(play=true), 없으면 run 의 input.json. 못 읽으면 아니다(예전과 같다).
+     * ★ 작업 입력을 먼저 본다. 시트 심기는 run 번호를 작업에 적기(learnRun) 전에 불려서, run 폴더로만
+     *   찾으면 번호가 null 이라 매번 NullPointerException 으로 심기가 통째로 빠졌다(운영 2026-11-11).
+     */
     private boolean isPlay(WebtoonJob job) {
+        String input = job.getInputJson();
+        if (input != null && !input.isBlank()) {
+            try {
+                if (mapper.readTree(input).path("play").asBoolean(false)) {
+                    return true;
+                }
+            } catch (IOException e) {
+                // 아래 run 폴더로 다시 본다
+            }
+        }
+        if (job.getRunId() == null) {
+            return false;
+        }
         Path file = runsDir.resolve(job.getRunId()).resolve("input.json");
         try {
             return Files.isRegularFile(file) && mapper.readTree(file.toFile()).path("play").asBoolean(false);

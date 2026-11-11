@@ -49,6 +49,9 @@ public class ZzalCharacterImport {
 
     private static final Logger log = LoggerFactory.getLogger(ZzalCharacterImport.class);
 
+    /** 짤 캐릭터 시트를 그대로 가져온 캐릭터의 sheet_mode. 체험에서도 이 시트를 심는다(CharacterService.seedSheet). */
+    public static final String SHEET_MODE = "zzal";
+
     /** 하네스가 받는 사진 상한과 같다(CharacterService.MAX_PHOTO_BYTES). */
     private static final long MAX_BYTES = 6L * 1024 * 1024;
 
@@ -141,6 +144,11 @@ public class ZzalCharacterImport {
         WebtoonCharacter one = WebtoonCharacter.drawing(UUID.randomUUID().toString().replace("-", ""),
                 userId, null, name, pick.description(), now);
         one.drewArt(key, CharacterSource.UPLOAD, now);
+        if (useSheet) {
+            /* 짤 캐릭터 시트를 그대로 가져왔으면 그게 이 캐릭터의 시트다 — 작품마다 시트를 새로 그리지 않고
+               이걸 심는다(CharacterService.seedSheet). 사양(sheet_spec)은 없어서 하네스가 글로만 적는다. */
+            one.keepSheet(key, null, SHEET_MODE, now);
+        }
         log.info("짤 캐릭터를 웹툰 캐릭터로 가져왔습니다 (user={}, pet={}, sheet={})", userId, petId, useSheet);
         return characters.save(one);
     }
