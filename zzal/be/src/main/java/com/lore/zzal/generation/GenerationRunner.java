@@ -228,7 +228,22 @@ public class GenerationRunner {
                     }
                 }
             };
-            running.add(new Running(p.step(), stepId, stepExecutor.submit(task),
+            Future<StepResult> future;
+            try {
+                future = stepExecutor.submit(task);
+            } catch (java.util.concurrent.RejectedExecutionException e) {
+                // ★ 창구 실행기가 먼저 닫혔다(종료 중) — 끼어들기와 같다(P1 검토 표 1번). 이미 낸 단계도 끊고
+                //   전부 INTERRUPTED·비용 0 으로 적는다. 올려 보내면 잡이 RUNNING 고아로 남는다.
+                log.warn("단계 실행기가 닫혀 있다(종료 중) — 끊긴 것으로 적는다 jobId={} step={}", jobId, p.step().name());
+                recorder.failStep(stepId, GenErrorCode.INTERRUPTED, BigDecimal.ZERO);
+                for (Running r : running) {
+                    r.future().cancel(true);
+                    recorder.failStep(r.stepId(), GenErrorCode.INTERRUPTED, BigDecimal.ZERO);
+                }
+                return new StageOutcome(BigDecimal.ZERO, GenErrorCode.INTERRUPTED, false, false, false, null,
+                        "실행기 닫힘 — " + p.step().name(), true);
+            }
+            running.add(new Running(p.step(), stepId, future,
                     System.nanoTime() + TimeUnit.SECONDS.toNanos(limit)));
         }
         if (running.size() > 1) {

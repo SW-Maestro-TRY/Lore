@@ -150,6 +150,15 @@ public class HatchService {
         long imageFromJobId = job.getAttempt() > 1 ? 0L : jobId;
         int gridDiscards = 0;
         while (true) {
+            // ★★ 바깥 끼어들기(배포 때 부화 풀 종료 등)면 다시 굽지도, 실패로 닫지도 않는다(P1 검토 표 1번).
+            //   러너는 끊김 표시를 되살려 돌려준다 — 여기서 새 잡을 만들면 새 단계가 곧바로 또 끊겨
+            //   밀리초 안에 시도 상한을 다 쓰고 펫을 FAILED 로 닫는다. 펫은 HATCHING 으로 남기고,
+            //   재기동 뒤 기동 복구(StuckHatchRecovery)가 이어 굽는다. 끊김 표시는 지우지 않는다.
+            if (interrupted(result)) {
+                log.warn("끼어들기 — 재시도·실패 확정 없이 돌아간다(기동 복구가 이어 굽는다) petId={} 시도={}회",
+                        petId, attempt);
+                return;
+            }
             if (result != null && badGrid(result)) {
                 gridDiscards += 1;
             }
@@ -225,6 +234,12 @@ public class HatchService {
                 return;
             }
         }
+    }
+
+    /** 이 시도가 바깥 끼어들기로 끝났나 — 결과 코드가 INTERRUPTED 이거나 지금 스레드가 끊긴 상태. */
+    private static boolean interrupted(RunResult result) {
+        return Thread.currentThread().isInterrupted()
+                || (result != null && result.errorCode() == GenErrorCode.INTERRUPTED);
     }
 
     /**
