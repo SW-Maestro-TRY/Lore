@@ -542,6 +542,7 @@ public class TestComicController {
     }
 
     /** 장 하나를 메모를 붙여 다시 그린다(보류된 장, 마음에 안 드는 장). */
+    @SuppressWarnings("unchecked")
     @PostMapping("/drafts/{id}/redraw")
     public Map<String, Object> redraw(@PathVariable String id, @RequestHeader("X-Test-Passcode") String pass,
                                       @RequestBody Map<String, Object> body,
@@ -556,6 +557,27 @@ public class TestComicController {
         Map<String, Object> e = episodes(path).stream().filter(x -> ((Number) x.get("n")).intValue() == en)
                 .findFirst().orElseThrow(() -> new TestError(404, "화를 찾지 못했어요"));
         if (n < 1 || n > pagesOf(e)) throw new TestError(404, "장을 찾지 못했어요");
+        // 장면 글을 직접 고쳐 다시 그리기(막힌 장 등). 표지(1장)는 장면이 없다. 처음 고칠 때 원래 글을 scenes.orig.json 에 남긴다.
+        if (body.get("scene") instanceof Map<?, ?> edit && n > 1) {
+            Path scenesFile = ep(id, en).resolve("scenes.json");
+            Map<String, Object> scenes = mapper.readValue(scenesFile.toFile(), new TypeReference<>() {});
+            List<Map<String, Object>> list = (List<Map<String, Object>>) scenes.get("scenes");
+            if (list == null || n - 2 >= list.size()) throw new TestError(404, "장면을 찾지 못했어요");
+            Map<String, Object> scene = list.get(n - 2);
+            boolean changed = false;
+            for (String k : List.of("what", "acting", "look")) {
+                if (!(edit.get(k) instanceof String v)) continue;
+                v = v.strip();
+                if (v.isEmpty() || v.length() > 3000) throw new TestError(400, "장면 글은 비우지 말고 3000자 안으로 적어 주세요");
+                if (!v.equals(scene.get(k))) { scene.put(k, v); changed = true; }
+            }
+            if (changed) {
+                Path orig = ep(id, en).resolve("scenes.orig.json");
+                if (!Files.isRegularFile(orig)) Files.copy(scenesFile, orig);
+                scene.put("edited", true);
+                write(scenesFile, scenes);
+            }
+        }
         Path page = ep(id, en).resolve("pages/page%02d.png".formatted(n));
         Path keep = ep(id, en).resolve("pages/versions/page%02d.%d.png".formatted(n, Instant.now().toEpochMilli()));
         Files.createDirectories(keep.getParent());
