@@ -2593,7 +2593,14 @@ def main(argv=None) -> int:
     p.add_argument("--chat-sheets", action="store_true", help="시트 보관함에서 1화 시트를 깐다")
     p.add_argument("--chat-save-sheets", action="store_true", help="1화 시트를 보관함에 넣는다")
     p.add_argument("--chat-share-sheets", action="store_true", help="1화 시트를 나머지 화에 복사한다")
+    p.add_argument("--chat-soften", action="store_true",
+                   help="안전 검사에 걸린 장(--page)의 장면 글에서 그림 묘사만 순하게 고쳐 쓴다(대사는 그대로). 화 run 에서 돈다")
     args = p.parse_args(argv)
+    if args.chat_soften:
+        if not args.run_id or not re.fullmatch(r"test-[0-9a-f]{32}-e[0-9]+", args.run_id) or not args.page:
+            raise SystemExit("비공개 테스트 화 run 번호와 --page 가 필요합니다")
+        import chat_comic
+        return 0 if chat_comic.soften(RUNS_DIR / args.run_id, int(args.page[0])) else 1
     if args.chat_extract or args.chat_prepare or args.chat_sheets or args.chat_save_sheets or args.chat_share_sheets:
         if not args.run_id or not re.fullmatch(r"test-[0-9a-f]{32}", args.run_id):
             raise SystemExit("비공개 테스트 run 번호가 필요합니다")

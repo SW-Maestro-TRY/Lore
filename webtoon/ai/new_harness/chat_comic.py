@@ -256,6 +256,54 @@ def _write_scenes(dialogue: list[dict], ranges: list[tuple], title: str, cast: s
     return scenes, meta
 
 
+_QUOTE = re.compile(r"[“\"]([^”\"]+)[”\"]")
+
+
+def soften(run_dir: Path, page: int) -> bool:
+    """안전 검사에 걸린 장(page = 장면 page-1)의 그림 묘사만 순하게 고쳐 쓴다. 대사(“…”)는 한 글자도 안 바꾼다.
+
+    처음 고칠 때 원래 장면을 scenes.orig.json 에 남긴다. 대사가 하나라도 빠지면 쓰지 않고 False.
+    """
+    path = run_dir / "scenes.json"
+    data = _read(path)
+    scenes = data.get("scenes") or []
+    if not 2 <= page <= len(scenes) + 1:
+        return False
+    scene = scenes[page - 2]
+    keep = [q.strip() for q in _QUOTE.findall(str(scene.get("acting") or "")) if q.strip()]
+    prompt = (
+        "아래는 세로 웹툰 한 장의 장면 글이다. 이 글로 그림을 그리려 했더니 이미지 모델의 안전 검사(성적 표현)에 걸렸다. "
+        "전체 이용가 로맨틱 코미디 웹툰에 그대로 실릴 그림이 되도록 where·what·acting·look·ends 를 고쳐 써라.\n"
+        "- acting 안의 대사(“…” 안의 글)는 한 글자도 바꾸지 말고, 순서와 말하는 사람도 그대로 둔다.\n"
+        "- 장면의 감정(설렘·장난·당황·다정함)과 흐름은 살리고, 그것을 표정·눈빛·거리·자세·소품·효과음으로 보여 준다.\n"
+        "- 몸이 닿는 동작은 길에서 남이 봐도 자연스러운 가벼운 스킨십으로 바꾼다.\n"
+        "- 고친 글은 보이는 것만 긍정형으로 적는다. 빼는 것을 이름으로 다시 적지 않는다.\n"
+        "JSON 객체 {\"where\":\"…\",\"what\":\"…\",\"acting\":\"…\",\"look\":\"…\",\"ends\":\"…\"}만 돌려준다.\n\n"
+        + json.dumps({k: scene.get(k, "") for k in ("where", "what", "acting", "look", "ends")}, ensure_ascii=False, indent=1)
+    )
+    for _ in range(2):
+        text, meta = llm.Call("SCENE")(prompt, temperature=0.3, max_tokens=4000)
+        new = _json(text)
+        acting = str(new.get("acting") or "")
+        if all(q in acting for q in keep):
+            break
+    else:
+        return False
+    orig = run_dir / "scenes.orig.json"
+    if not orig.exists():
+        _write(orig, data)
+    look = str(new.get("look") or "").replace(BUBBLE_RULE, "").strip()
+    scene.update({"where": str(new.get("where") or scene.get("where") or "").strip(),
+                  "what": str(new.get("what") or scene.get("what") or "").strip(),
+                  "acting": acting.strip(),
+                  "look": (look + " " if look else "") + BUBBLE_RULE,
+                  "ends": str(new.get("ends") or scene.get("ends") or "").strip(),
+                  "softened": int(scene.get("softened") or 0) + 1})
+    _write(path, data)
+    _write(run_dir / f"soften-meta-{page:02d}.json", meta)
+    return True
+
+
 def _people(draft: dict) -> list[dict]:
     """인물 목록 — [{name, description, role}] (role: main=주인공급, cast=조연). 옛 칸(name·co_name)도 받는다."""
     raw = draft.get("people")

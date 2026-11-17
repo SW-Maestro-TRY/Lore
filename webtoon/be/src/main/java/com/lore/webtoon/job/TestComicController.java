@@ -569,7 +569,7 @@ public class TestComicController {
                 else {
                     if (Files.isRegularFile(keep)) Files.copy(keep, page, StandardCopyOption.REPLACE_EXISTING);
                     else held.add(en + "/" + n);
-                    msg = en + "화 " + n + "장을 다시 그리지 못했어요(안전 검사·한도). 메모를 바꿔 보세요";
+                    msg = en + "화 " + n + "장을 다시 그리지 못했어요. 안전 검사에 걸려 그림 묘사를 순하게 고쳐 다시 그려 봤는데도 막혔어요";
                 }
                 setHeld(path, held);
                 Files.deleteIfExists(ep(id, en).resolve("episode.png"));
@@ -615,7 +615,16 @@ public class TestComicController {
             log.warn("장 프롬프트가 한도를 넘음 (id={}, {}화 {}장)", id, en, n);
             return false;
         }
-        for (int attempt = 1; attempt <= PAGE_ATTEMPTS && !Files.isRegularFile(png); attempt++) run(args, ENV);
+        Path unsafe = ep(id, en).resolve("pages/page%02d.unsafe.json".formatted(n));
+        for (int attempt = 1; attempt <= PAGE_ATTEMPTS && !Files.isRegularFile(png); attempt++) {
+            Files.deleteIfExists(unsafe);
+            run(args, ENV);
+            // 안전 검사에 걸리면 같은 글로 다시 그려도 또 걸린다 — 장면 글의 그림 묘사만 순하게 고쳐 쓰고(대사는 그대로) 다시 그린다.
+            if (!Files.isRegularFile(png) && Files.isRegularFile(unsafe) && n > 1 && attempt < PAGE_ATTEMPTS) {
+                run(List.of("--run-id", rid, "--chat-soften", "--page", String.valueOf(n)), ENV);
+                run(dry, ENV);
+            }
+        }
         return Files.isRegularFile(png);
     }
 
