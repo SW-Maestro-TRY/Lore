@@ -5,7 +5,7 @@ import styles from "./test-comic.module.css";
 import Library, { type Work } from "./library";
 
 type Line = { speaker: string; text: string };
-type Scene = { n: number; what: string; acting: string; missing?: string[] };
+type Scene = { n: number; where?: string; what: string; acting: string; look?: string; missing?: string[]; softened?: number; edited?: boolean };
 type Episode = {
   n: number; run_id: string; subtitle: string; scenes: number; pages: number;
   messages: [number, number]; missing: number; drawn: string[]; stitched: boolean;
@@ -24,6 +24,10 @@ type Person = { name: string; description: string; role: "main" | "cast"; photo:
 const API = "/api/webtoon/v1/test-comic";
 const BUSY = ["extracting", "generating", "drawing"];
 const STYLE_NAMES: Record<string, string> = { webtoon_lock_bg: "일반 웹툰" };
+/** 장면 글 그림 묘사 끝에 하네스가 붙이는 문장(chat_comic.BUBBLE_RULE) — 고치는 칸에는 빼고 보여 준다. */
+const BUBBLE_RULE = "한 컷에는 말풍선 두 개까지만 두고, 대사가 길거나 많으면 컷을 더 나눠 한 줄씩 나눠 싣는다.";
+/** 화자가 아니라 서술 칸에 붙는 이름(chat_comic.NARRATOR_NAMES 와 같게). */
+const NARRATOR = new Set(["", "서술", "나레이션", "내레이션", "지문", "해설", "narration", "narrator"]);
 
 /** 서버 업로드 한도(파일당 1MB) 안으로 JPEG 로 줄인다. 시트는 화질을 높게(서버가 PNG 로 바꿔 저장). */
 async function compressed(file: File, quality = .85): Promise<File> {
@@ -73,6 +77,8 @@ export default function TestComic() {
   const [episode, setEpisode] = useState(1);
   const [redrawPage, setRedrawPage] = useState(0);
   const [redrawNote, setRedrawNote] = useState("");
+  // 고칠 장의 장면 글(표지 빼고). 열 때 지금 글로 채우고, 바뀐 칸만 서버에 보낸다.
+  const [sceneEdit, setSceneEdit] = useState<{ what: string; acting: string; look: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [art, setArt] = useState<Record<string, string>>({});
@@ -115,10 +121,11 @@ export default function TestComic() {
 
   useEffect(() => {
     if (!draft?.transcript || transcript) return;
-    setTranscript(draft.transcript.dialogue.map(l => `${l.speaker}: ${l.text}`).join("\n"));
+    setTranscript(draft.transcript.dialogue.map(l => `${l.speaker || "서술"}: ${l.text}`).join("\n"));
     // 대화에 나온 화자로 인물 칸을 채운다. 둘까지는 주인공급, 나머지는 조연으로 시작한다(바꿀 수 있다).
-    setPeople(prev => prev.length ? prev : (draft.transcript?.characters || []).map((name, i) =>
-      ({ name, description: "", role: i < 2 ? "main" : "cast", photo: null })));
+    // 「서술」처럼 화자가 아닌 칸은 인물로 넣지 않는다.
+    setPeople(prev => prev.length ? prev : (draft.transcript?.characters || []).filter(name => !NARRATOR.has(name.trim().toLowerCase()))
+      .map((name, i) => ({ name, description: "", role: i < 2 ? "main" : "cast", photo: null })));
   }, [draft?.transcript, transcript]);
 
   // 그림은 비밀번호 머리글이 있어야 받으므로 blob 으로 받아 둔다. 다시 그린 장은 키에 시각을 붙여 새로 받는다.
@@ -211,10 +218,13 @@ export default function TestComic() {
     const named = people.filter(p => p.name.trim());
     const dialogue = linesFromText(transcript, named.map(p => p.name));
     if (!named.length || !dialogue.length) throw new Error("인물 이름과 대화를 확인해 주세요. 메시지는 ‘이름: 내용’으로 시작합니다");
+    // 표지에 들어가고, 둘러보기는 같은 제목을 한 작품(이어 붙인 화)으로 묶는다 — 새 작품은 새 제목이어야 한다.
+    if (!continueOf && !title.trim()) throw new Error("제목을 적어 주세요. 표지에 들어가요");
+    if (!continueOf && works.some(w => w.title === title.trim())) throw new Error("이미 있는 제목이에요. 다음 화로 붙이려면 ‘이어 붙일 작품’에서 골라 주세요");
     for (const [i, p] of named.entries()) if (p.photo) await upload(draft.id, `p${i}`, p.photo);
     setDraft(await (await call(`/drafts/${draft.id}/generate`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dialogue, title, genre: "로맨틱 코미디", notes, rename, continue_of: continueOf || undefined,
+      body: JSON.stringify({ dialogue, title: title.trim(), genre: "로맨틱 코미디", notes, rename, continue_of: continueOf || undefined,
         people: named.map(p => ({ name: p.name.trim(), description: p.description, role: p.role })) }),
     })).json());
   }, "만들기를 시작하지 못했어요");
@@ -243,9 +253,9 @@ export default function TestComic() {
     forget(`${episode}|episode`);
     setDraft(await (await call(`/drafts/${draft.id}/redraw`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ episode, page: redrawPage, note: redrawNote }),
+      body: JSON.stringify({ episode, page: redrawPage, note: redrawNote, scene: sceneEdit ? { ...sceneEdit, look: `${sceneEdit.look.trim()} ${BUBBLE_RULE}`.trim() } : undefined }),
     })).json());
-    setRedrawPage(0); setRedrawNote("");
+    setRedrawPage(0); setRedrawNote(""); setSceneEdit(null);
   }, "다시 그리지 못했어요");
 
   const startOver = () => {
@@ -358,7 +368,7 @@ export default function TestComic() {
           <label htmlFor="comic-notes">메모 · 선택</label>
           <textarea id="comic-notes" rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
           <p className={styles.fine}>시트 보관함에 같은 이름의 인물이 있으면 그 시트를 그대로 써요(그림체가 다르면 외모 사양만 가져와 새로 그려요).</p>
-          <button onClick={generate} disabled={busy || !transcript || !people.some(p => p.name.trim())}>{busy ? "시작 중…" : "장면 나누고 시트 준비하기"}</button>
+          <button onClick={generate} disabled={busy || !transcript || !people.some(p => p.name.trim()) || (!continueOf && !title.trim())}>{busy ? "시작 중…" : "장면 나누고 시트 준비하기"}</button>
         </section> : null}
 
         {showWork ? <section className={styles.panel}>
@@ -403,10 +413,30 @@ export default function TestComic() {
               return <div key={key} className={styles.pageBox}>
                 {art[key] ? <img src={art[key]} alt={`${current.n}화 ${i + 1}장`} />
                   : <div className={styles.wait}>{isHeld ? `${i + 1}장 · 안전 검사에 걸려 보류됨` : `${i + 1}장 그리는 중`}</div>}
-                {draft.phase === "done" ? <button className={styles.ghost} onClick={() => setRedrawPage(i + 1)} disabled={busy}>
-                  {i + 1}장 {isHeld ? "다시 그리기" : "고치기"}</button> : null}
+                {draft.phase === "done" ? <button className={styles.ghost} disabled={busy} onClick={() => {
+                  setRedrawPage(i + 1); setRedrawNote("");
+                  const sc = i > 0 ? current.scenesJson?.scenes?.[i - 1] : undefined;
+                  setSceneEdit(sc ? { what: sc.what || "", acting: sc.acting || "", look: (sc.look || "").replace(BUBBLE_RULE, "").trim() } : null);
+                }}>{i + 1}장 {isHeld ? "다시 그리기" : "고치기"}</button> : null}
                 {redrawPage === i + 1 && draft.phase === "done" ? <div className={styles.redraw}>
-                  <label htmlFor={`note-${i}`}>무엇을 고칠까요 · 150자 안</label>
+                  {sceneEdit ? (() => {
+                    const sc = current.scenesJson?.scenes?.[i - 1];
+                    return <>
+                      <p className={styles.fine}>
+                        {i + 1}장 장면 · {sc?.where || ""}
+                        {sc?.softened ? " · 안전 검사에 걸려 그림 묘사를 자동으로 순하게 고친 글이에요" : ""}
+                        {sc?.edited ? " · 직접 고친 글이에요" : ""}
+                      </p>
+                      {isHeld ? <p className={styles.warn}>이 글로 그리다 안전 검사(성적 표현)에 걸렸어요. 대사(“…”)는 두고 몸이 닿는 동작·클로즈업 묘사를 바꿔 보세요.</p> : null}
+                      <label htmlFor={`what-${i}`}>무슨 장면</label>
+                      <textarea id={`what-${i}`} rows={2} value={sceneEdit.what} onChange={e => setSceneEdit({ ...sceneEdit, what: e.target.value })} />
+                      <label htmlFor={`acting-${i}`}>대사와 행동 · 대사는 “…” 그대로 들어가요</label>
+                      <textarea id={`acting-${i}`} rows={7} value={sceneEdit.acting} onChange={e => setSceneEdit({ ...sceneEdit, acting: e.target.value })} />
+                      <label htmlFor={`look-${i}`}>그림 묘사</label>
+                      <textarea id={`look-${i}`} rows={3} value={sceneEdit.look} onChange={e => setSceneEdit({ ...sceneEdit, look: e.target.value })} />
+                    </>;
+                  })() : <p className={styles.fine}>표지예요. 제목과 두 사람이 들어가요.</p>}
+                  <label htmlFor={`note-${i}`}>그 밖에 고칠 것 · 선택 · 150자 안</label>
                   <input id={`note-${i}`} maxLength={150} value={redrawNote} onChange={e => setRedrawNote(e.target.value)}
                     placeholder="예: 첫 컷을 당황한 표정으로" />
                   <div className={styles.row}>

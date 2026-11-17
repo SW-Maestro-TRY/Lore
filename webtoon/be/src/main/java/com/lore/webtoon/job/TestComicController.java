@@ -451,7 +451,8 @@ public class TestComicController {
                 }
                 out.add(Map.of("id", id, "title", String.valueOf(plan.getOrDefault("title", "")),
                         "createdAt", String.valueOf(st.getOrDefault("createdAt", "")),
-                        "phase", String.valueOf(st.getOrDefault("phase", "")), "episodes", eps));
+                        "phase", String.valueOf(st.getOrDefault("phase", "")), "episodes", eps,
+                        "held", st.getOrDefault("held", List.of())));
             }
         }
         out.sort(Comparator.comparing(m -> String.valueOf(m.get("createdAt"))));
@@ -541,6 +542,7 @@ public class TestComicController {
     }
 
     /** 장 하나를 메모를 붙여 다시 그린다(보류된 장, 마음에 안 드는 장). */
+    @SuppressWarnings("unchecked")
     @PostMapping("/drafts/{id}/redraw")
     public Map<String, Object> redraw(@PathVariable String id, @RequestHeader("X-Test-Passcode") String pass,
                                       @RequestBody Map<String, Object> body,
@@ -555,6 +557,27 @@ public class TestComicController {
         Map<String, Object> e = episodes(path).stream().filter(x -> ((Number) x.get("n")).intValue() == en)
                 .findFirst().orElseThrow(() -> new TestError(404, "화를 찾지 못했어요"));
         if (n < 1 || n > pagesOf(e)) throw new TestError(404, "장을 찾지 못했어요");
+        // 장면 글을 직접 고쳐 다시 그리기(막힌 장 등). 표지(1장)는 장면이 없다. 처음 고칠 때 원래 글을 scenes.orig.json 에 남긴다.
+        if (body.get("scene") instanceof Map<?, ?> edit && n > 1) {
+            Path scenesFile = ep(id, en).resolve("scenes.json");
+            Map<String, Object> scenes = mapper.readValue(scenesFile.toFile(), new TypeReference<>() {});
+            List<Map<String, Object>> list = (List<Map<String, Object>>) scenes.get("scenes");
+            if (list == null || n - 2 >= list.size()) throw new TestError(404, "장면을 찾지 못했어요");
+            Map<String, Object> scene = list.get(n - 2);
+            boolean changed = false;
+            for (String k : List.of("what", "acting", "look")) {
+                if (!(edit.get(k) instanceof String v)) continue;
+                v = v.strip();
+                if (v.isEmpty() || v.length() > 3000) throw new TestError(400, "장면 글은 비우지 말고 3000자 안으로 적어 주세요");
+                if (!v.equals(scene.get(k))) { scene.put(k, v); changed = true; }
+            }
+            if (changed) {
+                Path orig = ep(id, en).resolve("scenes.orig.json");
+                if (!Files.isRegularFile(orig)) Files.copy(scenesFile, orig);
+                scene.put("edited", true);
+                write(scenesFile, scenes);
+            }
+        }
         Path page = ep(id, en).resolve("pages/page%02d.png".formatted(n));
         Path keep = ep(id, en).resolve("pages/versions/page%02d.%d.png".formatted(n, Instant.now().toEpochMilli()));
         Files.createDirectories(keep.getParent());
@@ -568,7 +591,7 @@ public class TestComicController {
                 else {
                     if (Files.isRegularFile(keep)) Files.copy(keep, page, StandardCopyOption.REPLACE_EXISTING);
                     else held.add(en + "/" + n);
-                    msg = en + "화 " + n + "장을 다시 그리지 못했어요(안전 검사·한도). 메모를 바꿔 보세요";
+                    msg = en + "화 " + n + "장을 다시 그리지 못했어요. 안전 검사에 걸려 그림 묘사를 순하게 고쳐 다시 그려 봤는데도 막혔어요";
                 }
                 setHeld(path, held);
                 Files.deleteIfExists(ep(id, en).resolve("episode.png"));
@@ -614,7 +637,16 @@ public class TestComicController {
             log.warn("장 프롬프트가 한도를 넘음 (id={}, {}화 {}장)", id, en, n);
             return false;
         }
-        for (int attempt = 1; attempt <= PAGE_ATTEMPTS && !Files.isRegularFile(png); attempt++) run(args, ENV);
+        Path unsafe = ep(id, en).resolve("pages/page%02d.unsafe.json".formatted(n));
+        for (int attempt = 1; attempt <= PAGE_ATTEMPTS && !Files.isRegularFile(png); attempt++) {
+            Files.deleteIfExists(unsafe);
+            run(args, ENV);
+            // 안전 검사에 걸리면 같은 글로 다시 그려도 또 걸린다 — 장면 글의 그림 묘사만 순하게 고쳐 쓰고(대사는 그대로) 다시 그린다.
+            if (!Files.isRegularFile(png) && Files.isRegularFile(unsafe) && n > 1 && attempt < PAGE_ATTEMPTS) {
+                run(List.of("--run-id", rid, "--chat-soften", "--page", String.valueOf(n)), ENV);
+                run(dry, ENV);
+            }
+        }
         return Files.isRegularFile(png);
     }
 
