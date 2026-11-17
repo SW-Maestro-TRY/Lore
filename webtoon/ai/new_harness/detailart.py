@@ -603,6 +603,15 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         "",
         f"[여기서 끝낸다 — 다음 장이 이어받을 자리다] {ends}",
         "",
+    ]
+    if (llm.env("NH_NEXT_SCENE") or "").strip() and not last and scene_no < len(scenes):
+        # 채팅 만화: 그림 모델이 다음 장을 몰라서 다음 장의 일(달려와 안기기 등)을
+        # 이 장에 미리 그려 버렸다(2026-11-18). 다음 장의 첫 일을 알려 주되 그리지 말라고 못박는다.
+        nxt = scenes[scene_no]
+        lines += [f"[다음 장에서 일어나는 일 — 이 장에서는 아직 일어나지 않았다. 그리지 않는다] "
+                  f"{(nxt.get('what') or '').strip()}",
+                  "  이 장의 인물 자리·거리·자세는 다음 장의 일이 이제 막 시작될 수 있는 상태로 둔다.", ""]
+    lines += [
         "**다른 장면들은 지금 동시에 그려지고 있다.** 위 두 지점이 앞뒤 장과 "
         "맞물리는 자리다 — 옆 장의 그림을 보고 맞추는 것이 아니라 이 글에 "
         "맞춘다.",
