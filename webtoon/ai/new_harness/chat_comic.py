@@ -88,7 +88,7 @@ def extract(run_dir: Path) -> None:
             cleaned.append(line)
     if not cleaned:
         raise ValueError("캡처에서 대화를 읽지 못했습니다")
-    speakers = list(dict.fromkeys(x["speaker"] for x in cleaned if x["speaker"]))
+    speakers = list(dict.fromkeys(x["speaker"] for x in cleaned if not is_narrator(x["speaker"])))
     _write(run_dir / "transcript.json", {"dialogue": cleaned, "characters": speakers})
 
 
@@ -102,9 +102,39 @@ _NARRATION_END = re.compile(r"(다|듯|듯이|처럼|며|고|채|데|게|도)[.�
 _NARRATION_SUBJECT = re.compile(r"(그녀|그는|그의|그가|[가-힣]{2,}(은|는|의|가|이) [가-힣]+(했|었|였|았|다))")
 
 
+# 화자가 아니라 서술 칸에 붙는 이름 — 인물로 세지 않고, 대사 검사도 하지 않는다.
+NARRATOR_NAMES = {"", "서술", "나레이션", "내레이션", "지문", "해설", "narration", "narrator"}
+
+
+def is_narrator(name: str) -> bool:
+    return str(name or "").strip().lower() in NARRATOR_NAMES
+
+
+# 캡처 글은 화면 폭에서 줄이 꺾여 들어온다. 문장 끝 표시 없이 끝난 줄은 다음 줄에 이어 붙여 한 문장으로 본다.
+_LINE_DONE = re.compile(r"([.!?。…~”\"’'」)\]]|[ㄱ-ㅎ]|[.]{2,})$")
+
+
+def _unwrap(text: str) -> list[str]:
+    out, buf = [], ""
+    for raw in str(text).splitlines():
+        line = raw.strip()
+        if not line:
+            if buf:
+                out.append(buf)
+            buf = ""
+            continue
+        buf = f"{buf} {line}" if buf else line
+        if _LINE_DONE.search(buf.strip("*").strip()):
+            out.append(buf)
+            buf = ""
+    if buf:
+        out.append(buf)
+    return out
+
+
 def speech_lines(text: str) -> list[str]:
     out = []
-    for raw in str(text).splitlines():
+    for raw in _unwrap(text):
         line = raw.strip().strip("*").strip()
         if len(line) < 2:
             continue
@@ -127,6 +157,8 @@ def missing_lines(messages: list[dict], acting: str) -> list[str]:
     have = _norm(acting)
     out = []
     for m in messages:
+        if is_narrator(m.get("speaker", "")):
+            continue
         for line in speech_lines(m.get("text", "")):
             head = re.split(r"\.{2,}|…|!{2,}|\?{2,}", line, maxsplit=1)[0]  # 대사 뒤에 붙은 지문은 떼고 본다
             key = _norm(head if len(_norm(head)) >= 2 else line)[:8]
@@ -235,7 +267,7 @@ def _people(draft: dict) -> list[dict]:
         if not isinstance(p, dict):
             continue
         nm = str(p.get("name") or "").strip()
-        if not nm or nm in seen:
+        if not nm or nm in seen or is_narrator(nm):
             continue
         seen.add(nm)
         out.append({"name": nm, "description": str(p.get("description") or "").strip()[:2000],

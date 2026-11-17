@@ -451,7 +451,8 @@ public class TestComicController {
                 }
                 out.add(Map.of("id", id, "title", String.valueOf(plan.getOrDefault("title", "")),
                         "createdAt", String.valueOf(st.getOrDefault("createdAt", "")),
-                        "phase", String.valueOf(st.getOrDefault("phase", "")), "episodes", eps));
+                        "phase", String.valueOf(st.getOrDefault("phase", "")), "episodes", eps,
+                        "held", st.getOrDefault("held", List.of())));
             }
         }
         out.sort(Comparator.comparing(m -> String.valueOf(m.get("createdAt"))));

@@ -24,6 +24,8 @@ type Person = { name: string; description: string; role: "main" | "cast"; photo:
 const API = "/api/webtoon/v1/test-comic";
 const BUSY = ["extracting", "generating", "drawing"];
 const STYLE_NAMES: Record<string, string> = { webtoon_lock_bg: "일반 웹툰" };
+/** 화자가 아니라 서술 칸에 붙는 이름(chat_comic.NARRATOR_NAMES 와 같게). */
+const NARRATOR = new Set(["", "서술", "나레이션", "내레이션", "지문", "해설", "narration", "narrator"]);
 
 /** 서버 업로드 한도(파일당 1MB) 안으로 JPEG 로 줄인다. 시트는 화질을 높게(서버가 PNG 로 바꿔 저장). */
 async function compressed(file: File, quality = .85): Promise<File> {
@@ -115,10 +117,11 @@ export default function TestComic() {
 
   useEffect(() => {
     if (!draft?.transcript || transcript) return;
-    setTranscript(draft.transcript.dialogue.map(l => `${l.speaker}: ${l.text}`).join("\n"));
+    setTranscript(draft.transcript.dialogue.map(l => `${l.speaker || "서술"}: ${l.text}`).join("\n"));
     // 대화에 나온 화자로 인물 칸을 채운다. 둘까지는 주인공급, 나머지는 조연으로 시작한다(바꿀 수 있다).
-    setPeople(prev => prev.length ? prev : (draft.transcript?.characters || []).map((name, i) =>
-      ({ name, description: "", role: i < 2 ? "main" : "cast", photo: null })));
+    // 「서술」처럼 화자가 아닌 칸은 인물로 넣지 않는다.
+    setPeople(prev => prev.length ? prev : (draft.transcript?.characters || []).filter(name => !NARRATOR.has(name.trim().toLowerCase()))
+      .map((name, i) => ({ name, description: "", role: i < 2 ? "main" : "cast", photo: null })));
   }, [draft?.transcript, transcript]);
 
   // 그림은 비밀번호 머리글이 있어야 받으므로 blob 으로 받아 둔다. 다시 그린 장은 키에 시각을 붙여 새로 받는다.
@@ -211,10 +214,13 @@ export default function TestComic() {
     const named = people.filter(p => p.name.trim());
     const dialogue = linesFromText(transcript, named.map(p => p.name));
     if (!named.length || !dialogue.length) throw new Error("인물 이름과 대화를 확인해 주세요. 메시지는 ‘이름: 내용’으로 시작합니다");
+    // 표지에 들어가고, 둘러보기는 같은 제목을 한 작품(이어 붙인 화)으로 묶는다 — 새 작품은 새 제목이어야 한다.
+    if (!continueOf && !title.trim()) throw new Error("제목을 적어 주세요. 표지에 들어가요");
+    if (!continueOf && works.some(w => w.title === title.trim())) throw new Error("이미 있는 제목이에요. 다음 화로 붙이려면 ‘이어 붙일 작품’에서 골라 주세요");
     for (const [i, p] of named.entries()) if (p.photo) await upload(draft.id, `p${i}`, p.photo);
     setDraft(await (await call(`/drafts/${draft.id}/generate`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dialogue, title, genre: "로맨틱 코미디", notes, rename, continue_of: continueOf || undefined,
+      body: JSON.stringify({ dialogue, title: title.trim(), genre: "로맨틱 코미디", notes, rename, continue_of: continueOf || undefined,
         people: named.map(p => ({ name: p.name.trim(), description: p.description, role: p.role })) }),
     })).json());
   }, "만들기를 시작하지 못했어요");
@@ -358,7 +364,7 @@ export default function TestComic() {
           <label htmlFor="comic-notes">메모 · 선택</label>
           <textarea id="comic-notes" rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
           <p className={styles.fine}>시트 보관함에 같은 이름의 인물이 있으면 그 시트를 그대로 써요(그림체가 다르면 외모 사양만 가져와 새로 그려요).</p>
-          <button onClick={generate} disabled={busy || !transcript || !people.some(p => p.name.trim())}>{busy ? "시작 중…" : "장면 나누고 시트 준비하기"}</button>
+          <button onClick={generate} disabled={busy || !transcript || !people.some(p => p.name.trim()) || (!continueOf && !title.trim())}>{busy ? "시작 중…" : "장면 나누고 시트 준비하기"}</button>
         </section> : null}
 
         {showWork ? <section className={styles.panel}>
