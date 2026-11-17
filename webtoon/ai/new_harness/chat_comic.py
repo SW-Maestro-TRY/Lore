@@ -88,7 +88,7 @@ def extract(run_dir: Path) -> None:
             cleaned.append(line)
     if not cleaned:
         raise ValueError("캡처에서 대화를 읽지 못했습니다")
-    speakers = list(dict.fromkeys(x["speaker"] for x in cleaned if x["speaker"]))
+    speakers = list(dict.fromkeys(x["speaker"] for x in cleaned if not is_narrator(x["speaker"])))
     _write(run_dir / "transcript.json", {"dialogue": cleaned, "characters": speakers})
 
 
@@ -102,9 +102,39 @@ _NARRATION_END = re.compile(r"(다|듯|듯이|처럼|며|고|채|데|게|도)[.�
 _NARRATION_SUBJECT = re.compile(r"(그녀|그는|그의|그가|[가-힣]{2,}(은|는|의|가|이) [가-힣]+(했|었|였|았|다))")
 
 
+# 화자가 아니라 서술 칸에 붙는 이름 — 인물로 세지 않고, 대사 검사도 하지 않는다.
+NARRATOR_NAMES = {"", "서술", "나레이션", "내레이션", "지문", "해설", "narration", "narrator"}
+
+
+def is_narrator(name: str) -> bool:
+    return str(name or "").strip().lower() in NARRATOR_NAMES
+
+
+# 캡처 글은 화면 폭에서 줄이 꺾여 들어온다. 문장 끝 표시 없이 끝난 줄은 다음 줄에 이어 붙여 한 문장으로 본다.
+_LINE_DONE = re.compile(r"([.!?。…~”\"’'」)\]]|[ㄱ-ㅎ]|[.]{2,})$")
+
+
+def _unwrap(text: str) -> list[str]:
+    out, buf = [], ""
+    for raw in str(text).splitlines():
+        line = raw.strip()
+        if not line:
+            if buf:
+                out.append(buf)
+            buf = ""
+            continue
+        buf = f"{buf} {line}" if buf else line
+        if _LINE_DONE.search(buf.strip("*").strip()):
+            out.append(buf)
+            buf = ""
+    if buf:
+        out.append(buf)
+    return out
+
+
 def speech_lines(text: str) -> list[str]:
     out = []
-    for raw in str(text).splitlines():
+    for raw in _unwrap(text):
         line = raw.strip().strip("*").strip()
         if len(line) < 2:
             continue
@@ -127,6 +157,8 @@ def missing_lines(messages: list[dict], acting: str) -> list[str]:
     have = _norm(acting)
     out = []
     for m in messages:
+        if is_narrator(m.get("speaker", "")):
+            continue
         for line in speech_lines(m.get("text", "")):
             head = re.split(r"\.{2,}|…|!{2,}|\?{2,}", line, maxsplit=1)[0]  # 대사 뒤에 붙은 지문은 떼고 본다
             key = _norm(head if len(_norm(head)) >= 2 else line)[:8]
@@ -224,6 +256,54 @@ def _write_scenes(dialogue: list[dict], ranges: list[tuple], title: str, cast: s
     return scenes, meta
 
 
+_QUOTE = re.compile(r"[“\"]([^”\"]+)[”\"]")
+
+
+def soften(run_dir: Path, page: int) -> bool:
+    """안전 검사에 걸린 장(page = 장면 page-1)의 그림 묘사만 순하게 고쳐 쓴다. 대사(“…”)는 한 글자도 안 바꾼다.
+
+    처음 고칠 때 원래 장면을 scenes.orig.json 에 남긴다. 대사가 하나라도 빠지면 쓰지 않고 False.
+    """
+    path = run_dir / "scenes.json"
+    data = _read(path)
+    scenes = data.get("scenes") or []
+    if not 2 <= page <= len(scenes) + 1:
+        return False
+    scene = scenes[page - 2]
+    keep = [q.strip() for q in _QUOTE.findall(str(scene.get("acting") or "")) if q.strip()]
+    prompt = (
+        "아래는 세로 웹툰 한 장의 장면 글이다. 이 글로 그림을 그리려 했더니 이미지 모델의 안전 검사(성적 표현)에 걸렸다. "
+        "전체 이용가 로맨틱 코미디 웹툰에 그대로 실릴 그림이 되도록 where·what·acting·look·ends 를 고쳐 써라.\n"
+        "- acting 안의 대사(“…” 안의 글)는 한 글자도 바꾸지 말고, 순서와 말하는 사람도 그대로 둔다.\n"
+        "- 장면의 감정(설렘·장난·당황·다정함)과 흐름은 살리고, 그것을 표정·눈빛·거리·자세·소품·효과음으로 보여 준다.\n"
+        "- 몸이 닿는 동작은 길에서 남이 봐도 자연스러운 가벼운 스킨십으로 바꾼다.\n"
+        "- 고친 글은 보이는 것만 긍정형으로 적는다. 빼는 것을 이름으로 다시 적지 않는다.\n"
+        "JSON 객체 {\"where\":\"…\",\"what\":\"…\",\"acting\":\"…\",\"look\":\"…\",\"ends\":\"…\"}만 돌려준다.\n\n"
+        + json.dumps({k: scene.get(k, "") for k in ("where", "what", "acting", "look", "ends")}, ensure_ascii=False, indent=1)
+    )
+    for _ in range(2):
+        text, meta = llm.Call("SCENE")(prompt, temperature=0.3, max_tokens=4000)
+        new = _json(text)
+        acting = str(new.get("acting") or "")
+        if all(q in acting for q in keep):
+            break
+    else:
+        return False
+    orig = run_dir / "scenes.orig.json"
+    if not orig.exists():
+        _write(orig, data)
+    look = str(new.get("look") or "").replace(BUBBLE_RULE, "").strip()
+    scene.update({"where": str(new.get("where") or scene.get("where") or "").strip(),
+                  "what": str(new.get("what") or scene.get("what") or "").strip(),
+                  "acting": acting.strip(),
+                  "look": (look + " " if look else "") + BUBBLE_RULE,
+                  "ends": str(new.get("ends") or scene.get("ends") or "").strip(),
+                  "softened": int(scene.get("softened") or 0) + 1})
+    _write(path, data)
+    _write(run_dir / f"soften-meta-{page:02d}.json", meta)
+    return True
+
+
 def _people(draft: dict) -> list[dict]:
     """인물 목록 — [{name, description, role}] (role: main=주인공급, cast=조연). 옛 칸(name·co_name)도 받는다."""
     raw = draft.get("people")
@@ -235,7 +315,7 @@ def _people(draft: dict) -> list[dict]:
         if not isinstance(p, dict):
             continue
         nm = str(p.get("name") or "").strip()
-        if not nm or nm in seen:
+        if not nm or nm in seen or is_narrator(nm):
             continue
         seen.add(nm)
         out.append({"name": nm, "description": str(p.get("description") or "").strip()[:2000],

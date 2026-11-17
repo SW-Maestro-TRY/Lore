@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import styles from "./test-comic.module.css";
 
 export type Work = {
-  id: string; title: string; createdAt: string; phase: string;
+  id: string; title: string; createdAt: string; phase: string; held?: string[];
   episodes: { n: number; number: number; subtitle: string; pages: number; cover: boolean; stitched: boolean }[];
 };
-type Entry = { workId: string; n: number; number: number; subtitle: string; pages: number; stitched: boolean };
+type Entry = { workId: string; n: number; number: number; subtitle: string; pages: number; stitched: boolean; held: string[] };
 type View = { kind: "shelf" } | { kind: "series"; title: string } | { kind: "read"; title: string; index: number };
 
 /** 만든 웹툰 둘러보기 — 같은 제목은 한 작품(이어 붙인 다음 화 포함). 그림은 비밀번호 머리글로 받아 blob 으로 보여 준다. */
@@ -20,7 +20,7 @@ export default function Library({ works, load }: { works: Work[]; load: (workId:
     for (const w of works) for (const e of w.episodes) {
       if (!e.cover) continue;  // 표지도 아직 없는 화는 빼 둔다
       const list = map.get(w.title) || [];
-      list.push({ workId: w.id, n: e.n, number: e.number, subtitle: e.subtitle, pages: e.pages, stitched: e.stitched });
+      list.push({ workId: w.id, n: e.n, number: e.number, subtitle: e.subtitle, pages: e.pages, stitched: e.stitched, held: w.held || [] });
       map.set(w.title, list);
     }
     return Array.from(map, ([title, list]) => ({ title, list: list.sort((a, b) => a.number - b.number) }))
@@ -80,7 +80,8 @@ export default function Library({ works, load }: { works: Work[]; load: (workId:
     <h2>{s.title} {e.number}화</h2>
     <div className={styles.comic}>{Array.from({ length: e.pages }, (_, i) => {
       const src = art[`${e.workId}|${e.n}|page${String(i + 1).padStart(2, "0")}.png`];
-      return src ? <img key={i} src={src} alt={`${e.number}화 ${i + 1}장`} /> : <div key={i} className={styles.wait}>{i + 1}장</div>;
+      if (src) return <img key={i} src={src} alt={`${e.number}화 ${i + 1}장`} />;
+      return <div key={i} className={styles.wait}>{e.held.includes(`${e.n}/${i + 1}`) ? `${i + 1}장 · 안전 검사에 걸려 보류됨 — 만들기 탭에서 메모를 붙여 다시 그릴 수 있어요` : `${i + 1}장`}</div>;
     })}</div>
     <div className={styles.row}>
       {view.index > 0 ? <button className={styles.ghost} onClick={() => setView({ ...view, index: view.index - 1 })}>← {s.list[view.index - 1].number}화</button> : null}
