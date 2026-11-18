@@ -142,13 +142,16 @@ def apply_book(existing: list, rows: list, more: dict, renamed: dict | None = No
     return kept + [{**r, "new": True} for r in rows]
 
 
-def merge_progress(rows: list[dict], changes: list, removed: list, ids=None) -> list[dict]:
+def merge_progress(rows: list[dict], changes: list, removed: list, ids=None, ep=None) -> list[dict]:
     """실험의 progress_update 합치기 — 지울 것을 빼고, key 가 있으면 덮어쓰고, 없으면 새 P 번호.
 
     새 P 번호는 남은 P 개수 다음 번호에서 시작하되 **이미 쓰는 번호는 건너뛴다.** 예전에는 P001·P002 중 P001
     을 지우고 새 상태를 넣으면 새 상태가 P002 가 되어 남아 있던 P002 를 덮어썼다(2026-11-18 재현).
     ids(고정 항목 id 목록)를 주면, 고정 항목에 없는 L 번호는 새 상태로 받는다 — 없는 항목을 덮어쓰는 줄이 생기지 않게."""
     removed = {str(k) for k in removed or []}
+    # 「앎」은 지우지 않는다 — 한 번 안 것은 모르는 상태로 돌아가지 않는다(prompt/lore/progress_prompt).
+    known = {str(r.get("key")) for r in rows if r.get("kind") == "앎"}
+    removed -= known
     merged = {r["key"]: r for r in rows if r.get("key") and r["key"] not in removed}
     given = {k for k in merged if k.startswith("P")}       # 입력에 있던 P 번호만 고칠 수 있다(옮긴 줄의 새 번호는 아님)
     ids = None if ids is None else {str(i) for i in ids}
@@ -181,14 +184,51 @@ def merge_progress(rows: list[dict], changes: list, removed: list, ids=None) -> 
         key = moved.get(key, key)
         if not ((key in given and key in merged) or (key and is_entry(key)) or (ids is None and key in merged)):
             key = fresh()
-        merged[key] = {"key": key, "title": str(c.get("title") or "").strip(), "text": str(c["text"]).strip()}
+        if key in known and str(c.get("kind") or "앎").strip() != "앎":
+            key = fresh()                  # 「앎」 줄을 다른 종류로 덮어쓰지 않는다 — 새 줄로 받는다
+        before = merged.get(key) or {}
+        kind = str(c.get("kind") or before.get("kind") or "").strip()
+        row = {"key": key, "title": str(c.get("title") or "").strip(), "text": str(c["text"]).strip()}
+        if kind in KINDS:
+            row["kind"] = kind
+        if ep is not None:
+            row["ep"] = ep
+        was = list(before.get("was") or [])
+        if kind == "관계" and before.get("text") and before["text"] != row["text"]:
+            # 관계는 지금 사이만 남기면 「왜 이렇게 됐는지」가 사라져 재회 때 처음으로 돌아간다. 바뀌기 전을 셋까지 남긴다.
+            was = (was + [f"{before.get('ep') or '?'}화까지: {before['text']}"])[-3:]
+        if was:
+            row["was"] = was
+        merged[key] = row
     return list(merged.values())
 
 
+# 진행 상태의 종류(prompt/lore/progress_prompt). 사건 기록은 진행 상태와 같은 목록에 kind 「사건」으로 둔다 —
+# 서버가 진행 상태 목록을 그대로 다음 화로 넘기므로 저장할 자리를 따로 만들지 않아도 된다.
+KINDS = ("지금", "몸", "관계", "앎", "미해결")
+EVENT = "사건"
+KEEP = ("kind", "ep", "was")
+
+
+def is_event(row) -> bool:
+    return isinstance(row, dict) and str(row.get("kind") or "") == EVENT
+
+
 def progress_rows(progress) -> list[dict]:
-    return [{"key": str(p.get("key") or p.get("id") or ""), "title": str(p.get("title") or ""),
-             "text": str(p.get("text") or "")}
-            for p in progress or [] if isinstance(p, dict) and str(p.get("text") or "").strip()]
+    """진행 상태 줄(사건 기록은 뺀다). 종류 · 출처 화 · 바뀌기 전 상태가 있으면 그대로 둔다."""
+    out = []
+    for p in progress or []:
+        if not isinstance(p, dict) or not str(p.get("text") or "").strip() or is_event(p):
+            continue
+        row = {"key": str(p.get("key") or p.get("id") or ""), "title": str(p.get("title") or ""),
+               "text": str(p.get("text") or "")}
+        row.update({k: p[k] for k in KEEP if p.get(k) not in (None, "", [])})
+        out.append(row)
+    return out
+
+
+def event_rows(progress) -> list[dict]:
+    return [p for p in progress or [] if is_event(p) and str(p.get("text") or "").strip()]
 
 
 def extract(source: str, out_dir: Path, lang: str = "ko", existing: list | None = None) -> tuple[list[dict], dict[str, str], dict[str, dict]]:
@@ -198,12 +238,28 @@ def extract(source: str, out_dir: Path, lang: str = "ko", existing: list | None 
     return book_entries(got, existing)
 
 
-def update_progress(rows: list[dict], new_text: str, out_dir: Path, lang: str = "ko", entries=None) -> tuple[list, list, list]:
+def update_progress(rows: list[dict], new_text: str, out_dir: Path, lang: str = "ko", entries=None, ep=None) -> tuple[list, list, list]:
     got = _call(progress_prompt(rows, new_text, lang, entries), out_dir, "LORE_PROGRESS")
     changes = got.get("entries", []) if isinstance(got.get("entries"), list) else []
     removed = got.get("remove", []) if isinstance(got.get("remove"), list) else []
     ids = None if entries is None else [e.get("id") for e in entries if isinstance(e, dict) and e.get("id")]
-    return merge_progress(rows, changes, removed, ids), changes, removed
+    kept_known = {str(r.get("key")) for r in rows if r.get("kind") == "앎"}
+    return merge_progress(rows, changes, removed, ids, ep), changes, [k for k in removed if str(k) not in kept_known]
+
+
+def events_prompt(new_text: str, lang: str = "ko") -> str:
+    return _prompt("lore/events_prompt", lang) + new_text + "\n"
+
+
+def extract_events(new_text: str, out_dir: Path, lang: str = "ko", ep=None) -> dict | None:
+    """이 화의 사건 기록 한 줄(진행 상태 목록에 kind 「사건」으로 붙는다). 뽑은 것이 없으면 None."""
+    got = _call(events_prompt(new_text, lang), out_dir, "LORE_EVENTS")
+    raw = got.get("events") if isinstance(got.get("events"), list) else []
+    lines = [x.strip() for x in raw if isinstance(x, str) and x.strip()]
+    if not lines:
+        return None
+    n = ep if ep is not None else 0
+    return {"key": f"E{n:03d}", "kind": EVENT, "ep": ep, "title": f"{n}화", "text": "\n".join(lines)}
 
 
 def main():

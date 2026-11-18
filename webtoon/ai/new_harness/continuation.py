@@ -339,17 +339,33 @@ def stage_digest(packet_path, out_path, dry_run, lang="ko"):
     if not kept:
         kept = world_seed(packet["source_dir"])
     rows = X.progress_rows(previous.get("progress"))
+    events = X.event_rows(previous.get("progress"))
+    ep = packet.get("episode_number")
     text = episode_text(packet)
     R.write_text(out_dir / "lore_book_prompt.txt", X.book_prompt(text, lang, kept))
     R.write_text(out_dir / "lore_progress_prompt.txt", X.progress_prompt(rows, text, lang, kept))
+    try:
+        R.write_text(out_dir / "lore_events_prompt.txt", X.events_prompt(text, lang))
+    except BaseException as exc:                                       # noqa: BLE001 — 템플릿이 없어도 정리는 한다
+        print(f"[정리] 사건 기록 프롬프트를 만들지 못했습니다: {exc}", file=__import__("sys").stderr)
     if dry_run:
         return None
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    with ThreadPoolExecutor(max_workers=3) as pool:
         added = pool.submit(X.extract, text, out_dir, lang, kept)
-        progress = pool.submit(X.update_progress, rows, text, out_dir, lang, kept)
+        progress = pool.submit(X.update_progress, rows, text, out_dir, lang, kept, ep)
+        happened = pool.submit(X.extract_events, text, out_dir, lang, ep)
         (rows_new, more, renamed), (merged, changes, removed) = added.result(), progress.result()
-    result = {"entries": X.apply_book(kept, rows_new, more, renamed), "progress": merged,
-              "progress_changes": changes, "progress_removed": removed}
+        try:
+            event = happened.result()
+        except BaseException as exc:                                   # noqa: BLE001 — SystemExit 포함
+            # 사건 기록이 실패해도 고정 설정 · 진행 상태 정리는 살린다. 이 화의 기록만 빠진다.
+            import sys
+            print(f"[정리] 사건 기록을 뽑지 못했습니다: {exc}", file=sys.stderr)
+            event = None
+    # 같은 화를 다시 정리하면 그 화의 기록을 바꾼다.
+    events = [e for e in events if not event or e.get("key") != event["key"]] + ([event] if event else [])
+    result = {"entries": X.apply_book(kept, rows_new, more, renamed), "progress": merged + events,
+              "progress_changes": changes, "progress_removed": removed, "event": event}
     R.write_json(out_path, result)
     return result

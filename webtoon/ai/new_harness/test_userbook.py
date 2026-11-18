@@ -96,6 +96,44 @@ class UserbookTest(unittest.TestCase):
   book={'confirmed':True,'entries':[{'id':'R000','title':'세계','content':'밤에는 통행금지','always':True,'keys':[]}],
         'progress':[{'key':'R000','title':'세계','text':'통행금지가 해제됐다'}]}
   self.assertIn('→ 지금: 통행금지가 해제됐다',userbook.block({'lorebook':book},'',continuation=True))
+ def test_progress_kinds_keep_knowledge_and_relation_history(self):
+  rows=[{'key':'P001','kind':'앎','title':'정체','text':'수아는 민호의 정체를 안다','ep':3},
+        {'key':'P002','kind':'관계','title':'수아와 민호','text':'서로 경계한다','ep':2}]
+  merged=lore_extract.merge_progress(rows,[{'key':'P002','kind':'관계','title':'수아와 민호','text':'서로 믿는다'},
+                                           {'key':'','kind':'몸','title':'부상','text':'민호가 왼팔을 다쳤다'}],['P001'],ids=[],ep=5)
+  by={r['key']:r for r in merged}
+  self.assertIn('P001',by)                                    # 앎은 remove 해도 남는다
+  self.assertEqual(by['P002']['text'],'서로 믿는다');self.assertEqual(by['P002']['was'],['2화까지: 서로 경계한다'])
+  self.assertEqual(by['P003']['ep'],5);self.assertEqual(by['P003']['kind'],'몸')
+  self.assertNotIn('was',by['P003'])
+  text=userbook.progress_text(merged)
+  self.assertIn('[관계] 수아와 민호: 서로 믿는다 (5화)',text);self.assertIn('· 2화까지: 서로 경계한다',text)
+ def test_old_progress_without_kinds_reads_the_same(self):
+  rows=[{'key':'P001','title':'위치','text':'다리 앞'}]
+  self.assertEqual(userbook.progress_text(rows),'- 위치: 다리 앞')
+  self.assertEqual(lore_extract.progress_rows(rows),rows)
+ def test_event_log_recent_and_matching_older(self):
+  entries=[{'id':'L0001','title':'한도윤','kind':'person','keys':['한도윤'],'content':'옛 동료'},
+           {'id':'L0002','title':'등대','kind':'place','keys':['등대'],'content':'바닷가'}]
+  events=[{'key':f'E{n:03d}','kind':'사건','ep':n,'title':f'{n}화','text':t} for n,t in
+          [(1,'세린이 도윤과 편의점에서 헤어졌다'),(2,'세린이 등대에 숨었다'),(3,'비가 왔다'),(4,'식량이 떨어졌다'),(5,'세린이 다리를 건넜다'),(6,'밤이 됐다')]]
+  book={'confirmed':True,'entries':entries,'progress':[{'key':'P001','title':'위치','text':'다리 위'},*events]}
+  text=userbook.block({'lorebook':book},'도윤이 돌아온다',continuation=True)
+  self.assertIn('1화: 세린이 도윤과 편의점에서 헤어졌다',text)  # 이번 글의 인물이 나오는 옛 기록
+  self.assertNotIn('2화: 세린이 등대에 숨었다',text);self.assertNotIn('3화: 비가 왔다',text)
+  for n in (4,5,6): self.assertIn(f'{n}화:',text)                 # 최근 세 화는 늘
+  self.assertLess(text.index('1화:'),text.index('4화:'))
+  self.assertNotIn('편의점에서 헤어졌다',userbook.progress_text(userbook.progress_parts(book)[1]))
+ def test_event_recent_counts_episodes_and_knowledge_is_not_overwritten(self):
+  ev=[{'key':f'E{n:03d}','kind':'사건','ep':n,'title':f'{n}화','text':f'{n}화 일'} for n in (1,2,6)]
+  text=userbook.block({'lorebook':{'confirmed':True,'entries':[],'progress':ev}},'',continuation=True)
+  self.assertIn('6화:',text);self.assertNotIn('1화:',text);self.assertNotIn('2화:',text)
+  rows=[{'key':'L0001','kind':'앎','title':'정체','text':'수아는 안다'}]
+  merged=lore_extract.merge_progress(rows,[{'key':'L0001','kind':'몸','title':'부상','text':'팔을 다쳤다'}],['L0001'],ids=['L0001'])
+  self.assertEqual(sorted(r['text'] for r in merged),['수아는 안다','팔을 다쳤다'])
+ def test_event_rows_never_reach_the_progress_model(self):
+  rows=lore_extract.progress_rows([{'key':'E001','kind':'사건','ep':1,'title':'1화','text':'일'},{'key':'P001','title':'위치','text':'집'}])
+  self.assertEqual([r['key'] for r in rows],['P001'])
  def test_rules_always_entries_ranked_and_progress_overrides(self):
   book={'confirmed':True,'entries':[{'id':'L0001','title':'열쇠','content':'밤에만 빛난다','keys':['열쇠']},
         {'id':'L0002','title':'문','content':'열쇠로 열린다','keys':['문','열쇠']},{'id':'L0003','title':'바다','content':'멀다','keys':['바다']},

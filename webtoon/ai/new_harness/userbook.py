@@ -54,12 +54,17 @@ def select_all(entries, budget=BUDGET):
     return out
 
 
+EVENT = "사건"          # lore_extract.EVENT 와 같다 — 진행 상태 목록 안의 사건 기록 줄
+RECENT = 3              # 사건 기록 — 최근 몇 화는 늘 넣는다
+EVENT_BUDGET = 8000     # 그 전 화의 사건 기록은 이번 글에 걸린 것만 이만큼까지
+
+
 def progress_parts(book):
-    """(덮어쓰기 {고정 항목 id: 지금 상태}, 새 상태 목록)."""
+    """(덮어쓰기 {고정 항목 id: 지금 상태}, 새 상태 목록). 사건 기록 줄은 뺀다(event_lines)."""
     ids = {str(e.get("id")) for e in book.get("entries", []) if isinstance(e, dict) and e.get("id")}
     over, new = {}, []
     for p in book.get("progress") or []:
-        if not isinstance(p, dict) or not str(p.get("text") or "").strip():
+        if not isinstance(p, dict) or not str(p.get("text") or "").strip() or p.get("kind") == EVENT:
             continue
         key = str(p.get("key") or "")
         if key in ids:
@@ -70,7 +75,42 @@ def progress_parts(book):
 
 
 def progress_text(rows):
-    return "\n".join(f"- {p.get('title', '')}: {p.get('text', '')}" for p in rows)
+    def one(p):
+        kind = f"[{p['kind']}] " if p.get("kind") else ""
+        since = f" ({p['ep']}화)" if p.get("ep") not in (None, "") else ""
+        was = "".join(f"\n  · {w}" for w in p.get("was") or [])
+        return f"- {kind}{p.get('title', '')}: {p.get('text', '')}{since}{was}"
+    return "\n".join(one(p) for p in rows)
+
+
+def event_lines(book, query, entries):
+    """사건 기록 — 최근 RECENT 화는 전부, 그 전 화는 이번 글에 나온 인물 · 장소 · 물건이 그 기록에도 나올 때만.
+
+    진행 상태는 「지금」만 남겨서, 몇 화 전에 헤어진 인물이 돌아오면 그 사이 일을 찾을 곳이 없었다(2026-11-18).
+    고르는 기준은 고정 설정 항목의 이름 · 키워드다 — 항목 고르기(select)와 같은 낱말 일치, 벡터 검색은 아니다."""
+    rows = [p for p in book.get("progress") or [] if isinstance(p, dict) and p.get("kind") == EVENT
+            and str(p.get("text") or "").strip()]
+    if not rows:
+        return []
+    rows.sort(key=lambda p: int(p.get("ep") or 0))
+    last = int(rows[-1].get("ep") or 0)
+    # 최근 RECENT 「화」 — 기록이 빠진 화가 있어도 화 번호로 센다(마지막 기록 세 건이 아니다).
+    recent = [p for p in rows if int(p.get("ep") or 0) > last - RECENT]
+    older = [p for p in rows if int(p.get("ep") or 0) <= last - RECENT]
+    hit = [e for e in select(entries, query, budget=10**9) if e.get("kind") != "world"]
+    words = set()
+    for e in hit:
+        words |= {str(k).strip() for k in [*(e.get("keys") or []), e.get("title") or ""] if len(str(k).strip()) >= 2}
+        if e.get("kind") == "person" and lore_short(e.get("title")):
+            words.add(lore_short(e.get("title")))
+    chosen, used = [], 0
+    for p in reversed(older):                 # 가까운 화부터 예산까지
+        if any(w in str(p["text"]) for w in words) and used + len(p["text"]) <= EVENT_BUDGET:
+            chosen.append(p)
+            used += len(p["text"])
+    picked = sorted(chosen, key=lambda p: int(p.get("ep") or 0)) + recent
+    return ["지난 사건 기록 (이미 일어난 일 — 다시 시작하지 않는다. 인물이 다시 나오면 그 사이의 일을 이어 받는다)"] + [
+        f"- {p.get('ep')}화: " + str(p["text"]).replace("\n", "\n  ") for p in picked]
 
 
 def block(char, context="", stage="story", continuation=False, everything=False, budget=BUDGET):
@@ -101,6 +141,7 @@ def block(char, context="", stage="story", continuation=False, everything=False,
             + (f"\n  → 지금: {over[str(e.get('id'))]}" if str(e.get("id") or "") in over else "") for e in rules]
     over, new = progress_parts(book)
     query = str(context or "")
+    lines += event_lines(book, query + "\n" + progress_text(new), keyed)
     if new:
         lines += ["진행 상태 (연재하면서 바뀐 지금 상태)", progress_text(new)]
         query += "\n" + progress_text(new)

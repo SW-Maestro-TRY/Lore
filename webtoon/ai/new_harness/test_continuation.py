@@ -113,6 +113,28 @@ class LegacyEpisodeTest(unittest.TestCase):
             self.assertIn(head,text); self.assertIn("등급 재측정을 받는다",text)
         self.assertFalse(out.exists())
 
+    def test_digest_adds_one_event_row_per_episode_and_replaces_on_redo(self):
+        import lore_extract as X
+        from unittest.mock import patch
+        out=Path(self.temp.name)/"digest3"/"result.json"; out.parent.mkdir()
+        prev={"entries":[],"progress":[{"key":"E001","kind":"사건","ep":1,"title":"1화","text":"옛 기록"},
+                                       {"key":"P001","kind":"지금","title":"위치","text":"집"}]}
+        def fake(prompt,out_dir,stage):
+            return {"LORE_BOOK":{"entries":[]},"LORE_PROGRESS":{"entries":[{"key":"P001","kind":"지금","title":"위치","text":"학교"}],"remove":[]},
+                    "LORE_EVENTS":{"events":["하린이 학교로 갔다","서우와 약속했다"]}}[stage]
+        for redo in ("하린이 학교로 갔다", "하린이 학교로 갔다"):
+            packet=Path(self.temp.name)/"packet3.json"
+            packet.write_text(json.dumps({"source_dir":str(self.src),"episode_number":2,"source_scenes":["장면"],"previous":prev},ensure_ascii=False))
+            with patch.object(X,"_call",side_effect=fake):
+                got=C.stage_digest(packet,out,False)
+            prev={"entries":got["entries"],"progress":got["progress"]}
+        events=[r for r in got["progress"] if r.get("kind")=="사건"]
+        self.assertEqual([(r["key"],r["ep"]) for r in events],[("E001",1),("E002",2)])
+        self.assertEqual(events[1]["text"],"하린이 학교로 갔다\n서우와 약속했다")
+        now=next(r for r in got["progress"] if r["key"]=="P001")
+        self.assertEqual((now["text"],now["ep"]),("학교",2))
+        self.assertIn("사건 기록",(out.parent/"lore_events_prompt.txt").read_text())
+
     def test_carried_entries_without_ids_get_ids_so_digest_adds_to_them(self):
         # 1화에 붙인 설정집 항목은 번호가 없다 — 번호를 달아야 같은 대상이 새 항목으로 또 생기지 않는다
         packet=Path(self.temp.name)/"packet.json"; out=Path(self.temp.name)/"digest2"/"result.json"; out.parent.mkdir()
