@@ -73,6 +73,9 @@ CHECK_PROMPT = """너는 연재 웹툰의 설정 감수자다. [이전 회차 �
 
 찾지 않을 것 — 새 사실 추가, 이야기 속에서 설명된 변화, 인물의 거짓말이 장면에서 거짓말로 드러나는 것,
 문장 품질 · 재미.
+다음 화로 넘기는 수수께끼 — 이번 화에서 처음 드러난 변화가 의문 자체로 그려지면(다른 인물이 놀라거나 이상하게
+여기거나, 그 순간에서 화가 끝남) 모순이 아니라 다음 화에서 풀릴 미해결이다. 이런 것은 minor 로만 적고 what 앞에
+「미해결:」을 붙인다. 이전 회차의 사실을 아무도 알아채지 못한 채 덮어쓰면 모순이다.
 
 severity
 - critical: 독자가 바로 알아챌 큰 모순(죽은 인물이 설명 없이 나옴, 핵심 관계 · 정체가 뒤집힘, 큰 사건의 경위가 바뀜)
@@ -332,12 +335,20 @@ def main() -> int:
         put(out / "state.json", state)
     else:
         state = setup(env, args, out)
+    if args.resume and str(state.get("status", "")).startswith("stopped"):
+        # 세 번 실패로 멈춘 것을 사람이 보고 다시 돌린 것 — 그 화의 재시도 횟수를 새로 센다.
+        for x in state.get("incidents") or []:
+            if x["n"] == state["done"] + 1:
+                x["before_resume"] = True
     failed = out / "runs" / f"ep{state['done'] + 1:02d}"
     if args.resume and failed.exists():
         # 예전 판(멈추기만 하던 것)으로 멈춘 화 — 실패본으로 옮기고 회차 정하기부터 다시 한다.
         n = state["done"] + 1
         tries = sum(1 for x in state.setdefault("incidents", []) if x["n"] == n)
         kept = failed.with_name(f"{failed.name}.failed{tries + 1}")
+        while kept.exists():
+            tries += 1
+            kept = failed.with_name(f"{failed.name}.failed{tries + 1}")
         failed.rename(kept)
         if str(n) in state.get("issues", {}) and len(state["plan"]) >= n:
             state["incidents"].append({"n": n, "try": tries + 1, "request": state["plan"][n - 1]["request"],
@@ -369,7 +380,7 @@ def main() -> int:
         if bad:
             # 정리(설정집 갱신)를 하지 않는다 — 틀린 화가 기억으로 굳지 않게. 실패본은 따로 두고, 회차 정하기부터
             # 다시 한다(같은 요청으로 다시 쓰면 같은 실수가 난다). 두 번 다시 해도 걸리면 멈춘다(강의 p.85 「최대 3회 … 사람에게」).
-            tries = sum(1 for x in state.setdefault("incidents", []) if x["n"] == n)
+            tries = sum(1 for x in state.setdefault("incidents", []) if x["n"] == n and not x.get("before_resume"))
             run_dir = out / "runs" / f"ep{n:02d}"
             kept = run_dir.with_name(f"{run_dir.name}.failed{tries + 1}")
             if kept.exists():
