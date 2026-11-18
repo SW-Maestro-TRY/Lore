@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -321,7 +322,16 @@ def main() -> int:
         state = setup(env, args, out)
     failed = out / "runs" / f"ep{state['done'] + 1:02d}"
     if args.resume and failed.exists():
-        failed.rename(failed.with_name(failed.name + time.strftime(".failed-%H%M%S")))
+        # 예전 판(멈추기만 하던 것)으로 멈춘 화 — 실패본으로 옮기고 회차 정하기부터 다시 한다.
+        n = state["done"] + 1
+        tries = sum(1 for x in state.setdefault("incidents", []) if x["n"] == n)
+        kept = failed.with_name(f"{failed.name}.failed{tries + 1}")
+        failed.rename(kept)
+        if str(n) in state.get("issues", {}) and len(state["plan"]) >= n:
+            state["incidents"].append({"n": n, "try": tries + 1, "request": state["plan"][n - 1]["request"],
+                                       "issues": [i for i in state["issues"][str(n)] if i.get("severity") == "critical"],
+                                       "kept": kept.name, "at": time.strftime("%H:%M:%S")})
+        state["plan"] = state["plan"][:n - 1]
     state["status"] = "running"
     if not args.resume or "pace" not in state:
         state["pace"] = [int(x) for x in args.pace.split("-")]
@@ -345,11 +355,25 @@ def main() -> int:
         levels = [i.get("severity") for i in found]
         bad = [i for i in found if i.get("severity") in stop_levels]
         if bad:
-            # 정리(설정집 갱신)를 하지 않고 멈춘다 — 틀린 화가 기억으로 굳지 않게. 다시 돌리면 이 화는 따로 옮겨 두고 새로 만든다.
-            state["status"] = f"stopped_at_{n}"
+            # 정리(설정집 갱신)를 하지 않는다 — 틀린 화가 기억으로 굳지 않게. 실패본은 따로 두고, 회차 정하기부터
+            # 다시 한다(같은 요청으로 다시 쓰면 같은 실수가 난다). 두 번 다시 해도 걸리면 멈춘다(강의 p.85 「최대 3회 … 사람에게」).
+            tries = sum(1 for x in state.setdefault("incidents", []) if x["n"] == n)
+            run_dir = out / "runs" / f"ep{n:02d}"
+            kept = run_dir.with_name(f"{run_dir.name}.failed{tries + 1}")
+            if kept.exists():
+                shutil.rmtree(kept)
+            run_dir.rename(kept)
+            state["incidents"].append({"n": n, "try": tries + 1, "request": item["request"], "issues": bad,
+                                       "kept": kept.name, "at": time.strftime("%H:%M:%S")})
+            state["plan"] = state["plan"][:n - 1]
+            if tries + 1 >= 3:
+                state["status"] = f"stopped_at_{n}"
+                put(out / "state.json", state)
+                log(f"[멈춤] {n}화 세 번 모두 검사 {levels}: {bad[0].get('what')}")
+                return 2
             put(out / "state.json", state)
-            log(f"[멈춤] {n}화 검사 {levels}: {bad[0].get('what')}")
-            return 2
+            log(f"[다시] {n}화 검사 {levels} — {tries + 1}번째 실패본 {kept.name}, 회차 정하기부터 다시: {bad[0].get('what')}")
+            continue
         log(f"[{n}화] 정리(설정집 · 진행 상태 갱신)")
         state["book"] = digest(env, out, n, state["book"])
         state["done"] = n
