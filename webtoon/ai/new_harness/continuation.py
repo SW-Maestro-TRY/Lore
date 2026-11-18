@@ -323,19 +323,31 @@ def stage_digest(packet_path, out_path, dry_run, lang="ko"):
     kept = [e for e in previous.get("entries") or [] if isinstance(e, dict)]
     # 1화에 붙인 설정집 항목은 번호가 없다. 번호가 없으면 정리가 이미 있는 대상에 새 사실을 덧붙이지 못하고
     # 같은 대상을 새 항목으로 또 만들었다(2026-10-26, 마법학교 설정집). 여기서 K 번호를 단다.
-    kept = [e if str(e.get("id") or "").strip() else {**e, "id": f"K{i + 1:03d}"} for i, e in enumerate(kept)]
+    # 진행 상태에만 남은 번호(지운 항목의 K003 등)도 피한다 — 새 항목이 그 상태를 물려받지 않게.
+    used = {str(e.get("id") or "").strip() for e in kept} | {
+        str(p.get("key") or p.get("id") or "").strip() for p in previous.get("progress") or [] if isinstance(p, dict)}
+    numbered = []
+    for i, e in enumerate(kept):
+        if not str(e.get("id") or "").strip():
+            k = i + 1
+            while f"K{k:03d}" in used:       # 번호가 있는 항목과 겹치지 않게(K002 회중시계 뒤의 번호 없는 나침반)
+                k += 1
+            used.add(f"K{k:03d}")
+            e = {**e, "id": f"K{k:03d}"}
+        numbered.append(e)
+    kept = numbered
     if not kept:
         kept = world_seed(packet["source_dir"])
     rows = X.progress_rows(previous.get("progress"))
     text = episode_text(packet)
     R.write_text(out_dir / "lore_book_prompt.txt", X.book_prompt(text, lang, kept))
-    R.write_text(out_dir / "lore_progress_prompt.txt", X.progress_prompt(rows, text, lang))
+    R.write_text(out_dir / "lore_progress_prompt.txt", X.progress_prompt(rows, text, lang, kept))
     if dry_run:
         return None
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=2) as pool:
         added = pool.submit(X.extract, text, out_dir, lang, kept)
-        progress = pool.submit(X.update_progress, rows, text, out_dir, lang)
+        progress = pool.submit(X.update_progress, rows, text, out_dir, lang, kept)
         (rows_new, more, renamed), (merged, changes, removed) = added.result(), progress.result()
     result = {"entries": X.apply_book(kept, rows_new, more, renamed), "progress": merged,
               "progress_changes": changes, "progress_removed": removed}

@@ -7,6 +7,15 @@ orv-experiment 의 2층 로어북과 같은 방식으로 넣는다(`world_block`
   [진행 상태] 로 매번 전부 들어간다. 진행 상태의 글도 항목 고르기에 쓴다.
 """
 
+import re
+
+
+def lore_short(title) -> str:
+    """lore_extract.short_name 과 같다(이 파일은 llm 을 부르는 lore_extract 를 import 하지 않는다)."""
+    t = re.sub(r"\s+", "", str(title or ""))
+    return t[1:] if len(t) == 3 and all("가" <= ch <= "힣" for ch in t) else ""
+
+
 # 실험의 lorebook_condition.budget_chars 와 같다.
 BUDGET = 30000
 
@@ -19,6 +28,11 @@ def select(entries, query, budget=BUDGET):
     for i, e in enumerate(entries):
         keys = {str(k).strip() for k in [*(e.get("keys") or []), e.get("title") or ""] if str(k).strip()}
         hits = sum(k.casefold() in folded for k in keys)
+        short = lore_short(e.get("title")) if e.get("kind") == "person" else ""
+        if short and short not in keys and re.search(r"(?<![가-힣])" + re.escape(short), folded):
+            # 성을 뺀 부름도 그 인물이다(한도윤 → 도윤) — 본문은 성 없이 부르는 일이 많다(2026-11-18).
+            # 앞에 다른 글자가 붙은 「김도윤」은 그 인물이 아니다.
+            hits += 1
         if hits:
             ranked.append((-hits, i, e))
     chosen, used = set(), 0
@@ -79,7 +93,12 @@ def block(char, context="", stage="story", continuation=False, everything=False,
     rules = [e for e in active if e.get("always")]
     keyed = [e for e in active if not e.get("always")]
     if rules:
-        lines += ["항상 참고하는 설정 (이야기의 세계)"] + [f"- {e.get('title', '')}: {e.get('content', '')}" for e in rules]
+        over, _ = progress_parts(book)
+        # 항상 켜짐 항목도 연재 중에 상태가 바뀐다(세계의 통행금지가 풀렸다 등). 예전에는 그 상태를 저장해 놓고
+        # 다음 화에 안 보여 줬다 — 키워드 항목처럼 「→ 지금」으로 붙인다(2026-11-18).
+        lines += ["항상 참고하는 설정 (이야기의 세계)"] + [
+            f"- {e.get('title', '')}: {e.get('content', '')}"
+            + (f"\n  → 지금: {over[str(e.get('id'))]}" if str(e.get("id") or "") in over else "") for e in rules]
     over, new = progress_parts(book)
     query = str(context or "")
     if new:

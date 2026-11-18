@@ -57,8 +57,17 @@ def book_prompt(source: str, lang: str = "ko", known=None) -> str:
     return _prompt("lore/book_prompt", lang) + source + "\n" + known_block(known)
 
 
-def progress_prompt(rows: list[dict], new_text: str, lang: str = "ko") -> str:
-    return (_prompt("lore/progress_prompt", lang) + json.dumps({"entries": rows}, ensure_ascii=False, indent=1)
+def fixed_block(entries) -> str:
+    """진행 상태를 고칠 때 대조할 고정 로어북. 프롬프트가 「고정 로어북과 어긋나면 반영하지 말라」고 하는데
+    예전에는 고정 항목을 안 넘겨서 대조할 수가 없었다(2026-11-18 장기 연재 점검)."""
+    rows = [f"- {e.get('id', '')} {e.get('title', '')}: {e.get('content') or e.get('text') or ''}"
+            for e in entries or [] if isinstance(e, dict) and e.get("enabled", True) and str(e.get("title") or "").strip()]
+    return "[고정 로어북 — key 가 이 id 면 그 항목의 지금 상태다]\n" + ("\n".join(rows) if rows else "(없음)") + "\n\n"
+
+
+def progress_prompt(rows: list[dict], new_text: str, lang: str = "ko", entries=None) -> str:
+    return (_prompt("lore/progress_prompt", lang).replace("[현재 진행 상태]\n", fixed_block(entries) + "[현재 진행 상태]\n")
+            + json.dumps({"entries": rows}, ensure_ascii=False, indent=1)
             + "\n\n[새 화 본문]\n" + new_text + "\n")
 
 
@@ -68,6 +77,7 @@ GENERIC_WORLD = "세계 배경"
 
 def _norm(title) -> str:
     return re.sub(r"\s+", "", str(title or "")).casefold()
+
 
 
 def book_entries(entries: list, existing: list | None = None) -> tuple[list[dict], dict[str, str], dict[str, dict]]:
@@ -132,18 +142,45 @@ def apply_book(existing: list, rows: list, more: dict, renamed: dict | None = No
     return kept + [{**r, "new": True} for r in rows]
 
 
-def merge_progress(rows: list[dict], changes: list, removed: list) -> list[dict]:
-    """실험의 progress_update 합치기 그대로 — 지울 것을 빼고, key 가 있으면 덮어쓰고, 없으면 새 P 번호."""
+def merge_progress(rows: list[dict], changes: list, removed: list, ids=None) -> list[dict]:
+    """실험의 progress_update 합치기 — 지울 것을 빼고, key 가 있으면 덮어쓰고, 없으면 새 P 번호.
+
+    새 P 번호는 남은 P 개수 다음 번호에서 시작하되 **이미 쓰는 번호는 건너뛴다.** 예전에는 P001·P002 중 P001
+    을 지우고 새 상태를 넣으면 새 상태가 P002 가 되어 남아 있던 P002 를 덮어썼다(2026-11-18 재현).
+    ids(고정 항목 id 목록)를 주면, 고정 항목에 없는 L 번호는 새 상태로 받는다 — 없는 항목을 덮어쓰는 줄이 생기지 않게."""
     removed = {str(k) for k in removed or []}
     merged = {r["key"]: r for r in rows if r.get("key") and r["key"] not in removed}
+    given = {k for k in merged if k.startswith("P")}       # 입력에 있던 P 번호만 고칠 수 있다(옮긴 줄의 새 번호는 아님)
+    ids = None if ids is None else {str(i) for i in ids}
     n = sum(1 for k in merged if k.startswith("P"))
+
+    def fresh():
+        nonlocal n
+        n += 1
+        while f"P{n:03d}" in merged or ids is not None and f"P{n:03d}" in ids:
+            n += 1
+        return f"P{n:03d}"
+
+    def is_entry(key):
+        return key in ids if ids is not None else key.startswith("L")
+
+    moved: dict[str, str] = {}
+    if ids is not None:
+        # 고정 항목이 없어진 「→ 지금」 줄은 새 상태로 돌린다 — 나중에 같은 번호를 받은 다른 항목 밑에 붙지 않게.
+        for key in [k for k in merged if not k.startswith("P") and k not in ids]:
+            row = merged.pop(key)
+            moved[key] = fresh()
+            given.add(moved[key])          # 옛 번호(L0002)로 온 변경만 이 줄을 고친다 — 아래 key = moved.get(...)
+            merged[moved[key]] = {**row, "key": moved[key]}
     for c in changes or []:
         if not isinstance(c, dict) or not str(c.get("text") or "").strip():
             continue
         key = str(c.get("key") or "").strip()
-        if not key or key not in merged and not key.startswith("L"):
-            n += 1
-            key = f"P{n:03d}"
+        if key in moved.values() and key not in moved:
+            key = ""                       # 모델이 입력에 없던 새 번호(옮긴 줄의 번호)를 쓴 것 — 새 줄로 받는다
+        key = moved.get(key, key)
+        if not ((key in given and key in merged) or (key and is_entry(key)) or (ids is None and key in merged)):
+            key = fresh()
         merged[key] = {"key": key, "title": str(c.get("title") or "").strip(), "text": str(c["text"]).strip()}
     return list(merged.values())
 
@@ -161,11 +198,12 @@ def extract(source: str, out_dir: Path, lang: str = "ko", existing: list | None 
     return book_entries(got, existing)
 
 
-def update_progress(rows: list[dict], new_text: str, out_dir: Path, lang: str = "ko") -> tuple[list, list, list]:
-    got = _call(progress_prompt(rows, new_text, lang), out_dir, "LORE_PROGRESS")
+def update_progress(rows: list[dict], new_text: str, out_dir: Path, lang: str = "ko", entries=None) -> tuple[list, list, list]:
+    got = _call(progress_prompt(rows, new_text, lang, entries), out_dir, "LORE_PROGRESS")
     changes = got.get("entries", []) if isinstance(got.get("entries"), list) else []
     removed = got.get("remove", []) if isinstance(got.get("remove"), list) else []
-    return merge_progress(rows, changes, removed), changes, removed
+    ids = None if entries is None else [e.get("id") for e in entries if isinstance(e, dict) and e.get("id")]
+    return merge_progress(rows, changes, removed, ids), changes, removed
 
 
 def main():

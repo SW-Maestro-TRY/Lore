@@ -61,6 +61,41 @@ class UserbookTest(unittest.TestCase):
   rows=[{'key':'P001','title':'위치','text':'다리 앞'},{'key':'L0001','title':'열쇠','text':'민수가 갖고 있다'}]
   merged=lore_extract.merge_progress(rows,[{'key':'','title':'약속','text':'내일 만나기로 했다'},{'key':'L0001','title':'열쇠','text':'잃어버렸다'}],['P001'])
   self.assertEqual([(r['key'],r['text']) for r in merged],[('L0001','잃어버렸다'),('P001','내일 만나기로 했다')])  # 실험처럼 남은 P 개수 다음 번호
+ def test_progress_new_key_never_overwrites_a_kept_state(self):
+  rows=[{'key':'P001','title':'위치','text':'다리 앞'},{'key':'P002','title':'비밀','text':'수아는 정체를 모른다'}]
+  merged=lore_extract.merge_progress(rows,[{'key':'','title':'식량','text':'통조림 세 개'}],['P001'])
+  self.assertEqual({r['key']:r['text'] for r in merged},{'P002':'수아는 정체를 모른다','P003':'통조림 세 개'})
+ def test_progress_unknown_entry_key_becomes_new_state(self):
+  merged=lore_extract.merge_progress([],[{'key':'L9999','title':'?','text':'출처 없는 상태'},{'key':'L0001','title':'열쇠','text':'부서졌다'}],[],ids=['L0001'])
+  self.assertEqual([(r['key'],r['text']) for r in merged],[('P001','출처 없는 상태'),('L0001','부서졌다')])
+ def test_progress_prompt_carries_fixed_entries(self):
+  text=lore_extract.progress_prompt([],'새 화',entries=[{'id':'L0001','title':'열쇠','content':'밤에만 빛난다'}])
+  self.assertIn('L0001 열쇠: 밤에만 빛난다',text);self.assertLess(text.index('밤에만 빛난다'),text.index('[현재 진행 상태]'))
+ def test_person_found_by_given_name_in_search_only(self):
+  rows=[{'id':'L0001','title':'한도윤','kind':'person','keys':['한도윤'],'content':'세린의 옛 동료'}]
+  self.assertEqual(userbook.select(rows,'도윤과 다시 만난다'),rows)
+  self.assertEqual(userbook.select(rows,'김도윤이 왔다'),[])
+  self.assertEqual(userbook.select([{**rows[0],'kind':'place'}],'도윤과 다시 만난다'),[])
+  new,more,_=lore_extract.book_entries([{'title':'김도윤','type':'person','text':'다른 사람'}],rows)
+  self.assertEqual([r['title'] for r in new],['김도윤']);self.assertEqual(more,{})  # 정리 단계의 이름 합치기는 하지 않는다
+ def test_progress_keeps_entry_ids_and_retires_orphans(self):
+  rows=[{'key':'L0002','title':'열쇠','text':'부서짐'},{'key':'P001','title':'위치','text':'문 앞'}]
+  merged=lore_extract.merge_progress(rows,[{'key':'K001','title':'세계','text':'밤이 끝났다'}],[],ids=['K001'])
+  self.assertEqual({r['key']:r['text'] for r in merged},{'P001':'문 앞','P002':'부서짐','K001':'밤이 끝났다'})
+  merged=lore_extract.merge_progress(rows,[{'key':'L0002','title':'열쇠','text':'고쳤다'}],[],ids=['K001'])
+  self.assertNotIn('L0002',{r['key'] for r in merged})
+ def test_orphan_state_update_follows_its_new_key(self):
+  rows=[{'key':'L0002','title':'열쇠','text':'부서짐'}]
+  merged=lore_extract.merge_progress(rows,[{'key':'L0002','title':'열쇠','text':'수리됨'}],[],ids=['P001'])
+  self.assertEqual([(r['key'],r['text']) for r in merged],[('P002','수리됨')])
+ def test_model_cannot_claim_a_moved_key(self):
+  rows=[{'key':'L0002','title':'열쇠','text':'부서짐'}]
+  merged=lore_extract.merge_progress(rows,[{'key':'L0002','title':'열쇠','text':'수리됨'},{'key':'P001','title':'식량','text':'사흘치'}],[],ids=[])
+  self.assertEqual(sorted(r['text'] for r in merged),['사흘치','수리됨'])
+ def test_always_entry_shows_current_state(self):
+  book={'confirmed':True,'entries':[{'id':'R000','title':'세계','content':'밤에는 통행금지','always':True,'keys':[]}],
+        'progress':[{'key':'R000','title':'세계','text':'통행금지가 해제됐다'}]}
+  self.assertIn('→ 지금: 통행금지가 해제됐다',userbook.block({'lorebook':book},'',continuation=True))
  def test_rules_always_entries_ranked_and_progress_overrides(self):
   book={'confirmed':True,'entries':[{'id':'L0001','title':'열쇠','content':'밤에만 빛난다','keys':['열쇠']},
         {'id':'L0002','title':'문','content':'열쇠로 열린다','keys':['문','열쇠']},{'id':'L0003','title':'바다','content':'멀다','keys':['바다']},
