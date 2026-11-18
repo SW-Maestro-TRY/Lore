@@ -49,6 +49,7 @@ import json
 import os
 import re
 import shutil
+import time
 from pathlib import Path
 
 import imagegen
@@ -187,6 +188,54 @@ def sheet_stem(name: str) -> str:
     return re.sub(r"[\\/]", "_", (name or "").strip())
 
 
+def outfit_sheet(run_dir: Path, name: str, wear_text: str, base: Path, style: str, log=print) -> Path:
+    """옷 상태(채팅 만화)별 시트 — 같은 얼굴·머리·체형·문신에 옷만 바꾼 시트를 한 번 그려 두고 같은 옷 장면마다 쓴다.
+
+    시트 그림을 참조로 붙이면 글로 「옷은 옷차림대로」를 몇 번 적어도 시트의 옷(후드 등)이 그대로 나왔다
+    (2026-11-19, 스웨터·병원복 장면의 토끼 후드). 그래서 그 장면에 붙이는 시트 자체를 옷에 맞춘다.
+    여러 장을 동시에 그리면 같은 옷을 여러 프로세스가 찾는다 — 잠금 파일로 한 번만 그리고 나머지는 기다린다.
+    못 그리면 원래 시트를 돌려준다."""
+    import hashlib
+    import os as _os
+    wear_text = (wear_text or "").strip()
+    if not wear_text or not base.exists():
+        return base
+    folder = run_dir / "sheets" / "outfits"
+    folder.mkdir(parents=True, exist_ok=True)
+    key = hashlib.sha1(f"{name}|{wear_text}|{style}".encode("utf-8")).hexdigest()[:12]
+    out = folder / f"{sheet_stem(name)}-{key}.png"
+    if out.exists():
+        return out
+    lock = folder / f"{out.name}.lock"
+    try:
+        fd = _os.open(lock, _os.O_CREAT | _os.O_EXCL | _os.O_WRONLY)
+        _os.close(fd)
+    except FileExistsError:
+        for _ in range(120):            # 다른 프로세스가 그리는 중 — 최대 4분 기다린다
+            if out.exists():
+                return out
+            if not lock.exists():
+                break
+            time.sleep(2)
+        return out if out.exists() else base
+    try:
+        prompt = (imageprompt.load_style(style) + "\n\n"
+                  "Character reference sheet. Draw exactly the same person as in the attached reference sheet: identical face, "
+                  "eyes, eye shape, hair style and color, body type, skin, moles and tattoos in the same places. "
+                  f"Change ONLY the clothing. The person now wears: {wear_text}. "
+                  "Anything the reference wears that is not part of this clothing (hood, hat, animal ears, ribbons, jacket, accessories) "
+                  "is removed — the head shows the bare natural hair. Front full-body view and a face close-up side by side, "
+                  "plain white background. No text, no labels, no speech bubbles.")
+        (folder / f"{out.stem}.prompt.txt").write_text(prompt, encoding="utf-8")
+        log(f"[옷 시트] {name} · {wear_text[:40]} 그리는 중")
+        imagegen.paint("SHEET_IMAGE", prompt, out, refs=[base], kind=imagegen.SHEET_KIND)
+    except BaseException as exc:  # noqa: BLE001 — 못 그리면 원래 시트로
+        log(f"[옷 시트] {name} 실패 — 원래 시트로 그린다: {type(exc).__name__}: {str(exc)[:160]}")
+    finally:
+        lock.unlink(missing_ok=True)
+    return out if out.exists() else base
+
+
 def co_sheets_of(run_dir: Path, char: dict | None) -> list[tuple[dict, Path, dict | None]]:
     """함께 주인공인 사람마다 (그 사람, sheets/<이름>.png, 시트 사양). 그림이 없어도 자리는 돌려준다."""
     out = []
@@ -277,7 +326,24 @@ def sheet_plan(char: dict | None, scene: dict | None) -> tuple[list[int], int]:
     return who, min(CAST_SHEET_LIMIT, room - len(who))
 
 
-def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(), attached=None) -> str:
+# 옷·차림에 해당하는 고정 요소를 알아보는 낱말 — 장면에 옷 상태(wear)가 있으면 그 사람의 이런 요소는 빼고 넣는다.
+_CLOTHES_WORDS = ("후드", "리본", "프릴", "소매", "옷", "셔츠", "재킷", "자켓", "블라우스", "원피스", "드레스", "정장", "넥타이",
+                  "모자", "코트", "신발", "구두", "스커트", "치마", "바지", "잠옷", "카디건", "가디건", "스웨터", "니트", "단추",
+                  "레이스", "베일", "앞치마", "제복", "교복", "후디", "패딩", "양말", "스타킹", "hood", "dress", "suit", "shirt",
+                  "jacket", "coat", "skirt", "pajama", "sweater", "ribbon", "frill")
+
+
+def _without_clothes(spec: dict | None, name: str, wear: dict | None) -> dict | None:
+    """장면에 이 사람의 옷 상태가 적혀 있으면 시트 사양의 옷 요소를 뺀다(얼굴·머리·체형·문신만 남긴다).
+    시트의 옷이 「고정 요소(반드시 그대로)」로 여러 번 들어가 옷차림 지시를 이겼다(2026-11-19, 병원복·스웨터 장면의 토끼 후드)."""
+    if not spec or not wear or not str(wear.get(name) or "").strip():
+        return spec
+    keep = [d for d in (spec.get("design_details") or []) if not any(w in str(d).lower() for w in _CLOTHES_WORDS)]
+    props = [d for d in (spec.get("props") or []) if not any(w in str(d).lower() for w in _CLOTHES_WORDS)]
+    return {**spec, "design_details": keep, "props": props}
+
+
+def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(), attached=None, wear=None) -> str:
     """장면마다 **글자까지 같게** 들어가는 인물 고정 앵커.
 
     외모(시트)와 설명(사용자가 적은 원문)은 서로 다른 역할이다 — 시트가 있어도
@@ -293,7 +359,7 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
         card = charcard.short(charcard.for_story(char))
         desc = f"{card}. {desc}" if card and desc else (card or desc)
     if spec:
-        lines.append(imageprompt.sheet_line(spec))
+        lines.append(imageprompt.sheet_line(_without_clothes(spec, str((char or {}).get("name") or ""), wear)))
         if desc:
             lines.append(f"- 설명: {desc}")
     elif char:
@@ -308,7 +374,7 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
         one_card = charcard.short(charcard.for_story(one))
         one_desc = f"{one_card}. {one_desc}" if one_card and one_desc else (one_card or one_desc)
         if one_spec:
-            lines.append(imageprompt.sheet_line(one_spec))
+            lines.append(imageprompt.sheet_line(_without_clothes(one_spec, str(one.get("name") or ""), wear)))
             if one_desc:
                 lines.append(f"- 설명: {one_desc}")
         else:
@@ -325,8 +391,10 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
         on = [names[i] for i in (attached if attached is not None else range(len(names))) if i < len(names)]
         which = (f"첨부한 첫 그림이 {on[0]}의 시트다." if len(on) == 1
                  else f"첨부한 그림 가운데 앞의 {len(on)}장이 이 순서대로 {', '.join(on)}의 시트다.")
-        head = (f"주인공은 {len(names)}명이다 — {', '.join(names)}. {which} 시트가 붙은 주인공은 자기 시트를 그대로 따르고, 서로의 "
-                "얼굴·머리·옷차림을 섞거나 바꿔 그리지 않는다. 시트가 안 붙은 주인공이 이 장에 나오면 아래 설명대로 "
+        follow = ("얼굴·머리·체형·문신은 자기 시트를 그대로 따르고, 옷은 장면의 [옷차림]을 따른다. 서로의 얼굴·머리를"
+                  if wear else "자기 시트를 그대로 따르고, 서로의 얼굴·머리·옷차림을")
+        head = (f"주인공은 {len(names)}명이다 — {', '.join(names)}. {which} 시트가 붙은 주인공은 {follow} "
+                "섞거나 바꿔 그리지 않는다. 시트가 안 붙은 주인공이 이 장에 나오면 아래 설명대로 "
                 "그린다. 아래 인물은 이 화 내내 같은 사람으로 그린다. ")
     else:
         head = "주인공은 첨부한 시트를 그대로 따른다. 아래 인물은 이 화 내내 같은 사람으로 그린다. "
@@ -566,7 +634,13 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         here = {k: v for k, v in wear.items() if k in text_all} or wear
         lines += ["[옷차림 — 이 장면에서 인물이 지금 입고 있는 옷. 시트의 옷보다 먼저다]"]
         lines += [f"{k}: {v}" for k, v in here.items()]
-        lines += ["  시트는 얼굴·머리·체형·문신을 맞추는 데만 쓴다. 옷은 위에 적힌 대로 그리고, 시트의 옷을 그리지 않는다.", ""]
+        lines += ["  시트는 얼굴·머리·체형·문신을 맞추는 데만 쓴다. 옷은 위에 적힌 대로 그리고, 시트의 옷을 그리지 않는다. "
+                  "위 인물 절의 「고정 요소」「시트를 그대로 따른다」에 들어 있는 옷·겉옷·모자·후드·귀 달린 옷·신발도 "
+                  "이 장면에서는 이 옷차림으로 바뀐다 — 여기 적히지 않은 모자·후드는 그리지 않는다.", ""]
+    always = [t for t in (scene.get("always") or []) if isinstance(t, str) and t.strip()]
+    if always:
+        # 인물 설명 한가운데 묻힌 규칙(손바닥 문신 없음 등)은 그림 모델이 놓쳤다(2026-11-19). 장면 글 옆에 따로 둔다.
+        lines += ["[늘 지킬 것 — 컷마다]"] + always + [""]
     look = (scene.get("look") or "").strip()
     if look and not user_text and look not in ("시트 그대로", "시트 그대로.", "없음", "없음."):
         # 시트와 달라진 겉모습(#147). 시트는 매 장 다시 붙어서, 여기 안 적으면
@@ -653,7 +727,8 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         scene_instr += ("\n\n첨부한 직전 그림이 바로 앞 장이다 — 인물·공간·"
                         "시간대·조명이 뚝 끊기지 않게 참고한다. 이야기가 어디서 "
                         "시작해 어디서 끝나는지는 위 두 지점이 정한다.")
-    people = "\n\n".join(b for b in (character_block(char, spec, cast, co, attached),
+    people = "\n\n".join(b for b in (character_block(char, spec, cast, co, attached,
+                                                     wear=scene.get("wear") if isinstance(scene.get("wear"), dict) else None),
                                      cast_sheet_block(list(cast_sheet_names)),
                                      fixed_block(fixed_names)) if b)
     return (text
@@ -909,7 +984,14 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         # 참조 순서: 주인공 시트 → 이 장면의 조연 시트 → 직전 장. 표지(n_==0)에는 조연 시트를 안 붙인다.
         who, room = sheet_plan(char, scenes[n_ - 1] if n_ > 0 else None)
         page_refs = [cast_sheets[nm] for nm in (cast_sheets_in_scene(cast_sheets, scenes[n_ - 1], room) if n_ > 0 else [])]
-        refs = sheet_refs(who) + page_refs + ([prev_img] if page_no > 1 and prev_img.exists() else [])
+        hero_refs = sheet_refs(who)
+        wear_now = (scenes[n_ - 1].get("wear") if n_ > 0 else None) or {}
+        if isinstance(wear_now, dict) and wear_now and not dry_run:
+            names_all = [str((char or {}).get("name") or "")] + [str(o.get("name") or "") for o, _p, _s in co]
+            hero_refs = [outfit_sheet(run_dir, names_all[i], str(wear_now.get(names_all[i]) or ""), hero_sheets[i], style, log)
+                         if i < len(names_all) and str(wear_now.get(names_all[i]) or "").strip() else hero_sheets[i]
+                         for i in who if i < len(hero_sheets) and hero_sheets[i].exists()]
+        refs = hero_refs + page_refs + ([prev_img] if page_no > 1 and prev_img.exists() else [])
         log(f"[{label}] 참조 {len(refs)}장 …")
         meta = None
         for attempt in (1, 2):

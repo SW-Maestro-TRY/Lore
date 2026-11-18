@@ -374,6 +374,7 @@ def prepare(run_dir: Path) -> None:
     # 앞 작품에 이어 붙이는 경우(서버가 draft 에 넣어 준다): 화 번호를 이어 세고, 앞 화가 끝난 장면에서 시작한다.
     start = int(draft.get("start_number") or 1)
     summary, prev_end = [], str(draft.get("prev_end") or "").strip()
+    always = [str(t).strip() for t in (draft.get("always") or []) if str(t).strip()][:6]   # 장마다 그림 옆에 붙일 규칙
     wear: dict[str, str] = dict(draft.get("prev_wear") or {})   # 옷 상태 — 장면마다 저장하고 안 바뀐 사람은 앞 장면 옷을 물려받는다
     for n, ep in enumerate(episodes, 1):
         ranges = ep["ranges"]
@@ -391,6 +392,7 @@ def prepare(run_dir: Path) -> None:
             got = s.get("wear") if isinstance(s.get("wear"), dict) else {}
             wear = {**wear, **{str(k).strip(): str(v).strip() for k, v in got.items() if str(k).strip() and str(v).strip()}}
             out.append({"n": i, "prev": prev, "where": str(s.get("where") or "").strip(), "wear": dict(wear),
+                        **({"always": always} if always else {}),
                         "what": str(s.get("what") or "").strip(), "acting": str(s.get("acting") or "").strip(),
                         "look": (look + " " if look else "") + BUBBLE_RULE,
                         "ends": str(s.get("ends") or "").strip(), "narration": [],
