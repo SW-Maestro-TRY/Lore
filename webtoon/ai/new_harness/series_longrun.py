@@ -39,6 +39,7 @@ HERE = Path(__file__).resolve().parent
 STEP_PROMPT = """너는 원작을 웹툰 연재로 옮기는 각색 작가다. 아래 [원작 — 아직 옮기지 않은 부분]의 맨 앞부터, 이번 {n}화에 옮길 만큼을 정한다.
 
 - 이번 화는 웹툰 한 화 분량(장면 4~6개)이다. 사건 하나가 시작되고, 그 화 안에서 상황이 한 번 바뀌는 데까지를 담는다.
+- 분량: 원작은 전체 {total}자이고 아직 {left}자가 남았다. 한 화에 보통 원작 {lo}~{hi}자를 담는다. 사건이 몰린 대목은 이보다 짧게, 사건 없이 대화 · 일상이 이어지는 대목은 이보다 길게 잡는다. 웹툰 한 화가 원작의 대사 몇 줄만 옮기는 일이 없게 한다.
 - 원작의 순서를 지킨다. 원작의 중요한 사건을 건너뛰지 않는다. 사건 없이 대화만 길게 이어지는 대목은 한 화에 묶어도 된다.
 - 원작에 같은 장면의 다른 버전이 섞여 있으면 하나만 따른다.
 - [지금까지의 연재]는 이미 웹툰으로 나온 것이다. 연재가 원작과 조금 달라졌으면 연재 쪽에서 자연스럽게 이어지게 정한다.
@@ -155,7 +156,7 @@ own.own_scenes(run_dir, char, False)
 """
 
 
-WINDOW = 25000
+WINDOW = 30000
 
 
 def find_quote(window: str, quote: str) -> int:
@@ -181,7 +182,9 @@ def plan_step(env: dict, out: Path, n: int, state: dict, source: str, model: str
     sys.path.insert(0, str(HERE))
     import userbook
     st = userbook.progress_text([p for p in state["book"]["progress"] if p.get("kind") != "사건"]) or "(아직 없음)"
-    prompt = STEP_PROMPT.format(n=n, state=st, prev=prev, total=len(source), start=start, tail=tail, window=window)
+    lo, hi = state.get("pace", [7000, 10000])
+    prompt = STEP_PROMPT.format(n=n, state=st, prev=prev, total=len(source), start=start, tail=tail, window=window,
+                                left=len(source) - start, lo=lo, hi=hi)
     note = ""
     for attempt in range(3):
         got = ask(env, prompt + note, model, out / "steps" / f"ep{n:02d}-{attempt}")
@@ -291,6 +294,7 @@ def main() -> int:
     p.add_argument("--genre", default="")
     p.add_argument("--title", default="")
     p.add_argument("--max-episodes", type=int, default=60)
+    p.add_argument("--pace", default="7000-10000", help="한 화에 담을 원작 글자 수의 보통 범위 — 회차 정하기에 알려 준다")
     p.add_argument("--out", required=True)
     p.add_argument("--resume", action="store_true")
     p.add_argument("--reuse-setup", help="다른 실행 폴더의 설정집(book0)을 그대로 쓴다 — 전/후 비교용")
@@ -319,6 +323,8 @@ def main() -> int:
     if args.resume and failed.exists():
         failed.rename(failed.with_name(failed.name + time.strftime(".failed-%H%M%S")))
     state["status"] = "running"
+    if not args.resume or "pace" not in state:
+        state["pace"] = [int(x) for x in args.pace.split("-")]
     stop_levels = {"critical": {"critical"}, "major": {"critical", "major"}, "none": set()}[args.stop_on]
     source = Path(state["source"]).read_text(encoding="utf-8")
     while True:
