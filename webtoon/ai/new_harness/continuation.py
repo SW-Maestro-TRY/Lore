@@ -275,12 +275,23 @@ def cast_looks(source_dir):
     return rows
 
 
+def last_look(source_dir):
+    """이 화 마지막 장면의 「겉모습·소지품·동행」(장면 단계가 시트와 달라진 것만 적은 칸). 다음 화가 이 모습에서
+    시작해야 한다 — 예전에는 담을 자리가 없어 다음 화 첫 장면이 시트 차림으로 돌아갔다(#1034)."""
+    data = read(Path(source_dir) / "scenes.json") if (Path(source_dir) / "scenes.json").is_file() else {}
+    scenes = [s for s in (data or {}).get("scenes", []) if isinstance(s, dict)]
+    look = str((scenes[-1] if scenes else {}).get("look") or "").strip()
+    return "" if look in ("", "시트 그대로", "시트 그대로.", "없음", "없음.") else look
+
+
 def episode_text(packet):
     n = packet.get("episode_number") or 1
     body, scenes = digest_source(packet)
     looks = cast_looks(packet["source_dir"])
+    end = last_look(packet["source_dir"])
     return "\n".join([f"[{n}화 본문]", body, "", f"[{n}화 확정 장면]", *scenes,
-                      *(["", f"[{n}화 등장인물의 겉모습 — 그림이 이 모습으로 그려졌다]", *looks] if looks else [])])
+                      *(["", f"[{n}화 등장인물의 겉모습 — 그림이 이 모습으로 그려졌다]", *looks] if looks else []),
+                      *(["", f"[{n}화 마지막 장면의 겉모습 — 캐릭터 시트와 달라진 것]", end] if end else [])])
 
 
 def world_seed(source):

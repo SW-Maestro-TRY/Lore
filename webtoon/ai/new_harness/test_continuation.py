@@ -113,6 +113,22 @@ class LegacyEpisodeTest(unittest.TestCase):
             self.assertIn(head,text); self.assertIn("등급 재측정을 받는다",text)
         self.assertFalse(out.exists())
 
+    def test_digest_carries_the_last_scene_look(self):
+        import json as J
+        scenes=J.loads((self.src/"scenes.json").read_text()) if (self.src/"scenes.json").exists() else {"scenes":[]}
+        scenes["scenes"]=(scenes.get("scenes") or [{"n":1,"what":"장면"}])+[{"n":99,"what":"끝","look":"하린은 외투를 벗어 셔츠 차림이다."}]
+        (self.src/"scenes.json").write_text(J.dumps(scenes,ensure_ascii=False))
+        out=Path(self.temp.name)/"digest4"/"result.json"; out.parent.mkdir()
+        packet=Path(self.temp.name)/"packet4.json"
+        packet.write_text(J.dumps({"source_dir":str(self.src),"episode_number":3,"source_scenes":["장면"],"previous":None},ensure_ascii=False))
+        C.stage_digest(packet,out,True)
+        text=(out.parent/"lore_progress_prompt.txt").read_text()
+        self.assertIn("[3화 마지막 장면의 겉모습 — 캐릭터 시트와 달라진 것]\n하린은 외투를 벗어 셔츠 차림이다.",text)
+        self.assertIn("겉모습: 인물이 지금 그림에 보이는 모습",text)
+        scenes["scenes"][-1]["look"]="시트 그대로"
+        (self.src/"scenes.json").write_text(J.dumps(scenes,ensure_ascii=False))
+        self.assertEqual(C.last_look(self.src),"")
+
     def test_digest_adds_one_event_row_per_episode_and_replaces_on_redo(self):
         import lore_extract as X
         from unittest.mock import patch

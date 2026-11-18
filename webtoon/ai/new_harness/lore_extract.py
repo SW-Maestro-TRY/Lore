@@ -205,7 +205,7 @@ def merge_progress(rows: list[dict], changes: list, removed: list, ids=None, ep=
 
 # 진행 상태의 종류(prompt/lore/progress_prompt). 사건 기록은 진행 상태와 같은 목록에 kind 「사건」으로 둔다 —
 # 서버가 진행 상태 목록을 그대로 다음 화로 넘기므로 저장할 자리를 따로 만들지 않아도 된다.
-KINDS = ("지금", "몸", "관계", "앎", "미해결")
+KINDS = ("지금", "겉모습", "몸", "관계", "앎", "미해결")
 EVENT = "사건"
 KEEP = ("kind", "ep", "was")
 
