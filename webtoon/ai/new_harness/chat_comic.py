@@ -185,7 +185,10 @@ SCENE_RULES = (
     "- 「두 번 뽀뽀한다」「여러 번 때린다」처럼 같은 동작을 되풀이하는 말은 「연달아 ~한다」로 쓴다 — "
     "그림 모델이 횟수만큼 같은 인물을 한 컷에 여러 번 그린다.\n"
     "- 우스운 순간은 그렇게 보이게(과장된 표정, 개그 톤) 적는다.\n"
-    "- look: 이 장면의 옷차림·소품, 앞 장면과 이어져야 하는 것(손에 든 것, 묻은 것, 놓인 것)과 아직 나오면 안 되는 것.\n"
+    "- wear: 이 장면에 나오는 인물마다 지금 입고 있는 옷(이름 → 옷차림). 시트의 옷은 기본값일 뿐이고 그림은 이 칸을 따른다. "
+    "대화에 옷이 나오거나 갈아입으면 그 장면부터 바꿔 적고, 안 나오면 앞 장면 옷을 그대로 적는다. "
+    "첫 장면은 대화와 상황(장소, 직전에 한 일)에서 정하고, 그래도 알 수 없을 때만 등장인물 설명·사용자 메모의 기본 옷을 쓴다.\n"
+    "- look: 이 장면의 소품, 앞 장면과 이어져야 하는 것(손에 든 것, 묻은 것, 놓인 것)과 아직 나오면 안 되는 것.\n"
     "- where: 장소와 시간, 빛. what: 이 장면에서 일어나는 일 한 문장. ends: 장면이 끝날 때 화면에 남는 상태 한 문장.\n"
 )
 
@@ -236,7 +239,7 @@ def _check_plan(plan: dict, total: int) -> list[dict]:
 
 
 def _write_scenes(dialogue: list[dict], ranges: list[tuple], title: str, cast: str, prev_end: str,
-                  fix: dict | None = None) -> tuple[list[dict], dict]:
+                  fix: dict | None = None, wear: dict | None = None) -> tuple[list[dict], dict]:
     blocks = []
     for i, (a, b) in enumerate(ranges, 1):
         extra = ""
@@ -245,10 +248,12 @@ def _write_scenes(dialogue: list[dict], ranges: list[tuple], title: str, cast: s
         blocks.append(f"### 장면 {i} — 메시지 [{a}]~[{b}]{extra}\n{_numbered(dialogue[a - 1:b], a)}")
     prompt = (
         "아래 대화를 장면별로 세로 웹툰 장면 글로 옮겨라.\n" + SCENE_RULES +
-        "JSON 객체 {\"scenes\":[{\"n\":1,\"where\":\"…\",\"what\":\"…\",\"acting\":\"…\",\"look\":\"…\",\"ends\":\"…\"}]}만 돌려준다. "
+        "JSON 객체 {\"scenes\":[{\"n\":1,\"where\":\"…\",\"what\":\"…\",\"acting\":\"…\",\"wear\":{\"인물 이름\":\"옷차림\"},\"look\":\"…\",\"ends\":\"…\"}]}만 돌려준다. "
         f"장면은 {len(ranges)}개, 순서대로.\n\n"
         f"[제목] {title}\n[등장인물]\n{cast}\n"
-        + (f"[앞 화가 끝난 상태] {prev_end}\n" if prev_end else "") + "\n" + "\n\n".join(blocks)
+        + (f"[앞 화가 끝난 상태] {prev_end}\n" if prev_end else "")
+        + (f"[앞 화가 끝날 때 옷차림] " + " / ".join(f"{k}: {v}" for k, v in wear.items()) + "\n" if wear else "")
+        + "\n" + "\n\n".join(blocks)
     )
     text, meta = llm.Call("SCENE")(prompt, temperature=0.3, max_tokens=32000)
     data = _json(text)
@@ -369,20 +374,23 @@ def prepare(run_dir: Path) -> None:
     # 앞 작품에 이어 붙이는 경우(서버가 draft 에 넣어 준다): 화 번호를 이어 세고, 앞 화가 끝난 장면에서 시작한다.
     start = int(draft.get("start_number") or 1)
     summary, prev_end = [], str(draft.get("prev_end") or "").strip()
+    wear: dict[str, str] = dict(draft.get("prev_wear") or {})   # 옷 상태 — 장면마다 저장하고 안 바뀐 사람은 앞 장면 옷을 물려받는다
     for n, ep in enumerate(episodes, 1):
         ranges = ep["ranges"]
-        scenes, meta = _write_scenes(dialogue, ranges, title, cast, prev_end)
+        scenes, meta = _write_scenes(dialogue, ranges, title, cast, prev_end, wear=wear)
         lost = {i: v for i, ((a, b), s) in enumerate(zip(ranges, scenes), 1)
                 if (v := missing_lines(dialogue[a - 1:b], str(s.get("acting") or "")))}
         if lost:  # 빠진 대사가 있으면 그 화를 한 번 다시 쓰고, 빠졌던 장면만 바꾼다.
-            again, _ = _write_scenes(dialogue, ranges, title, cast, prev_end, fix=lost)
+            again, _ = _write_scenes(dialogue, ranges, title, cast, prev_end, fix=lost, wear=wear)
             scenes = [again[i - 1] if i in lost else s for i, s in enumerate(scenes, 1)]
             lost = {i: v for i, ((a, b), s) in enumerate(zip(ranges, scenes), 1)
                     if (v := missing_lines(dialogue[a - 1:b], str(s.get("acting") or "")))}
         out, prev = [], prev_end
         for i, ((a, b), s) in enumerate(zip(ranges, scenes), 1):
             look = str(s.get("look") or "").strip()
-            out.append({"n": i, "prev": prev, "where": str(s.get("where") or "").strip(),
+            got = s.get("wear") if isinstance(s.get("wear"), dict) else {}
+            wear = {**wear, **{str(k).strip(): str(v).strip() for k, v in got.items() if str(k).strip() and str(v).strip()}}
+            out.append({"n": i, "prev": prev, "where": str(s.get("where") or "").strip(), "wear": dict(wear),
                         "what": str(s.get("what") or "").strip(), "acting": str(s.get("acting") or "").strip(),
                         "look": (look + " " if look else "") + BUBBLE_RULE,
                         "ends": str(s.get("ends") or "").strip(), "narration": [],

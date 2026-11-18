@@ -555,7 +555,18 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
     if scene.get("where") and not user_text:
         lines += [f"[장소와 상황] {scene['where']}", ""]
     if scene.get("acting") and not user_text:
-        lines += [f"[인물의 행동과 표정] {scene['acting']}", ""]
+        lines += [f"[인물의 행동과 표정] {scene['acting']}", "",
+                  "  말풍선 꼬리는 그 대사를 말한 인물의 입을 향한다 — 위 글에서 대사 앞에 적힌 이름이 말한 사람이다. "
+                  "듣는 사람 쪽으로 꼬리를 두지 않는다. 말한 사람이 컷 밖에 있으면 꼬리를 그 사람이 있는 쪽 컷 가장자리로 둔다.", ""]
+    wear = scene.get("wear") if isinstance(scene.get("wear"), dict) else {}
+    if wear:
+        # 옷 상태(채팅 만화, 2026-11-19). 장면 글 단계가 장면마다 저장하고 안 바뀐 사람은 앞 장면 옷을 물려받는다.
+        # 이 칸이 없으면 그림 모델이 시트의 옷으로 되돌아갔다(병원복을 입은 장면에서 시트의 토끼 후드가 나옴).
+        text_all = " ".join(str(scene.get(k) or "") for k in ("where", "what", "acting", "user_text"))
+        here = {k: v for k, v in wear.items() if k in text_all} or wear
+        lines += ["[옷차림 — 이 장면에서 인물이 지금 입고 있는 옷. 시트의 옷보다 먼저다]"]
+        lines += [f"{k}: {v}" for k, v in here.items()]
+        lines += ["  시트는 얼굴·머리·체형·문신을 맞추는 데만 쓴다. 옷은 위에 적힌 대로 그리고, 시트의 옷을 그리지 않는다.", ""]
     look = (scene.get("look") or "").strip()
     if look and not user_text and look not in ("시트 그대로", "시트 그대로.", "없음", "없음."):
         # 시트와 달라진 겉모습(#147). 시트는 매 장 다시 붙어서, 여기 안 적으면
