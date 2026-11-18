@@ -343,6 +343,15 @@ def _without_clothes(spec: dict | None, name: str, wear: dict | None) -> dict | 
     return {**spec, "design_details": keep, "props": props}
 
 
+def _desc_without_clothes(desc: str, name: str, wear: dict | None) -> str:
+    """옷 상태가 있는 장면에서는 인물 설명 가운데 「평소 즐겨 입는 옷」 문장을 그림 프롬프트에서만 뺀다.
+    설명의 「토끼 귀 달린 분홍 후드를 즐겨 입는다」가 스웨터 장면에 후드를 다시 불렀다(2026-11-19, 로판 시험)."""
+    if not desc or not wear or not str(wear.get(name) or "").strip():
+        return desc
+    parts = re.split(r"(?<=[.。])\s+", desc)
+    return " ".join(x for x in parts if not ("입" in x and any(w in x.lower() for w in _CLOTHES_WORDS)))
+
+
 def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(), attached=None, wear=None) -> str:
     """장면마다 **글자까지 같게** 들어가는 인물 고정 앵커.
 
@@ -360,6 +369,7 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
         desc = f"{card}. {desc}" if card and desc else (card or desc)
     if spec:
         lines.append(imageprompt.sheet_line(_without_clothes(spec, str((char or {}).get("name") or ""), wear)))
+        desc = _desc_without_clothes(desc, str((char or {}).get("name") or ""), wear)
         if desc:
             lines.append(f"- 설명: {desc}")
     elif char:
@@ -373,6 +383,7 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
         one_desc = (one.get("description") or "").strip()
         one_card = charcard.short(charcard.for_story(one))
         one_desc = f"{one_card}. {one_desc}" if one_card and one_desc else (one_card or one_desc)
+        one_desc = _desc_without_clothes(one_desc, str(one.get("name") or ""), wear)
         if one_spec:
             lines.append(imageprompt.sheet_line(_without_clothes(one_spec, str(one.get("name") or ""), wear)))
             if one_desc:

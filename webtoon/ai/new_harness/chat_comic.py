@@ -332,6 +332,14 @@ def _people(draft: dict) -> list[dict]:
     return out[:12]
 
 
+def _same_wear(a: str, b: str) -> bool:
+    """같은 옷을 말만 바꿔 적은 것인가 — 낱말(조사 뗀 것) 겹침으로 본다."""
+    def words(t):
+        return {re.sub(r"(와|과|에|을|를|은|는|이|가|의|도)$", "", w) for w in re.findall(r"[가-힣A-Za-z]+", t)} - {"", "입은", "입고", "차림"}
+    x, y = words(a), words(b)
+    return bool(x and y) and len(x & y) / len(x | y) >= 0.6
+
+
 def prepare(run_dir: Path) -> None:
     """확인한 대화(draft.json) → 화마다 run 폴더(scenes.json·input.json…)."""
     import run as R
@@ -390,7 +398,10 @@ def prepare(run_dir: Path) -> None:
         for i, ((a, b), s) in enumerate(zip(ranges, scenes), 1):
             look = str(s.get("look") or "").strip()
             got = s.get("wear") if isinstance(s.get("wear"), dict) else {}
-            wear = {**wear, **{str(k).strip(): str(v).strip() for k, v in got.items() if str(k).strip() and str(v).strip()}}
+            for k, v in got.items():
+                k, v = str(k).strip(), str(v).strip()
+                if k and v and not _same_wear(wear.get(k, ""), v):   # 말만 바꾼 같은 옷은 앞 글자 그대로 — 옷 시트를 또 그리지 않게
+                    wear[k] = v
             out.append({"n": i, "prev": prev, "where": str(s.get("where") or "").strip(), "wear": dict(wear),
                         **({"always": always} if always else {}),
                         "what": str(s.get("what") or "").strip(), "acting": str(s.get("acting") or "").strip(),
