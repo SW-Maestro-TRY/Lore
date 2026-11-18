@@ -1003,6 +1003,17 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                          if i < len(names_all) and str(wear_now.get(names_all[i]) or "").strip() else hero_sheets[i]
                          for i in who if i < len(hero_sheets) and hero_sheets[i].exists()]
         refs = hero_refs + page_refs + ([prev_img] if page_no > 1 and prev_img.exists() else [])
+        layout = Path(llm.env("NH_LAYOUT_REF") or "")
+        if str(layout) not in ("", ".") and layout.is_file():
+            # 예전 판 구도로 다시 그리기(채팅 만화, 2026-11-19): 예전 판은 컷·구도가 좋고 새 시트는 얼굴이 좋을 때.
+            # 직전 장은 빼고 붙인다 — 직전 장이 예전 얼굴이면 그 얼굴이 옮아온다. 이어짐은 밑그림과 장면 글이 맡는다
+            refs = [r for r in refs if r != prev_img] + [layout]
+            prompt += ("\n\n## 예전 판 밑그림 — 구도만 이 그림 그대로 (마지막에 첨부한 흐린 흑백 그림)\n"
+                       "마지막에 첨부한 흐린 흑백 그림은 이 장을 예전에 그린 판을 뭉개 놓은 밑그림이다. 여기서는 컷 나누기와 컷 크기, 카메라 각도, "
+                       "인물의 자리·자세·포즈·몸이 닿은 모양, 말풍선 자리만 가져온다. 이 밑그림은 흐려서 얼굴·머리·옷이 보이지 않는다 — "
+                       "인물의 얼굴 생김새·앞머리·머리카락·눈매·옷·문신은 전부 앞에 붙인 캐릭터 시트와 옷차림 칸대로 새로 그린다. "
+                       "밑그림에 보이는 머리 윤곽(가르마·머리 길이·흐르는 방향)도 따르지 않는다 — 앞머리와 얼굴에 흘러내린 머리칼, 눈 모양은 시트 그대로다. "
+                       "색과 선도 밑그림이 아니라 시트의 그림체로 완성한다.")
         log(f"[{label}] 참조 {len(refs)}장 …")
         meta = None
         for attempt in (1, 2):
