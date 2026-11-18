@@ -144,12 +144,18 @@ def ask(env: dict, prompt: str, model: str, out: Path) -> dict:
 def harness(env: dict, out: Path, *args: str, code: str | None = None) -> None:
     """run.py 를 서버가 부르는 그대로 자식 프로세스로. 실패하면 멈춘다."""
     cmd = [sys.executable, "-c", code, *args] if code else [sys.executable, "run.py", *args]
-    with (out / "harness.log").open("a", encoding="utf-8") as f:
-        f.write(f"\n$ {' '.join(args) or 'own.run_own(sheet=False)'}\n")
-        f.flush()
-        r = subprocess.run(cmd, cwd=HERE, env={**env, "NH_RUNS_DIR": str(out / "runs")}, stdout=f, stderr=f)
-    if r.returncode:
-        raise SystemExit(f"하네스가 실패했습니다 ({' '.join(args)}). {out / 'harness.log'} 를 보세요.")
+    # 하네스 안의 호출은 SDK 가 세 번 다시 한다. 구독 경로가 오래 붐비면 그래도 실패해서, 단계 전체를 몇 분 뒤 다시 부른다.
+    for attempt in range(4):
+        with (out / "harness.log").open("a", encoding="utf-8") as f:
+            f.write(f"\n$ {' '.join(args) or 'own.run_own(sheet=False)'}\n")
+            f.flush()
+            r = subprocess.run(cmd, cwd=HERE, env={**env, "NH_RUNS_DIR": str(out / "runs")}, stdout=f, stderr=f)
+        if not r.returncode:
+            return
+        if attempt < 3:
+            log(f"  하네스 단계 실패 — {60 * (attempt + 1)}초 뒤 다시 ({' '.join(args)[:60]})")
+            time.sleep(60 * (attempt + 1))
+    raise SystemExit(f"하네스가 실패했습니다 ({' '.join(args)}). {out / 'harness.log'} 를 보세요.")
 
 
 EP1 = """
