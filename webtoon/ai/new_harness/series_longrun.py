@@ -119,16 +119,22 @@ def ask(env: dict, prompt: str, model: str, out: Path) -> dict:
     req = urllib.request.Request(env["CODEX_PROXY_BASE_URL"].rstrip("/") + "/responses", data=body,
                                  headers={"Authorization": "Bearer " + env["CODEX_PROXY_API_KEY"],
                                           "Content-Type": "application/json"})
-    for attempt in range(3):
+    for attempt in range(8):
         try:
             with urllib.request.urlopen(req, timeout=600) as r:
                 data = json.loads(r.read())
             break
         except Exception as exc:                                       # noqa: BLE001
-            if attempt == 2:
+            # 구독 경로는 서버가 붐비면 503 + Retry-After 를 준다(2026-11-19 00:52, server_is_overloaded).
+            # 알려 준 만큼 기다리고, 간격을 늘려 가며 다시 한다. 인증 · 요청 오류(4xx)는 기다려도 안 되니 바로 멈춘다.
+            code = getattr(exc, "code", None)
+            if attempt == 7 or (isinstance(code, int) and 400 <= code < 500 and code != 429):
                 raise
-            log(f"  재시도 {attempt + 1}: {exc}")
-            time.sleep(10)
+            hint = getattr(exc, "headers", None)
+            after = int(hint.get("Retry-After", 0) or 0) if hint else 0
+            wait = min(300, max(after, 20 * (attempt + 1)))
+            log(f"  재시도 {attempt + 1}: {exc} — {wait}초 기다림")
+            time.sleep(wait)
     text = "".join(c.get("text", "") for o in data.get("output", []) if o.get("type") == "message"
                    for c in o.get("content", []))
     out.with_suffix(".txt").write_text(text, encoding="utf-8")
