@@ -27,6 +27,11 @@ from pathlib import Path
 
 try:
     import openai
+    # openai 는 하위 모듈을 처음 쓸 때 늦게 불러온다. 시트·장을 여러 스레드로 동시에 그리면
+    # 두 스레드가 같은 모듈을 같이 불러오다 _DeadlockError 로 멈춘다(2026-11-18) — 미리 불러 둔다.
+    import openai.resources.chat  # noqa: F401
+    import openai.resources.images  # noqa: F401
+    import openai.resources.responses  # noqa: F401
 except ImportError:  # pragma: no cover
     openai = None
 
