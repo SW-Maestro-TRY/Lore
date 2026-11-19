@@ -389,7 +389,10 @@ def main() -> int:
     p.add_argument("--source-to-writer", action="store_true", help="이번 화 원작 구간을 작가에게 통째로 준다(writer_request)")
     p.add_argument("--body-sentences", default="20-30", help="--source-to-writer 일 때 본문 문장 수")
     p.add_argument("--looks", action="store_true", help="설정집을 뽑을 때 인물마다 원작 생김새 인용 · 말하는 방식 · 비중을 붙인다")
-    p.add_argument("--reader-check", action="store_true", help="처음 읽는 독자 검사를 더한다 — major 면 그 화를 다시 만든다")
+    p.add_argument("--reader-check", action="store_true", help="처음 읽는 독자 검사를 더한다(기록만)")
+    p.add_argument("--reader-gate", action="store_true", help="독자 검사 major 도 그 화를 다시 만드는 조건으로 친다")
+    p.add_argument("--accept", type=int, default=0,
+                   help="멈춘 화의 K번째 실패본을 사람이 보고 통과시킨다(--resume 과 함께) — 그 화로 받고 정리까지 한다")
     args = p.parse_args()
     out = Path(args.out).resolve()
     env = proxy_env()
@@ -412,6 +415,25 @@ def main() -> int:
         for x in state.get("incidents") or []:
             if x["n"] == state["done"] + 1:
                 x["before_resume"] = True
+    if args.accept:
+        # 강의 p.85 「최대 3회 … 사람에게」의 사람 쪽 — 검사가 세 번 다 걸었지만 사람이 읽어 보고 받아들인 실패본을
+        # 그 화로 받는다. 그 화의 검사 결과는 그대로 남기고 「사람이 통과」 표시를 붙인다.
+        n = state["done"] + 1
+        inc = next((x for x in state.get("incidents") or [] if x["n"] == n and x["try"] == args.accept), None)
+        kept = out / "runs" / f"ep{n:02d}.failed{args.accept}"
+        if not inc or not inc.get("item") or not kept.exists():
+            raise SystemExit(f"{n}화 {args.accept}번째 실패본(과 그 회차 정하기 기록)이 없습니다")
+        if (out / "runs" / f"ep{n:02d}").exists():
+            raise SystemExit(f"{out / 'runs' / f'ep{n:02d}'} 가 이미 있습니다")
+        kept.rename(out / "runs" / f"ep{n:02d}")
+        inc["accepted"] = time.strftime("%H:%M:%S")
+        item = inc["item"]
+        state["plan"] = state["plan"][:n - 1] + [item]
+        state["issues"][str(n)] = inc.get("all_issues") or inc["issues"]
+        log(f"[{n}화] 사람이 {args.accept}번째 실패본을 통과 — 정리(설정집 · 진행 상태 갱신)")
+        state["book"] = digest(env, out, n, state["book"])
+        state["done"], state["cursor"], state["status"] = n, item["end"], "running"
+        put(out / "state.json", state)
     failed = out / "runs" / f"ep{state['done'] + 1:02d}"
     if args.resume and failed.exists():
         # 예전 판(멈추기만 하던 것)으로 멈춘 화 — 실패본으로 옮기고 회차 정하기부터 다시 한다.
@@ -432,6 +454,7 @@ def main() -> int:
         state["pace"] = [int(x) for x in args.pace.split("-")]
     # 이어 돌릴 때는 처음 정한 값을 그대로 쓴다. 이 값이 없던 옛 실행을 이어 돌리면 이번에 준 값을 쓴다.
     for key, val in (("source_to_writer", args.source_to_writer), ("reader_check", args.reader_check),
+                     ("reader_gate", args.reader_gate),
                      ("body_sentences", [int(x) for x in args.body_sentences.split("-")])):
         if not args.resume or key not in state:
             state[key] = val
@@ -455,7 +478,7 @@ def main() -> int:
         state["issues"][str(n)] = found
         levels = [i.get("severity") for i in found]
         bad = [i for i in found if i.get("severity") in stop_levels
-               or (state.get("reader_check") and str(i.get("what", "")).startswith("읽기") and i.get("severity") == "major")]
+               or (state.get("reader_gate") and str(i.get("what", "")).startswith("읽기") and i.get("severity") == "major")]
         if bad:
             # 정리(설정집 갱신)를 하지 않는다 — 틀린 화가 기억으로 굳지 않게. 실패본은 따로 두고, 회차 정하기부터
             # 다시 한다(같은 요청으로 다시 쓰면 같은 실수가 난다). 두 번 다시 해도 걸리면 멈춘다(강의 p.85 「최대 3회 … 사람에게」).
@@ -466,7 +489,7 @@ def main() -> int:
                 shutil.rmtree(kept)
             run_dir.rename(kept)
             state["incidents"].append({"n": n, "try": tries + 1, "request": item["request"], "issues": bad,
-                                       "kept": kept.name, "at": time.strftime("%H:%M:%S")})
+                                       "all_issues": found, "item": item, "kept": kept.name, "at": time.strftime("%H:%M:%S")})
             state["plan"] = state["plan"][:n - 1]
             if tries + 1 >= 3:
                 state["status"] = f"stopped_at_{n}"
