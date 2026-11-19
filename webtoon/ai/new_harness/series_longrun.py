@@ -89,6 +89,27 @@ severity
 """
 
 
+READ_PROMPT = """너는 이 연재 웹툰을 1화부터 따라 읽는 독자다. 원작은 모른다. [지금까지]는 앞 화들이고, 이제 [이번 화]를 읽는다.
+이번 화를 읽다가 막히는 곳을 찾는다.
+
+찾을 것
+- 지금 어디인지 · 언제인지 · 누가 함께 있는지 알 수 없는 곳
+- 인물이 왜 그렇게 하는지(이유 · 목적)를 알 수 없는 행동, 이유 없이 정해진 이동 · 결정
+- 처음 나온 인물 · 물건 · 장소가 누구 · 무엇인지 알 수 없는 곳
+- 앞 문장과 이어지지 않고 건너뛴 곳
+
+찾지 않을 것 — 다음 화로 넘기려고 일부러 남긴 의문, 문장 취향 · 재미.
+
+severity
+- major: 이번 화의 중심 사건이나 이동 · 결정의 이유를 독자가 알 수 없다
+- minor: 잠깐 헷갈리지만 곧 따라잡을 수 있다
+
+반드시 이번 화의 문장을 그대로 인용한다. 인용할 수 없으면 적지 않는다.
+출력은 JSON 하나만: {"issues":[{"severity":"major|minor","what":"읽기: 무엇을 알 수 없나","now":"이번 화 인용"}]}
+
+"""
+
+
 def log(msg: str) -> None:
     print(time.strftime("%H:%M:%S"), msg, flush=True)
 
@@ -228,14 +249,22 @@ def scene_lines(run_dir: Path) -> list[str]:
     return [own.scene_text(s) for s in body_of(run_dir)["scenes"]]
 
 
-def check(env: dict, out: Path, n: int, model: str) -> dict:
+def check(env: dict, out: Path, n: int, model: str, reader: bool = False) -> dict:
     history = []
     for i in range(1, n):
         b = body_of(out / "runs" / f"ep{i:02d}")
         history.append(f"[{i}화 — {b['title']}]\n{b['body']}")
     now = body_of(out / "runs" / f"ep{n:02d}")
     prompt = CHECK_PROMPT + "[이전 회차 원문]\n" + "\n\n".join(history) + f"\n\n[이번 화 — {n}화 {now['title']}]\n" + now["body"]
-    return ask(env, prompt, model, out / "checks" / f"ep{n:02d}")
+    got = ask(env, prompt, model, out / "checks" / f"ep{n:02d}") if n > 1 else {"issues": []}
+    if reader:
+        # 설정 검사는 「앞 화와 어긋났나」만 본다. 「처음 읽는 독자가 따라올 수 있나」는 따로 본다(2026-11-19 — 설정 오류가
+        # 적은 42화가 읽어 보니 무슨 상황인지 모르는 줄거리 요약이었다).
+        rp = READ_PROMPT + "[지금까지]\n" + ("\n\n".join(history) or "(없음 — 이번이 1화)") + f"\n\n[이번 화 — {n}화 {now['title']}]\n" + now["body"]
+        seen = ask(env, rp, model, out / "checks" / f"ep{n:02d}.read")
+        got["issues"] = list(got.get("issues") or []) + [{**i, "what": "읽기: " + str(i.get("what", "")).removeprefix("읽기:").strip()}
+                                                         for i in seen.get("issues") or [] if isinstance(i, dict)]
+    return got
 
 
 def digest(env: dict, out: Path, n: int, book: dict) -> dict:
@@ -250,6 +279,19 @@ def digest(env: dict, out: Path, n: int, book: dict) -> dict:
     # new · updated 는 이번 정리에서 붙은 표시다. 다음 화로 넘길 때는 뗀다(화면도 다음 화에 그대로 넘기지 않는다).
     return {"entries": [{k: v for k, v in e.items() if k not in ("new", "updated")} for e in got["entries"]],
             "progress": got["progress"]}
+
+
+def writer_request(state: dict, source: str, item: dict) -> str:
+    """이번 화 작가에게 넘기는 「이번 화 내용」. 기본은 회차 정하기의 요청 2~3문장(사람이 다음 화 내용을 짧게 적는 것).
+    --source-to-writer 면 이번 화로 옮길 원작 구간을 통째로 같이 준다 — 소설을 웹툰으로 옮기는 사람은 원작 장을 보고
+    쓴다. 2~3문장만 주면 원작의 상황 · 이유 · 인물의 상태가 빠진 줄거리 요약이 된다(2026-11-19, 원작 7천 자 → 본문 770자)."""
+    if not state.get("source_to_writer"):
+        return item["request"]
+    lo, hi = state.get("body_sentences", [20, 30])
+    passage = source[item["start"]:item["end"]].strip()
+    return (f"[이번 화로 옮길 원작 — 이 범위를 이번 화로 옮긴다]\n{passage}\n\n[각색 메모]\n{item['request']}\n\n"
+            f"본문은 {lo}~{hi}문장으로 쓴다. 원작의 장소 · 시간 · 상황, 인물이 그렇게 하는 이유, 인물의 몸 · 마음 상태가 "
+            "독자에게 전해지게 쓴다. 원작에 없는 사건을 더하지 않고, 원작의 대사는 살려 쓴다.")
 
 
 def episode(env: dict, out: Path, n: int, state: dict, request: str) -> None:
@@ -288,10 +330,13 @@ entries = []
 for i, part in enumerate([src[j:j+30000] for j in range(0, len(src), 30000)]):
     rows, more, renamed = X.extract(part, out.parent, 'ko', entries)
     entries = X.apply_book(entries, rows, more, renamed)
+if len(sys.argv) > 3 and sys.argv[3] == "looks":
+    entries = X.extract_looks(src, entries, out.parent, 'ko')
 out.write_text(json.dumps(entries, ensure_ascii=False, indent=2))
 """
     (out / "lore").mkdir(parents=True, exist_ok=True)
-    harness(env, out, str(Path(args.source).resolve()), str(out / "lore" / "book0.json"), code=code)
+    harness(env, out, str(Path(args.source).resolve()), str(out / "lore" / "book0.json"),
+            *(["looks"] if args.looks else []), code=code)
     entries = [{k: v for k, v in e.items() if k not in ("new", "updated")} for e in read(out / "lore" / "book0.json")]
     hero = next((e for e in entries if e.get("title") == args.hero), None)
     # 회차 계획을 미리 세우지 않는다. 매 화 직전에 원작의 책갈피(cursor) 뒤를 읽고 이번 화를 정한다(plan_step).
@@ -318,6 +363,10 @@ def main() -> int:
     p.add_argument("--check-model", default="gpt-6.2-astra")
     p.add_argument("--stop-on", default="critical", help="이 등급이 나오면 멈춘다 (critical · major · none)")
     p.add_argument("--only", type=int, default=0, help="이번 실행에서 최대 몇 화까지 (0 = 끝까지)")
+    p.add_argument("--source-to-writer", action="store_true", help="이번 화 원작 구간을 작가에게 통째로 준다(writer_request)")
+    p.add_argument("--body-sentences", default="20-30", help="--source-to-writer 일 때 본문 문장 수")
+    p.add_argument("--looks", action="store_true", help="설정집을 뽑을 때 인물마다 원작 생김새 인용 · 말하는 방식 · 비중을 붙인다")
+    p.add_argument("--reader-check", action="store_true", help="처음 읽는 독자 검사를 더한다 — major 면 그 화를 다시 만든다")
     args = p.parse_args()
     out = Path(args.out).resolve()
     env = proxy_env()
@@ -358,6 +407,11 @@ def main() -> int:
     state["status"] = "running"
     if not args.resume or "pace" not in state:
         state["pace"] = [int(x) for x in args.pace.split("-")]
+    # 이어 돌릴 때는 처음 정한 값을 그대로 쓴다. 이 값이 없던 옛 실행을 이어 돌리면 이번에 준 값을 쓴다.
+    for key, val in (("source_to_writer", args.source_to_writer), ("reader_check", args.reader_check),
+                     ("body_sentences", [int(x) for x in args.body_sentences.split("-")])):
+        if not args.resume or key not in state:
+            state[key] = val
     stop_levels = {"critical": {"critical"}, "major": {"critical", "major"}, "none": set()}[args.stop_on]
     source = Path(state["source"]).read_text(encoding="utf-8")
     while True:
@@ -372,11 +426,13 @@ def main() -> int:
         item = state["plan"][n - 1]
         pct = round(100 * item["end"] / len(source))
         log(f"[{n}화] 생성 — 원작 {item['start']}~{item['end']}자 ({pct}%){' · 마지막 화' if item['last'] else ''}")
-        episode(env, out, n, state, item["request"])
-        found = check(env, out, n, args.check_model).get("issues", []) if n > 1 else []
+        episode(env, out, n, state, writer_request(state, source, item))
+        found = (check(env, out, n, args.check_model, state.get("reader_check", False)).get("issues", [])
+                 if n > 1 or state.get("reader_check") else [])
         state["issues"][str(n)] = found
         levels = [i.get("severity") for i in found]
-        bad = [i for i in found if i.get("severity") in stop_levels]
+        bad = [i for i in found if i.get("severity") in stop_levels
+               or (state.get("reader_check") and str(i.get("what", "")).startswith("읽기") and i.get("severity") == "major")]
         if bad:
             # 정리(설정집 갱신)를 하지 않는다 — 틀린 화가 기억으로 굳지 않게. 실패본은 따로 두고, 회차 정하기부터
             # 다시 한다(같은 요청으로 다시 쓰면 같은 실수가 난다). 두 번 다시 해도 걸리면 멈춘다(강의 p.85 「최대 3회 … 사람에게」).
