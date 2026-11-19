@@ -219,12 +219,21 @@ def cast_sheets_in_scene(sheets: dict[str, Path], scene: dict, limit: int = CAST
     if not sheets or limit <= 0:
         return []
     hay = " ".join(str(scene.get(k) or "") for k in ("where", "what", "acting", "look", "prev", "ends", "user_text"))
-    out = []
-    for name in sheets:
-        first = name.split()[0] if name.split() else name
-        if name in hay or (first and first in hay):
-            out.append(name)
-    return out[:limit]
+    # 주인공을 찾을 때와 같은 말(_name_keys — 성을 뺀 이름까지)로 찾는다. 이름 전체와 앞 낱말만 보던 때는
+    # 장면 글이 「재훈」「도윤」처럼 이름만 쓰면 시트가 안 붙어, 연재 5~7화 장 그림의 조연이 시트 없이 그려졌다(2026-11-20).
+    return [name for name in sheets if any(k in hay for k in _name_keys(name))][:limit]
+
+
+def cover_cast_sheets(sheets: dict[str, Path], scenes: list[dict], limit: int = CAST_SHEET_LIMIT) -> list[str]:
+    """표지에 붙일 조연 시트 — 이 화 장면 글에 이름이 많이 나오는 조연부터 limit 명.
+
+    예전에는 표지에 조연 시트를 안 붙였다. 표지에 조연이 함께 그려지면 시트 없이 인물 설명 글만으로 얼굴을
+    지어서, 작가가 시트로 바꾼 머리 모양 대신 원작 글의 머리 모양으로 나왔다(2026-11-20, 연재 5화 표지의 한도윤).
+    """
+    if not sheets or limit <= 0:
+        return []
+    count = {name: sum(1 for one in scenes if cast_sheets_in_scene({name: sheets[name]}, one, 1)) for name in sheets}
+    return [n for n in sorted(count, key=lambda n: -count[n]) if count[n]][:limit]
 
 
 def cast_sheet_block(names: list[str]) -> str:
@@ -376,7 +385,7 @@ def fixed_block(fixed) -> str:
 
 def build_cover_prompt(*, title: str, genre: str, intro: str,
                        char: dict | None, spec: dict | None, cast: list[dict],
-                       style: str, fixed_names=(), lang: str = "ko", co=(), attached=None) -> str:
+                       style: str, fixed_names=(), lang: str = "ko", co=(), attached=None, cast_sheet_names=()) -> str:
     """표지 한 장. 컷을 나누지 않는 **한 장짜리 그림**이라 프롬프트 파일부터 다르다
     (`prompt/cover_prompt`).
 
@@ -411,7 +420,8 @@ def build_cover_prompt(*, title: str, genre: str, intro: str,
 
     return (imageprompt.apply_style_sections(text, style)
             .replace("{style}", imageprompt.load_style(style))
-            .replace("{people}", character_block(char, spec, cast, co, attached))
+            .replace("{people}", "\n\n".join(b for b in (character_block(char, spec, cast, co, attached),
+                                                    cast_sheet_block(list(cast_sheet_names))) if b))
             .replace("{fixed}", fixed_block(fixed_names))
             .replace("{work}", work))
 
@@ -853,7 +863,9 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             prompt = build_cover_prompt(title=title, genre=genre, intro=intro,
                                         char=char, spec=spec, cast=cast, style=style,
                                         fixed_names=fixed_names, lang=lang, co=co_people,
-                                        attached=sheet_plan(char, None)[0])
+                                        attached=sheet_plan(char, None)[0],
+                                        cast_sheet_names=cover_cast_sheets(
+                                            cast_sheets, scenes, min(CAST_SHEET_LIMIT, REF_LIMIT - len(sheet_plan(char, None)[0]))))
         else:
             # 직전 그림이 **실제로 있는지**를 본다. 차례로 그릴 때는 늘 있지만,
             # 장면을 동시에 그리면 옆 장이 아직 안 끝나 없을 수 있다 — 그때
@@ -922,9 +934,10 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             continue
 
         prev_img = page_path(run_dir, page_no - 1)
-        # 참조 순서: 주인공 시트 → 이 장면의 조연 시트 → 직전 장. 표지(n_==0)에는 조연 시트를 안 붙인다.
+        # 참조 순서: 주인공 시트 → 이 장면(표지면 이 화)의 조연 시트 → 직전 장.
         who, room = sheet_plan(char, scenes[n_ - 1] if n_ > 0 else None)
-        page_refs = [cast_sheets[nm] for nm in (cast_sheets_in_scene(cast_sheets, scenes[n_ - 1], room) if n_ > 0 else [])]
+        page_refs = [cast_sheets[nm] for nm in (cast_sheets_in_scene(cast_sheets, scenes[n_ - 1], room) if n_ > 0 else
+                                                cover_cast_sheets(cast_sheets, scenes, min(CAST_SHEET_LIMIT, REF_LIMIT - len(who))))]
         refs = sheet_refs(who) + page_refs + ([prev_img] if page_no > 1 and prev_img.exists() else [])
         log(f"[{label}] 참조 {len(refs)}장 …")
         meta = None
