@@ -123,8 +123,31 @@ def put(p: Path, obj) -> None:
     Path(p).write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def api_env() -> dict:
+    """LONGRUN_API=1 — 구독 한도가 찼을 때 OpenAI API 키(LONGRUN_ENV_FILE — 기본 저장소 루트 .env — 의 LONGRUN_API_KEY_VAR, 기본 OPENAI_KEY)로.
+    모델은 구독 경로와 같게 맞춘다(글 gpt-6-sol). 장면 단계도 OpenAI 로(제품 기본은 OpenRouter). 키는 어디에도 쓰지 않는다."""
+    var = os.environ.get("LONGRUN_API_KEY_VAR", "OPENAI_KEY")
+    root = Path(os.environ.get("LONGRUN_ENV_FILE") or HERE.parents[2] / ".env")
+    got = {}
+    for line in root.read_text(encoding="utf-8").splitlines():
+        if "=" in line and not line.lstrip().startswith("#"):
+            k, v = line.split("=", 1)
+            got[k.strip()] = v.strip().strip('"').strip("'")
+    key = got.get(var) or ""
+    if not key:
+        raise SystemExit(f"{root} 에 {var} 가 없습니다")
+    env = {k: v for k, v in os.environ.items() if k not in ("OPENROUTER_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY",
+                                                           "WEBTOON_CODEX_PROXY", "WEBTOON_API_KEY")}
+    env.update({"OPENAI_API_KEY": key, "CODEX_PROXY_API_KEY": key, "CODEX_PROXY_BASE_URL": "https://api.openai.com/v1",
+                "NH_PROVIDER": "openai", "NH_MODEL": "gpt-6-sol", "SCENE_PROVIDER": "openai", "SCENE_MODEL": "gpt-6-sol",
+                "PYTHONDONTWRITEBYTECODE": "1", "LOGFIRE_TOKEN": "", "NH_STORY_REVIEW": "0"})
+    return env
+
+
 def proxy_env() -> dict:
     """~/.cli-proxy-api/openai-env.sh 를 읽은 셸의 OPENAI_* 를 구독 경로 변수로. 키는 어디에도 쓰지 않는다."""
+    if os.environ.get("LONGRUN_API") == "1":
+        return api_env()
     out = subprocess.run(["bash", "-c", "source ~/.cli-proxy-api/openai-env.sh && env -0"],
                          capture_output=True, check=True).stdout.decode()
     got = dict(x.split("=", 1) for x in out.split("\0") if "=" in x)
