@@ -51,6 +51,7 @@ from pathlib import Path
 import llm
 import charcard
 import runmeta
+import userbook
 from llm import story
 
 HERE = Path(__file__).resolve().parent
@@ -220,6 +221,22 @@ def people_block(char: dict | None, cast, spec: dict | None = None) -> str:
             lines.append(f"{one['name']} — {_text(one.get('appearance'))}")
     if not lines:
         return ""
+    # 설정집의 「말하는 방식」(lore_extract.extract_looks) — 그리는 쪽(detailart.character_block)에는 있는데
+    # 검수에는 없어서, 말 못 하는 좀비 장에 말풍선이 없다고 「침묵」으로 다시 그리게 했고 다시 그린 판에서
+    # 그 좀비가 「저리 가.」라고 말했다(2026-11-19, longrun v4-art ep01 10장). 설정집이 없으면 아무것도 안 붙는다.
+    book = (char or {}).get("lorebook")
+    names = [_text((char or {}).get("name"))] + [_text(o.get("name")) for o in (char or {}).get("co") or []
+                                                if isinstance(o, dict)]
+    names += [_text(o.get("name")) for o in cast or [] if isinstance(o, dict)]
+    voices = []
+    for nm in names:
+        if not nm or not book:
+            continue
+        v = _text((userbook.person_look(book, nm) or {}).get("voice"))
+        if v:
+            voices.append(f"  - {nm}: {v}")
+    if voices:
+        lines += ["말하는 방식 (이 범위를 넘는 말풍선은 인물 문제다):"] + voices
     return "## 인물\n" + "\n".join(lines)
 
 

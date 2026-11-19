@@ -623,6 +623,15 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         "",
         f"[여기서 끝낸다 — 다음 장이 이어받을 자리다] {ends}",
         "",
+    ]
+    if (llm.env("NH_NEXT_SCENE") or "").strip() and not last and scene_no < len(scenes):
+        # 채팅 만화: 그림 모델이 다음 장을 몰라서 다음 장의 일(달려와 안기기 등)을
+        # 이 장에 미리 그려 버렸다(2026-11-18, #1020 34317a2e 에서 옮김). 다음 장의 첫 일을 알려 주되 그리지 말라고 못박는다.
+        nxt = scenes[scene_no]
+        lines += [f"[다음 장에서 일어나는 일 — 이 장에서는 아직 일어나지 않았다. 그리지 않는다] "
+                  f"{(nxt.get('what') or '').strip()}",
+                  "  이 장의 인물 자리·거리·자세는 다음 장의 일이 이제 막 시작될 수 있는 상태로 둔다.", ""]
+    lines += [
         "**다른 장면들은 지금 동시에 그려지고 있다.** 위 두 지점이 앞뒤 장과 "
         "맞물리는 자리다 — 옆 장의 그림을 보고 맞추는 것이 아니라 이 글에 "
         "맞춘다.",
@@ -647,12 +656,19 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         "말풍선으로 들어간다.** 그림과 나레이션만으로 상황이 이해되더라도 마찬가지다 — 한 장 내내 말이 없으면 "
         "독자는 그 침묵을 연출이 아니라 빠진 것으로 읽는다. 무슨 말을 할지는 장면 글과 인물에 맞게 네가 정한다.",
         "- 그 밖에도 인물이 말을 해야 자연스러운 순간은 말 없이 두지 않는다.",
+        # 원작 연재 1화(2026-11-19, haeun longrun v4-art ep01)에서 13장 중 8장을 다시 그렸다 — 한 장 안에서
+        # 같은 손등 클로즈업을 두 번, 앞 장 마지막 컷 구도로 다음 장을 시작, 장면 글의 대사 순서를 뒤집음.
+        "- 한 장 안에서 같은 거리·같은 각도의 컷을 두 번 쓰지 않는다. 같은 인물을 다시 잡으면 거리(전신·중경·"
+        "클로즈업)나 각도를 바꾼다.",
+        "- 장면 글에 따옴표로 적힌 대사·소리는 적힌 순서대로 위에서 아래로 놓는다. 앞뒤를 바꾸지 않는다.",
     ]
     scene_instr = "\n".join(lines)
     if has_prev:
         scene_instr += ("\n\n첨부한 직전 그림이 바로 앞 장이다 — 인물·공간·"
                         "시간대·조명이 뚝 끊기지 않게 참고한다. 이야기가 어디서 "
-                        "시작해 어디서 끝나는지는 위 두 지점이 정한다.")
+                        "시작해 어디서 끝나는지는 위 두 지점이 정한다. 직전 그림의 "
+                        "컷 구도를 따라 그리지 않는다 — 특히 이 장의 첫 컷은 직전 그림의 "
+                        "마지막 컷과 다른 거리·각도로 잡는다.")
     people = "\n\n".join(b for b in (character_block(char, spec, cast, co, attached),
                                      cast_sheet_block(list(cast_sheet_names)),
                                      fixed_block(fixed_names)) if b)
