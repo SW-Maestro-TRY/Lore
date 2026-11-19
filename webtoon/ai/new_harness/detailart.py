@@ -54,6 +54,7 @@ from pathlib import Path
 import imagegen
 import imageprompt
 import lorebook                                  # noqa: E402
+import userbook                                  # noqa: E402
 import llm
 import charcard
 import covercheck
@@ -299,9 +300,21 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
     elif char:
         who = (char.get("name") or "").strip()
         lines.append(f"{who} — {desc}" if desc else who)
+    book = (char or {}).get("lorebook")
+    quoted = voiced = False
+
+    def from_book(name):
+        # 설정집 인물 항목의 원작 묘사 · 말하는 방식 · 비중(lore_extract.extract_looks). 없으면 아무것도 안 붙는다.
+        nonlocal quoted, voiced
+        got = userbook.look_lines(userbook.person_look(book, name), quotes=4)
+        quoted = quoted or any(x.startswith("원작 묘사:") for x in got)
+        voiced = voiced or any(x.startswith("말하는 방식:") for x in got)
+        return [f"- {x}" for x in got]
+
     if char:
         for k, v in (char.get("fields") or {}).items():
             lines.append(f"- {k}: {v}")
+        lines += from_book(char.get("name"))
     # 함께 주인공인 사람(co: [(그 사람, 시트 사양)]) — 첫 주인공과 같은 모양으로 한 사람씩.
     for one, one_spec in co:
         one_desc = (one.get("description") or "").strip()
@@ -315,8 +328,10 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
             lines.append(f"{one['name']} — {one_desc}" if one_desc else one["name"])
         for k, v in (one.get("fields") or {}).items():
             lines.append(f"- {k}: {v}")
+        lines += from_book(one.get("name"))
     for one in cast:
         lines.append(f"{one['name']} — {(one.get('appearance') or '').strip()}")
+        lines += from_book(one["name"])
     lines = [ln for ln in lines if ln and ln.strip()]
     if not lines:
         return ""
@@ -335,6 +350,11 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
             "장면 내용에 「시트와 다른 것」이 적혀 있으면 그 장면에서는 그것이 시트보다 먼저다.\n"
             "설명에 적힌 내용이 지금 장면 상황과 관련 있으면 그 인물의 행동·표정·대사로 "
             "자연스럽게 드러나야 한다. 관련 없으면 억지로 끼워 넣지 않는다.\n"
+            + ("「원작 묘사」는 원작이 그 인물을 직접 그린 문장이다 — 눈 · 피부 · 몸의 특징을 그대로 그린다.\n"
+               if quoted else "")
+            + ("「말하는 방식」이 적힌 인물은 그 범위 안에서만 소리를 낸다. 말을 못 하는 인물에게는 문장으로 된 "
+               "말풍선을 주지 않고, 적힌 소리와 몸짓으로만 뜻을 전한다 — 이 프롬프트의 「말풍선이 들어간다」는 규칙보다 이것이 먼저다.\n"
+               if voiced else "")
             + "\n".join(lines))
 
 

@@ -262,6 +262,59 @@ def extract_events(new_text: str, out_dir: Path, lang: str = "ko", ep=None) -> d
     return {"key": f"E{n:03d}", "kind": EVENT, "ep": ep, "title": f"{n}화", "text": "\n".join(lines)}
 
 
+LOOK_WEIGHTS = ("주연", "주요 인물", "단역")
+
+
+def looks_prompt(source: str, names, lang: str = "ko") -> str:
+    people = "\n".join(f"- {n}" for n in names)
+    return _prompt("lore/look_prompt", lang) + "[인물]\n" + people + "\n\n[원문]\n" + source + "\n"
+
+
+def _squash(t) -> str:
+    return re.sub(r"\s+", "", str(t or ""))
+
+
+def merge_looks(looks: dict, got: dict, source: str) -> dict:
+    """한 구간에서 뽑은 생김새를 합친다. 인용은 **원문에 실제로 있는 것만** 남긴다(공백 차이만 너그럽게) —
+    모델이 지어낸 묘사(물건 이름을 생김새로 읽은 것, 다른 인물의 묘사)가 원작 근거인 척 시트에 들어가지 않게."""
+    flat = _squash(source)
+    out = {k: {"quotes": list(v.get("quotes") or []), "voice": v.get("voice") or "", "weight": v.get("weight") or ""}
+           for k, v in (looks or {}).items()}
+    for name, v in (got or {}).items():
+        if not isinstance(v, dict):
+            continue
+        one = out.setdefault(str(name), {"quotes": [], "voice": "", "weight": ""})
+        for q in v.get("quotes") or []:
+            q = str(q).strip()
+            if len(_squash(q)) >= 4 and _squash(q) in flat and q not in one["quotes"]:
+                one["quotes"].append(q)
+        voice = str(v.get("voice") or "").strip()
+        if voice and not one["voice"]:
+            one["voice"] = voice                        # 처음 드러난 말하는 방식 — 뒤에 바뀌면 진행 상태가 맡는다
+        w = str(v.get("weight") or "").strip()
+        if w in LOOK_WEIGHTS and (not one["weight"] or LOOK_WEIGHTS.index(w) < LOOK_WEIGHTS.index(one["weight"])):
+            one["weight"] = w
+    return out
+
+
+def extract_looks(source: str, entries: list, out_dir: Path, lang: str = "ko", chunk: int = 30000) -> list[dict]:
+    """인물 항목마다 원작이 적은 생김새 인용 · 말하는 방식 · 비중을 붙인다(entry["look"]).
+
+    고정 로어북 항목은 생김새를 요약해서 적는다 — 요약하다 원작의 눈에 띄는 특징이 흐려지거나(「붉은 홍채」 →
+    「충혈된 눈」) 다른 인물의 묘사가 섞인다. 시트와 장 그림은 이 인용을 기준으로 삼는다."""
+    names = [e["title"] for e in entries if isinstance(e, dict) and e.get("kind") == "person" and e.get("title")]
+    if not names:
+        return entries
+    looks: dict = {}
+    for i, part in enumerate(source[j:j + chunk] for j in range(0, len(source), chunk)):
+        got = _call(looks_prompt(part, names, lang), out_dir, f"LORE_LOOKS_{i + 1}").get("people", {})
+        looks = merge_looks(looks, got if isinstance(got, dict) else {}, part)
+    for e in entries:
+        if isinstance(e, dict) and e.get("title") in looks:
+            e["look"] = {**looks[e["title"]], "quotes": looks[e["title"]]["quotes"][:12]}
+    return entries
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, required=True)

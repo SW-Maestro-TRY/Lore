@@ -16,6 +16,39 @@ def lore_short(title) -> str:
     return t[1:] if len(t) == 3 and all("가" <= ch <= "힣" for ch in t) else ""
 
 
+def person_look(lorebook, name) -> dict:
+    """설정집에서 이 이름의 인물 항목이 가진 원작 생김새(lore_extract.extract_looks). 없으면 {}.
+
+    block 과 같이 확정된 설정집 · 켜진 항목만 본다(여러 권이면 모든 권). 이름이 항목 이름과 그대로 같은 것을 먼저
+    찾고, 없을 때만 성을 뺀 이름으로 찾는다 — 그때도 맞는 사람이 하나일 때만(성만 다른 두 사람을 섞지 않는다)."""
+    want = re.sub(r"\s+", "", str(name or ""))
+    if not want or not isinstance(lorebook, dict) or not lorebook.get("confirmed"):
+        return {}
+    books = [b for b in lorebook.get("books") or [] if isinstance(b, dict) and b.get("confirmed", True)] or [lorebook]
+    people = [e for b in books for e in b.get("entries") or []
+              if isinstance(e, dict) and e.get("enabled", True) and isinstance(e.get("look"), dict)]
+    title = lambda e: re.sub(r"\s+", "", str(e.get("title") or ""))
+    exact = [e for e in people if title(e) == want]
+    if exact:
+        return exact[0]["look"]
+    loose = [e for e in people if want == lore_short(title(e)) or (lore_short(want) and lore_short(want) == title(e))]
+    return loose[0]["look"] if len(loose) == 1 else {}
+
+
+def look_lines(look: dict, quotes: int = 6) -> list[str]:
+    """시트 · 장 그림 프롬프트에 붙이는 원작 근거 줄. 비어 있으면 빈 목록(옛 run 은 아무것도 안 붙는다)."""
+    look = look or {}
+    out = []
+    qs = [q for q in look.get("quotes") or [] if str(q).strip()][:quotes]
+    if qs:
+        out.append("원작 묘사: " + " / ".join(f"「{q}」" for q in qs))
+    if str(look.get("voice") or "").strip():
+        out.append(f"말하는 방식: {look['voice'].strip()}")
+    if str(look.get("weight") or "").strip():
+        out.append(f"작품 속 비중: {look['weight'].strip()}")
+    return out
+
+
 # 실험의 lorebook_condition.budget_chars 와 같다.
 BUDGET = 30000
 
