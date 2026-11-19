@@ -314,7 +314,9 @@ def writer_request(state: dict, source: str, item: dict) -> str:
     passage = source[item["start"]:item["end"]].strip()
     return (f"[이번 화로 옮길 원작 — 이 범위를 이번 화로 옮긴다]\n{passage}\n\n[각색 메모]\n{item['request']}\n\n"
             f"본문은 {lo}~{hi}문장으로 쓴다. 원작의 장소 · 시간 · 상황, 인물이 그렇게 하는 이유, 인물의 몸 · 마음 상태가 "
-            "독자에게 전해지게 쓴다. 원작에 없는 사건을 더하지 않고, 원작의 대사는 살려 쓴다.")
+            "독자에게 전해지게 쓴다. 원작에 없는 사건을 더하지 않고, 원작의 대사는 살려 쓴다. 원작의 나레이션과 인물의 "
+            "속마음 가운데 상황 · 이유 · 감정을 전하는 문장은 살려 쓴다(속마음은 그 인물의 생각으로). 인물이 자리를 옮기면 "
+            "어디로 · 왜 가는지 쓴다.")
 
 
 def episode(env: dict, out: Path, n: int, state: dict, request: str) -> None:
