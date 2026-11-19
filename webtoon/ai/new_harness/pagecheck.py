@@ -191,7 +191,7 @@ def spec_lines(spec: dict | None) -> list[str]:
     return lines
 
 
-def people_block(char: dict | None, cast, spec: dict | None = None) -> str:
+def people_block(char: dict | None, cast, spec: dict | None = None, sheeted=()) -> str:
     """인물 — "다른 사람이 되었다" 를 판정할 기준.
 
     캐릭터 시트 **그림**은 안 붙인다. 이 호출에 붙는 그림은 **직전 장과 지금 장**
@@ -218,6 +218,10 @@ def people_block(char: dict | None, cast, spec: dict | None = None) -> str:
         lines.append(f"{one['name']} (주인공) — {desc}" if desc else f"{one['name']} (주인공)")
     for one in cast or []:
         if isinstance(one, dict) and _text(one.get("name")):
+            if one["name"] in sheeted or any(one["name"] in nm or nm.endswith(one["name"]) for nm in sheeted):
+                # 시트가 붙은 조연 — 그리는 쪽은 시트를 따르므로 검수가 원작 겉모습 글로 머리·얼굴을 판정하면 반대로 다시 그리게 한다(2026-11-20)
+                lines.append(f"{one['name']} — 조연 시트가 있는 인물: 머리 모양 · 얼굴 · 체형은 이 글로 판정하지 않는다(시트를 따름). 같은 화 안에서 같은 사람으로 보이는지만 본다.")
+                continue
             lines.append(f"{one['name']} — {_text(one.get('appearance'))}")
     if not lines:
         return ""
@@ -338,13 +342,13 @@ def scene_block(direction: dict, scene_no: int, total: int, scenes=()) -> str:
 
 def build_prompt(direction: dict, *, scene_no: int, char: dict | None = None,
                  cast=(), has_prev: bool = True, prev_is_cover: bool = False,
-                 next_from: str = "", scenes=(), spec: dict | None = None) -> str:
+                 next_from: str = "", scenes=(), spec: dict | None = None, sheeted=()) -> str:
     path = PROMPT_DIR / "page_review_prompt"
     if not path.exists():
         raise SystemExit(f"프롬프트가 없습니다: {path}")
     total = len(scene_texts(direction, scenes))
     return (path.read_text(encoding="utf-8")
-            .replace("{people}", people_block(char, cast, spec))
+            .replace("{people}", people_block(char, cast, spec, sheeted))
             .replace("{story}", story_block(direction, scene_no, scenes))
             .replace("{prev}", prev_block(direction, scene_no, has_prev=has_prev,
                                           prev_is_cover=prev_is_cover,
@@ -520,9 +524,10 @@ def review_page(run_dir: Path, page_no: int, *, scene_no: int, direction: dict,
     has_prev = page_no > 1 and prev.exists()
 
     spec = read_json(run_dir / "sheet_spec.json")
+    sheeted = tuple(f.stem for f in (run_dir / "sheets").glob("*.png")) if (run_dir / "sheets").is_dir() else ()
     prompt = build_prompt(direction, scene_no=scene_no, char=char, cast=cast, spec=spec,
                           has_prev=has_prev, prev_is_cover=prev_is_cover,
-                          next_from=next_from, scenes=scenes)
+                          next_from=next_from, scenes=scenes, sheeted=sheeted)
     write_text(dest / f"page{page_no:02d}.review{suffix}_prompt.txt", prompt)
     if dry_run:
         return None, None

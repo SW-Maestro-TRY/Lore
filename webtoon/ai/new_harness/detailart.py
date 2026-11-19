@@ -245,7 +245,7 @@ def cast_sheet_block(names: list[str]) -> str:
              # 장면 글의 「시트와 다른 것」 칸에 원작 본문의 머리 모양(「짧게 민 머리」)이 옮겨 적혀, 그 칸이 시트보다 먼저라는
              # 규칙 때문에 작가가 시트로 정한 머리가 장마다 원작대로 돌아갔다(2026-11-20, 연재 5화).
              "이 인물들에 대해서는 장면 글의 「시트와 다른 것」에 적힌 것 가운데 옷 · 상처 · 피 · 소지품만 따른다. "
-             "머리 모양 · 얼굴 · 체형처럼 변하지 않는 생김새는 그 칸에 다르게 적혀 있어도 시트가 먼저다."]
+             "머리 모양 · 얼굴 · 체형처럼 변하지 않는 생김새는 그 칸이나 설정집 · 인물 설명 등 이 프롬프트 어디에 다르게 적혀 있어도 시트가 먼저다."]
     lines += [f"{name} — 첨부한 조연 시트를 따른다." for name in names]
     return "\n".join(lines)
 
@@ -343,7 +343,7 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
             lines.append(f"- {k}: {v}")
         lines += from_book(one.get("name"))
     for one in cast:
-        if one["name"] in sheeted:
+        if one["name"] in sheeted or any(one["name"] in _name_keys(nm) for nm in sheeted):
             # 시트가 붙은 조연은 겉모습 글 · 원작 묘사를 빼고 시트를 따르게 한다 — 글이 「짧게 민 머리」처럼 구체적이면
             # 그림 모델이 시트와 글을 섞어, 작가가 시트로 바꾼 머리 모양이 다시 원작 글대로 나왔다(2026-11-20, 연재 5화 표지).
             lines.append(f"{one['name']} — 얼굴·머리·체형은 첨부한 조연 시트대로 그린다(이 인물의 겉모습 글은 넣지 않았다). 옷은 장면 글에 따로 없으면 시트대로.")
