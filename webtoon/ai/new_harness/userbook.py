@@ -146,13 +146,61 @@ def event_lines(book, query, entries):
         f"- {p.get('ep')}화: " + str(p["text"]).replace("\n", "\n  ") for p in picked]
 
 
-def block(char, context="", stage="story", continuation=False, everything=False, budget=BUDGET):
+# 변하지 않는 생김새(머리 · 얼굴 · 체형)를 적은 문장만 — 낱말 하나(「키」 「턱」)로 찾으면 「지키는」 「산 중턱」 「턱선의 핏자국」까지 지웠다(11/20 검증).
+LOOK_RE = re.compile(
+    r"(짧|긴|길|민|밀|묶|곱슬|생머리|흑발|금발|검은|갈색|은발|백발|붉은)[^.,]{0,6}머리|머리(카락|칼)?(를|는|가|이|은)?\s*(짧|길|밀|묶|곱슬|검|갈색|하얗|희)"
+    r"|머리\s*(모양|색)|얼굴(형|선|의\s*(생김새|특징))|눈매|눈동자|홍채|눈썹|쌍꺼풀|체형|체격|몸집|거구|덩치"
+    r"|(붉은|검은|푸른|파란|갈색|회색|금빛|노란)\s?눈(을|이|은|에|과)?(?![가-힣])|(?<![가-힣])키(는|가)\s|센티미터|피부(색|빛)|(하얀|흰|창백한|까무잡잡한|구릿빛)\s?피부|이목구비")
+
+
+HURT_RE = re.compile(r"피(가|를|에|로|투성이|범벅|자국|딱지)?(?![가-힣])|핏|출혈|피멍|상처|부상|다친|다쳐|긁힌|긁혀|흘리|흉터|총상|찢어|찢긴|멍(?![가-힣])|멍이|붕대|베인|물린|화상|부러|골절")
+
+
+def _sheet_hit(title, sheeted) -> bool:
+    """제목이 이 사람인가 — 이름 그대로이거나 「이름의 …」 「이름 …」. 성을 뺀 이름도 같은 규칙(「도윤희」 「도윤시청」은 아니다)."""
+    title = str(title or "").strip()
+    keys = {k for n in sheeted for k in (n, n[1:] if len(n) == 3 else "") if len(k) >= 2}
+    return any(title == k or title.startswith((k + "의", k + " ", k + "(", k + " —")) for k in keys)
+
+
+def drop_looks(text: str) -> str:
+    """머리 · 얼굴 · 체형 · 눈 색을 적은 **마디**만 뺀다 — 시트가 있는 인물은 그림이 시트를 따르므로 설정집 겉모습 글이 시트와 싸우지 않게.
+    문장째 지우면 「짧게 민 머리에 턱선을 따라 마른 핏자국이 남아 있다」의 핏자국까지 사라져서, 쉼표 · 「~에」 · 「~고」 · 「~며」 마디로 나눠 본다.
+    상처 · 피 · 옷 · 소지품 · 관계 · 위치는 남긴다."""
+    out = []
+    for sent in re.split(r"(?<=[.다])\s+", str(text or "")):
+        if not sent or not LOOK_RE.search(sent):
+            out.append(sent)
+            continue
+        if HURT_RE.search(sent) and not any(LOOK_RE.search(c) and not HURT_RE.search(c) for c in re.split(r"(?<=[,에고며])\s+", sent)):
+            # 상처 · 피가 든 마디는 겉모습 낱말이 같이 있어도 남긴다 — 시트와 부딪칠 위험보다 상처를 잃는 게 더 나쁘다(11/20 검증 3회차)
+            out.append(sent)
+            continue
+        clauses = re.split(r"(?<=[,에고며])\s+", sent)
+        keep = [c for c in clauses if not LOOK_RE.search(c) or HURT_RE.search(c)]
+        if keep:
+            out.append(" ".join(keep))
+    return " ".join(x for x in out if x).strip()
+
+
+def block(char, context="", stage="story", continuation=False, everything=False, budget=BUDGET, sheeted=()):
+    """sheeted — 그림 단계(stage="image")에서 시트가 붙은 인물 이름. 그 인물의 고정 항목 · 진행 상태에서
+    머리 · 얼굴 · 체형 문장을 뺀다. 원작 글 「짧게 민 머리」(설정집 고정 항목 + 진행 상태 「한도윤의 겉모습」)가
+    모든 장 그림 프롬프트 끝에 붙어, 앞머리를 내린 시트를 이기고 연재 5~11화 도윤이 짧은 머리로 그려졌다(2026-11-20).
+    비어 있으면(기본) 예전과 한 글자도 같다."""
     book = (char or {}).get("lorebook") or {}
+    if sheeted and stage == "image" and book:
+        book = dict(book)
+        book["entries"] = [({**e, "content": drop_looks(e.get("content"))} if isinstance(e, dict) and _sheet_hit(e.get("title"), sheeted) else e)
+                           for e in book.get("entries") or []]
+        book["progress"] = [({**q, "text": drop_looks(q.get("text")), "was": [w for w in (drop_looks(x) for x in q.get("was") or []) if w]}
+                             if isinstance(q, dict) and _sheet_hit(q.get("title"), sheeted) else q)
+                            for q in book.get("progress") or []]
     if not book or not book.get("confirmed"):
         return ""
     if isinstance(book.get("books"), list):
         share = max(0, budget // max(1, len(book["books"])))
-        parts = [block({"lorebook": child}, context, stage, continuation, everything, share) for child in book["books"] if isinstance(child, dict)]
+        parts = [block({"lorebook": child}, context, stage, continuation, everything, share, sheeted) for child in book["books"] if isinstance(child, dict)]
         return "[함께 붙인 설정집 — 나열된 순서대로 참고한다. 설정이 충돌하면 뒤에 붙인 설정을 우선한다.]\n" + "\n\n".join(p for p in parts if p)
     lines = ["[작가가 확인한 설정집]", "이 설정집은 선택한 작품 세계다. 캐릭터 카드의 옛 세계보다 우선하며 인물의 외형은 유지한다."]
     if not continuation:

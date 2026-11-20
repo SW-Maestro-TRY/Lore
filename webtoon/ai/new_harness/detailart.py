@@ -907,8 +907,13 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         note_text = note_block(note) if note.strip() else ""
         # 키워드 항목은 한도 안에 남는 자리만큼만 고른다(돈 안 듦). 항상 참고 · 진행 상태는 늘 넣는다.
         room0 = IMAGE_PROMPT_MAX - len(prompt) - len(note_text) - len(memory) - 8
-        fixed = userbook.block(char, scene_text, "image", cont, budget=0)          # 항상 참고 · 진행 상태만
-        book = userbook.block(char, scene_text, "image", cont, budget=max(0, room0 - len(fixed)))
+        # 시트가 있는 사람(주인공 · 함께 주인공 · 조연 시트)은 설정집의 머리 · 얼굴 · 체형 글을 빼고 넣는다 — 시트와 싸워 이겼다(2026-11-20).
+        hero = str((char or {}).get("name") or "").strip() if (run_dir / "sheet.png").exists() else ""
+        co_sheeted = [str(o.get("name") or "").strip() for o in (char or {}).get("co") or []
+                      if isinstance(o, dict) and (run_dir / "sheets" / f"{str(o.get('name') or '').strip()}.png").exists()]
+        sheet_people = tuple(x for x in [hero] + co_sheeted + list(cast_sheets or {}) if x)
+        fixed = userbook.block(char, scene_text, "image", cont, budget=0, sheeted=sheet_people)          # 항상 참고 · 진행 상태만
+        book = userbook.block(char, scene_text, "image", cont, budget=max(0, room0 - len(fixed)), sheeted=sheet_people)
         extra = "\n\n".join(x for x in (book, memory) if x)
         base_prompt = prompt
 
