@@ -30,9 +30,56 @@ def person_look(lorebook, name) -> dict:
     title = lambda e: re.sub(r"\s+", "", str(e.get("title") or ""))
     exact = [e for e in people if title(e) == want]
     if exact:
-        return exact[0]["look"]
+        return voice_now(books, want, exact[0]["look"])
     loose = [e for e in people if want == lore_short(title(e)) or (lore_short(want) and lore_short(want) == title(e))]
-    return loose[0]["look"] if len(loose) == 1 else {}
+    return voice_now(books, title(loose[0]), loose[0]["look"]) if len(loose) == 1 else {}
+
+
+SPEECH_RE = re.compile(r"말을\s*(하|또렷|분명|시작)|말하(기 시작|게 되|는 모습)|대답(했|한다|하는|을 했)|답하는|답했다|라고 말(했|하)|말했다|문장으로 말|털어놓|부탁했|되물")
+MUTE_RE = re.compile(r"(?<![가-힣])말(을|은)?\s?(거의\s)?(하지\s?못|못\s?하|할\s?수\s?없)|울음|으르렁|말을 잃")
+NEG_RE = re.compile(r"못|않|없|모른")
+
+
+def voice_now(books, name: str, look: dict) -> dict:
+    """설정집의 「말하는 방식」은 1화 전에 정한 것이다 — 원래 말을 못 하는 인물이면, 연재 진행 상태에서 그 사람이 주어로 말한 가장 최근
+    기록을 「지금 상태」로 덧붙인다. 말 못 하던 좀비가 연재 후반에 말을 알아듣고 대답하는데 그림 · 검수는 「말은 거의 하지 못한다」를 받아
+    그의 대사를 빼거나 오류로 잡았다(2026-11-20, 연재 47화). 진행 상태가 없거나 그런 기록이 없으면 그대로 돌려준다.
+    한 마디(「~고」 「~며」 「~지만」 · 쉼표로 끊은 단위) 안에서 이름이 주어(이 · 가 · 은 · 는)이고 말하는 낱말이 있으며 부정(못 · 않 · 없)이 없을 때만 센다."""
+    if not isinstance(look, dict) or not str(look.get("voice") or "").strip() or not MUTE_RE.search(str(look["voice"])):
+        return look
+    keys = {k for k in (name, lore_short(name)) if k and len(k) >= 2}
+    subj = [re.compile(rf"(?<![가-힣]){re.escape(k)}(이|가|은|는)(?![가-힣])") for k in keys]
+    best = None
+    for b in books if isinstance(books, list) else []:
+        rows = b.get("progress") if isinstance(b, dict) and isinstance(b.get("progress"), list) else []
+        for q in rows:
+            if not isinstance(q, dict) or q.get("kind") == EVENT:
+                continue
+            t = str(q.get("text") or "")
+            hit = False
+            for c in re.split(r"(?<=고)\s+|(?<=며)\s+|(?<=지만)\s+|,\s*|(?<=[.다])\s+", t):
+                if NEG_RE.search(c):
+                    continue
+                for r in subj:
+                    m, sp = r.search(c), None
+                    if m:
+                        sp = SPEECH_RE.search(c, m.end())
+                    # 이름(주어)과 말하는 낱말 사이에 다른 주어가 끼면 그 사람의 말이다 — 「재훈은 세린이 대답하는 모습을 보았다」
+                    if m and sp and not re.search(r"[가-힣]+(이|가|은|는)\s", c[m.end():sp.start()]):
+                        hit = True
+                        break
+                if hit:
+                    break
+            if not hit:
+                continue
+            raw = q.get("ep")
+            ep = raw if isinstance(raw, int) and not isinstance(raw, bool) else (int(raw) if isinstance(raw, str) and raw.strip().isdigit() else -1)
+            if best is None or ep >= best[0]:
+                best = (ep, t.strip())
+    if not best:
+        return look
+    when = f"{best[0]}화 " if best[0] >= 0 else ""
+    return {**look, "voice": f"{look['voice'].strip()} — 단 연재 중 바뀜, 지금 상태({when}진행 상태): {best[1][:180]} → 말하는 방식은 이 지금 상태를 따른다."}
 
 
 def look_lines(look: dict, quotes: int = 6) -> list[str]:
