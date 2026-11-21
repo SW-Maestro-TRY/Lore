@@ -332,7 +332,8 @@ def free_step(env: dict, out: Path, n: int, state: dict, source: str, model: str
 def arc_line_for(arc: str, n: int) -> str:
     """줄기 글에서 「{n}화」로 시작하는 줄(다음 「…화」 줄 앞까지)을 돌려준다. 없으면 빈 문자열 — 예전 줄기 파일은 그대로 돈다."""
     lines, out, on = arc.splitlines(), [], False
-    head = re.compile(r"^\s*(\d+)화")
+    # 「34화까지 연재됐다」 같은 문장은 화 제목 줄이 아니다 — 「N화」 바로 뒤가 줄표 · 괄호 · 쌍점이거나 줄 끝일 때만 제목 줄로 본다.
+    head = re.compile(r"^\s*(\d+)화(?=\s*(?:[—\-(:：]|$))")
     for ln in lines:
         m = head.match(ln)
         if m:
