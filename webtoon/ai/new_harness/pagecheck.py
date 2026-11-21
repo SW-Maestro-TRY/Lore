@@ -192,6 +192,14 @@ def spec_lines(spec: dict | None) -> list[str]:
     return lines
 
 
+def now_line(book, name) -> str:
+    """연재 중 이야기 속 사건으로 시트에서 오래 달라진 몸(진행 상태의 [시트와 다름: …], userbook.look_now) — 검수가 시트 사양 대신
+    그 부위를 이 글로 판정하게 한다. 좀비였던 인물의 흰자가 돌아온 뒤에도 시트(검은 흰자)로 판정해 critical 로 다시 그리게 했다(2026-11-21)."""
+    now = userbook.look_now(book, name)
+    return (f" 단, 연재 중 달라진 곳 — {now}. 이 부위는 시트 사양이 아니라 이 글로 판정한다(이 모습이면 인물 문제가 아니다)."
+            if now else "")
+
+
 def people_block(char: dict | None, cast, spec: dict | None = None, sheeted=(), cast_specs=None) -> str:
     """인물 — "다른 사람이 되었다" 를 판정할 기준.
 
@@ -209,6 +217,8 @@ def people_block(char: dict | None, cast, spec: dict | None = None, sheeted=(), 
         if who:
             lines.append(f"{who} (주인공) — {desc}" if desc else f"{who} (주인공)")
     lines += spec_lines(spec)
+    if spec and char and now_line(char.get("lorebook"), char.get("name")):
+        lines.append(" " + now_line(char.get("lorebook"), char.get("name")).strip())
     # 함께 주인공인 사람(주인공 여러 명) — 시트 사양은 sheets/<이름>.spec.json 에 있어 여기선 설명만 둔다.
     for one in (char or {}).get("co") or []:
         if not isinstance(one, dict) or not _text(one.get("name")):
@@ -216,7 +226,7 @@ def people_block(char: dict | None, cast, spec: dict | None = None, sheeted=(), 
         desc = _text(one.get("description"))
         card = charcard.short(charcard.for_story({**one, "lorebook": char.get("lorebook")}))
         desc = f"{card}. {desc}" if card and desc else (card or desc)
-        lines.append(f"{one['name']} (주인공) — {desc}" if desc else f"{one['name']} (주인공)")
+        lines.append((f"{one['name']} (주인공) — {desc}" if desc else f"{one['name']} (주인공)") + now_line(char.get("lorebook"), one["name"]))
     for one in cast or []:
         if isinstance(one, dict) and _text(one.get("name")):
             if one["name"] in sheeted or any(one["name"] in nm or nm.endswith(one["name"]) for nm in sheeted):
@@ -226,12 +236,13 @@ def people_block(char: dict | None, cast, spec: dict | None = None, sheeted=(), 
                 specs = {k: v for k, v in (cast_specs or {}).items() if isinstance(v, dict)}
                 sp = specs.get(one["name"]) or next((v for k, v in specs.items() if k.endswith(one["name"])), None)
                 det = [_text(x) for x in (sp or {}).get("design_details") or [] if _text(x)]
+                now = now_line((char or {}).get("lorebook"), one["name"])
                 if det:
                     lines.append(f"{one['name']} — 조연 시트가 있는 인물. 시트 사양(이 사람의 고정 생김새): " + " / ".join(det)
                                  + " — 원작 · 장면의 겉모습 글이 아니라 이 사양으로 판정한다. 앞 장과 같아도 머리 모양 · 얼굴이 이 사양과 다르면 "
-                                 "다른 사람으로 그려진 것이다(critical, kind 인물). 옷 · 상처 · 피는 장면 글을 따를 수 있다.")
+                                 "다른 사람으로 그려진 것이다(critical, kind 인물). 옷 · 상처 · 피는 장면 글을 따를 수 있다." + now)
                     continue
-                lines.append(f"{one['name']} — 조연 시트가 있는 인물: 머리 모양 · 얼굴 · 체형은 이 글로 판정하지 않는다(시트를 따름). 같은 화 안에서 같은 사람으로 보이는지만 본다.")
+                lines.append(f"{one['name']} — 조연 시트가 있는 인물: 머리 모양 · 얼굴 · 체형은 이 글로 판정하지 않는다(시트를 따름). 같은 화 안에서 같은 사람으로 보이는지만 본다." + now)
                 continue
             lines.append(f"{one['name']} — {_text(one.get('appearance'))}")
     if not lines:

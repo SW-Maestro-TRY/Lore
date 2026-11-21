@@ -236,17 +236,27 @@ def cover_cast_sheets(sheets: dict[str, Path], scenes: list[dict], limit: int = 
     return [n for n in sorted(count, key=lambda n: -count[n]) if count[n]][:limit]
 
 
-def cast_sheet_block(names: list[str]) -> str:
-    """인물 절 뒤에 붙는 「조연 시트」 — 첨부한 조연 시트를 따르라는 한 줄씩."""
+def now_note(book, name) -> str:
+    """연재 중 이야기 속 사건으로 시트에서 오래 달라진 몸(진행 상태의 [시트와 다름: …]) — 시트보다 먼저인 한 마디. 없으면 ""."""
+    now = userbook.look_now(book, name)
+    return f" 단, 연재 중 달라진 곳(시트의 같은 부위보다 이 글이 먼저 — 나머지는 시트대로): {now}" if now else ""
+
+
+def cast_sheet_block(names: list[str], book=None) -> str:
+    """인물 절 뒤에 붙는 「조연 시트」 — 첨부한 조연 시트를 따르라는 한 줄씩.
+    book(설정집)에 그 인물의 [시트와 다름: …] 이 있으면 그 줄에 붙인다(userbook.look_now). 없으면 예전과 같다."""
     if not names:
         return ""
+    notes = {name: now_note(book, name) for name in names}
     lines = ["## 조연 시트 (주인공 시트 다음에 붙은 그림들)",
              "아래 인물은 첨부한 조연 시트를 따른다 — 얼굴·머리·옷차림을 시트 그대로, 이 화 내내 같은 사람으로 그린다.",
              # 장면 글의 「시트와 다른 것」 칸에 원작 본문의 머리 모양(「짧게 민 머리」)이 옮겨 적혀, 그 칸이 시트보다 먼저라는
              # 규칙 때문에 작가가 시트로 정한 머리가 장마다 원작대로 돌아갔다(2026-11-20, 연재 5화).
              "이 인물들에 대해서는 장면 글의 「시트와 다른 것」에 적힌 것 가운데 옷 · 상처 · 피 · 소지품만 따른다. "
-             "머리 모양 · 얼굴 · 체형처럼 변하지 않는 생김새는 그 칸이나 설정집 · 인물 설명 등 이 프롬프트 어디에 다르게 적혀 있어도 시트가 먼저다."]
-    lines += [f"{name} — 첨부한 조연 시트를 따른다." for name in names]
+             "머리 모양 · 얼굴 · 체형처럼 변하지 않는 생김새는 그 칸이나 설정집 · 인물 설명 등 이 프롬프트 어디에 다르게 적혀 있어도 시트가 먼저다."
+             + (" 다만 아래 이름 옆에 「연재 중 달라진 곳」이 적혀 있으면, 그것은 이야기 속에서 실제로 달라진 모습이라 그 부위만은 시트보다 먼저다."
+                if any(notes.values()) else "")]
+    lines += [f"{name} — 첨부한 조연 시트를 따른다.{notes[name]}" for name in names]
     return "\n".join(lines)
 
 
@@ -306,8 +316,11 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
         # 카드가 바꿔 놓은 종(사람 → 검은여우)을 놓치고 사람으로 그린다.
         card = charcard.short(charcard.for_story(char))
         desc = f"{card}. {desc}" if card and desc else (card or desc)
+    book0 = (char or {}).get("lorebook")
     if spec:
         lines.append(imageprompt.sheet_line(spec))
+        if now_note(book0, (char or {}).get("name")):
+            lines.append("-" + now_note(book0, (char or {}).get("name")))
         if desc:
             lines.append(f"- 설명: {desc}")
     elif char:
@@ -335,6 +348,8 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
         one_desc = f"{one_card}. {one_desc}" if one_card and one_desc else (one_card or one_desc)
         if one_spec:
             lines.append(imageprompt.sheet_line(one_spec))
+            if now_note(book0, one.get("name")):
+                lines.append("-" + now_note(book0, one.get("name")))
             if one_desc:
                 lines.append(f"- 설명: {one_desc}")
         else:
@@ -346,7 +361,8 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
         if one["name"] in sheeted or any(one["name"] in _name_keys(nm) for nm in sheeted):
             # 시트가 붙은 조연은 겉모습 글 · 원작 묘사를 빼고 시트를 따르게 한다 — 글이 「짧게 민 머리」처럼 구체적이면
             # 그림 모델이 시트와 글을 섞어, 작가가 시트로 바꾼 머리 모양이 다시 원작 글대로 나왔다(2026-11-20, 연재 5화 표지).
-            lines.append(f"{one['name']} — 얼굴·머리·체형은 첨부한 조연 시트대로 그린다(이 인물의 겉모습 글은 넣지 않았다). 옷은 장면 글에 따로 없으면 시트대로.")
+            lines.append(f"{one['name']} — 얼굴·머리·체형은 첨부한 조연 시트대로 그린다(이 인물의 겉모습 글은 넣지 않았다). 옷은 장면 글에 따로 없으면 시트대로."
+                         + now_note(book0, one["name"]))
             lines += [x for x in from_book(one["name"]) if not x.startswith("- 원작 묘사:")]
             continue
         lines.append(f"{one['name']} — {(one.get('appearance') or '').strip()}")
@@ -431,7 +447,7 @@ def build_cover_prompt(*, title: str, genre: str, intro: str,
     return (imageprompt.apply_style_sections(text, style)
             .replace("{style}", imageprompt.load_style(style))
             .replace("{people}", "\n\n".join(b for b in (character_block(char, spec, cast, co, attached, tuple(cast_sheet_names)),
-                                                    cast_sheet_block(list(cast_sheet_names))) if b))
+                                                    cast_sheet_block(list(cast_sheet_names), (char or {}).get("lorebook"))) if b))
             .replace("{fixed}", fixed_block(fixed_names))
             .replace("{work}", work))
 
@@ -603,7 +619,10 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         # 데이터 바로 옆에 둔다 — 멀리 있는 지시는 안 지켜진다(위 주석과 같다).
         lines += [f"[이 장면에서 시트와 다른 것 — 겉모습·소지품·동행] {look}",
                   "  시트는 기본 외형이고, 이 장면에서는 위에 적힌 차이가 시트보다 먼저다. "
-                  "여기 적히지 않은 것은 시트 그대로 그린다.", ""]
+                  "여기 적히지 않은 것은 시트 그대로 그린다."
+                  # 연재 중 오래 달라진 몸(userbook.look_now)이 있는 작품만 — 「적히지 않은 것은 시트 그대로」가 그 부위까지 시트로 되돌리지 않게
+                  + (" 단, 인물 절에 「연재 중 달라진 곳」이 적힌 부위는 여기 안 적혀 있어도 그 글대로 그린다."
+                     if userbook.SHEET_DIFF_RE.search(json.dumps((char or {}).get("lorebook") or {}, ensure_ascii=False)) else ""), ""]
     fixed = narration_of(scenes, scene_no)
     if fixed:
         # 나레이션 재료는 장면 단계(scene_prompt)에서 글 모델이 화 전체를 한 번에
@@ -690,7 +709,7 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
                         "컷 구도를 따라 그리지 않는다 — 특히 이 장의 첫 컷은 직전 그림의 "
                         "마지막 컷과 다른 거리·각도로 잡는다.")
     people = "\n\n".join(b for b in (character_block(char, spec, cast, co, attached, tuple(cast_sheet_names)),
-                                     cast_sheet_block(list(cast_sheet_names)),
+                                     cast_sheet_block(list(cast_sheet_names), (char or {}).get("lorebook")),
                                      fixed_block(fixed_names)) if b)
     return (text
             .replace("{{LANGUAGE_LINE}}", lang_mod.instruction(lang))

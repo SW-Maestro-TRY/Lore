@@ -210,10 +210,67 @@ def _sheet_hit(title, sheeted) -> bool:
     return any(title == k or title.startswith((k + "의", k + " ", k + "(", k + " —")) for k in keys)
 
 
+# 진행 상태 「겉모습」 줄 안의 [시트와 다름: …] — 이야기 속 사건으로 시트의 평소 모습에서 오래 달라진 몸(눈 · 피부 · 머리 · 흉터 · 체형).
+# 좀비였던 인물이 치료되며 흰자가 돌아오는데 시트는 1화의 검은 흰자라, 글이 없으면 그림이 화마다 왔다 갔다 했다(2026-11-21, 연재 31~47화).
+# 시트를 다시 뽑지 않고 이 글로 관리한다 — 그림 · 검수는 시트의 같은 부위를 이 글로 바꿔 읽는다(같은 장을 새로 그려 글만으로 눈이 바뀌는 것 확인).
+SHEET_DIFF_RE = re.compile(r"\[시트와 다름:\s*([^\]]+)\]")
+
+
+def _title_is(title, key) -> bool:
+    """진행 상태 줄 제목이 바로 이 이름의 것인가 — 「이름」 「이름의 …」 「이름 …」. 성을 빼서 늘리지 않는다(_sheet_hit 와 다름)."""
+    t = re.sub(r"\s+", " ", str(title or "")).strip()
+    return t == key or t.startswith((key + "의", key + " ", key + "(", key + " —"))
+
+
+def look_now(lorebook, name) -> str:
+    """이 인물의 가장 최근 [시트와 다름: …] 글과 그 화. 없으면 "" (예전 설정집은 아무것도 안 붙는다).
+    person_look 과 같이 확정된 설정집만 · 여러 권이면 모든 권. 진행 상태 줄의 제목이 이 사람(「전재훈의 겉모습」)인 것만 본다."""
+    if not isinstance(lorebook, dict) or not lorebook.get("confirmed") or not str(name or "").strip():
+        return ""
+    books = [b for b in lorebook.get("books") or [] if isinstance(b, dict) and b.get("confirmed", True)] or [lorebook]
+    want = re.sub(r"\s+", "", str(name))
+    # 성을 뺀 이름(도윤)은 그 이름을 가진 인물이 설정집에 하나일 때만 그 사람으로 본다 — 한도윤 · 김도윤이 같이 있으면 「도윤의 겉모습」은 누구 것인지 모른다.
+    people = {re.sub(r"\s+", "", str(e.get("title") or "")) for b in books for e in b.get("entries") or []
+              if isinstance(e, dict) and e.get("kind") == "person" and str(e.get("title") or "").strip()}
+    full = [p for p in people if lore_short(p) == want]
+    if want not in people and len(full) == 1:
+        want = full[0]                                   # 「도윤」으로 불렀고 그런 인물이 하나 → 한도윤
+    short = lore_short(want)
+    # 「도윤의 겉모습」을 한도윤 것으로 보는 건 한도윤이 설정집 인물이고 「도윤」으로 줄여 부를 사람이 그 하나뿐일 때만
+    keys = [want] + ([short] if short and want in people and [p for p in people if lore_short(p) == short] == [want]
+                     and short not in people else [])
+    best = None
+    for b in books:
+        for q in b.get("progress") or [] if isinstance(b.get("progress"), list) else []:
+            # 겉모습 줄만 — 관계 · 앎 줄에 같은 표시가 있어도 시트 예외로 삼지 않는다
+            if not isinstance(q, dict) or q.get("kind") != "겉모습" or not any(_title_is(q.get("title"), k) for k in keys if k):
+                continue
+            got = [m.group(1).strip() for m in SHEET_DIFF_RE.finditer(str(q.get("text") or "")) if m.group(1).strip()]
+            if not got:
+                continue
+            raw = q.get("ep")
+            ep = raw if isinstance(raw, int) and not isinstance(raw, bool) else (
+                int(raw.strip()) if isinstance(raw, str) and re.fullmatch(r"[0-9]{1,6}", raw.strip()) else -1)
+            if best is None or ep >= best[0]:
+                best = (ep, " ".join(got))
+    if not best:
+        return ""
+    return f"{best[1]} ({best[0]}화 진행 상태)" if best[0] >= 0 else best[1]
+
+
 def drop_looks(text: str) -> str:
     """머리 · 얼굴 · 체형 · 눈 색을 적은 **마디**만 뺀다 — 시트가 있는 인물은 그림이 시트를 따르므로 설정집 겉모습 글이 시트와 싸우지 않게.
     문장째 지우면 「짧게 민 머리에 턱선을 따라 마른 핏자국이 남아 있다」의 핏자국까지 사라져서, 쉼표 · 「~에」 · 「~고」 · 「~며」 마디로 나눠 본다.
-    상처 · 피 · 옷 · 소지품 · 관계 · 위치는 남긴다."""
+    상처 · 피 · 옷 · 소지품 · 관계 · 위치는 남긴다. [시트와 다름: …] 은 이야기 속에서 실제로 달라진 몸이라 그대로 남긴다."""
+    text = str(text or "")
+    marks = [m.group(0) for m in SHEET_DIFF_RE.finditer(text)]
+    if marks:
+        rest = _drop_plain(SHEET_DIFF_RE.sub(" ", text))
+        return " ".join(marks + ([rest] if rest else [])).strip()
+    return _drop_plain(text)
+
+
+def _drop_plain(text: str) -> str:
     out = []
     for sent in re.split(r"(?<=[.다])\s+", str(text or "")):
         if not sent or not LOOK_RE.search(sent):
