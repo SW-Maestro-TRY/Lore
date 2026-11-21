@@ -32,8 +32,9 @@ class LouTest {
     private final RunFiles files=mock(RunFiles.class);
     private final RegenService regen=mock(RegenService.class);
     private final UsageService usage=mock(UsageService.class);
+    private final EditorRegen editor=mock(EditorRegen.class);
     private final LouService service=new LouService(db,pages,files,harness,mock(WebtoonJobRepository.class),
-            mock(SafetyGuard.class),regen,usage);
+            mock(SafetyGuard.class),regen,usage,editor);
     private final WorkLedger ledger=mock(WorkLedger.class);
     private final LouController controller=new LouController(service,mock(Admins.class),ledger);
     private final Map<String,Object> ask=Map.of("active_page",2,"text","");
@@ -100,6 +101,88 @@ class LouTest {
             assertEquals(List.of("--lou-check","before","after"),captured.get(5,TimeUnit.SECONDS));
             assertTrue(finished.await(5,TimeUnit.SECONDS));
         } finally { TransactionSynchronizationManager.clearSynchronization(); }
+    }
+
+    @Test void automaticCheckWritesCompletedTurnWithoutQuota() throws Exception {
+        var job = mock(com.lore.webtoon.runs.PageRegen.class);
+        when(job.getId()).thenReturn("regen");
+        when(job.getRunId()).thenReturn("run");
+        when(job.getPageNo()).thenReturn(2);
+        when(job.getNote()).thenReturn("손");
+        var records = new LouRecords(db, ledger);
+        var result = new ObjectMapper().readTree("{\"ok\":false}");
+        records.checked(job, result);
+        verify(db).update(contains("'check',?,'done'"), anyString(), eq("run"), eq(0L),
+                eq("{\"page\":2,\"regen_id\":\"regen\",\"note\":\"손\",\"method\":\"keep\",\"auto\":true}"),
+                eq(result.toString()));
+        verifyNoMoreInteractions(db);
+    }
+
+    @Test void reviewUsesQuotaAndRestoresEveryPage() throws Exception {
+        assertThrows(LouLimit.class, () -> controller.review("run"));
+        when(db.update(anyString(),any(Object[].class))).thenReturn(1);
+        doAnswer(call -> {
+            Path dir = Files.createDirectories(root.resolve("run/pages"));
+            Files.writeString(dir.resolve("page01.png"), "첫 장");
+            Files.writeString(dir.resolve("page02.png"), "끝 장");
+            return null;
+        }).when(files).restore("run", 2);
+        when(harness.run(isNull(),anyList(),anyMap(),any())).thenAnswer(call -> {
+            List<String> args = call.getArgument(1);
+            assertEquals("--lou-review", args.get(2));
+            assertEquals(Map.of("lang","ko"), new ObjectMapper().readValue(Path.of(args.get(3)).toFile(), Map.class));
+            Files.writeString(Path.of(args.getLast()), "{\"reply\":\"완료\"}");
+            return 0;
+        });
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            controller.review("run");
+            verify(db).update(contains("insert into webtoon_lou_turn"),anyString(),eq("run"),eq(7L),eq("review"),eq("{}"));
+            TransactionSynchronizationManager.getSynchronizations().getFirst().afterCommit();
+            verify(usage,timeout(5000)).ingestMetaFile(eq("run"),any());
+            verify(db).update(contains("status='done'"),eq("{\"reply\":\"완료\"}"),anyString());
+        } finally { TransactionSynchronizationManager.clearSynchronization(); }
+    }
+
+    @Test void fixesSelectsStoredItemsAndUsesPlan() throws Exception {
+        LouService lou = spy(service);
+        var result = Map.of("items", List.of(Map.of("id","a","page",1), Map.of("id","skip","page",1)),
+                "dropped", List.of(Map.of("id","b","page",2)));
+        doReturn(Map.of("kind","review","status","done","result",result)).when(lou).view("run","r");
+        Path dir = Files.createDirectories(root.resolve("run/pages"));
+        Files.createFile(dir.resolve("page01.png"));
+        Files.createFile(dir.resolve("page02.png"));
+        when(harness.run(isNull(),anyList(),anyMap(),any())).thenAnswer(call -> {
+            List<String> args = call.getArgument(1);
+            assertEquals("--lou-plan", args.get(2));
+            var items = new ObjectMapper().readTree(Path.of(args.get(3)).toFile()).get("items");
+            assertEquals(2,items.size());
+            assertEquals("a",items.get(0).get("id").asText());
+            assertEquals("b",items.get(1).get("id").asText());
+            Files.writeString(Path.of(args.getLast()), """
+                    {"jobs":[{"page":1,"method":"keep","note":"손","basis":[2]},
+                             {"page":2,"method":"redraw","note":"문","basis":[]}]}
+                    """);
+            return 0;
+        });
+        var price = new EditorRegen.Price("surf",3);
+        when(editor.price(eq("run"),anyInt(),eq(7L),eq("surf"))).thenReturn(price);
+        when(editor.enqueue("run",1,7L,price,"손","keep",2,true)).thenReturn("j1");
+        when(editor.enqueue("run",2,7L,price,"문","redraw",null,false)).thenReturn("j2");
+        assertEquals(Map.of("jobs",List.of(Map.of("page",1,"method","keep","regen_id","j1"),
+                Map.of("page",2,"method","redraw","regen_id","j2"))),
+                lou.fixes("run",7L,Map.of("review_id","r","item_ids",List.of("b","a"),"quality","surf")));
+        assertThrows(BusinessException.class,()->lou.fixes("run",7L,Map.of("review_id","r","item_ids",List.of("missing"))));
+    }
+
+    @Test void fixesRejectsEmptyForeignAndUnfinishedReviews() {
+        assertThrows(BusinessException.class,()->service.fixes("run",7L,Map.of("review_id","r","item_ids",List.of())));
+        var body=Map.<String,Object>of("review_id","r","item_ids",List.of("a"));
+        assertThrows(BusinessException.class,()->service.fixes("other",7L,body));
+        LouService lou=spy(service);
+        doReturn(Map.of("kind","review","status","queued")).when(lou).view("run","r");
+        assertThrows(BusinessException.class,()->lou.fixes("run",7L,body));
+        verifyNoInteractions(editor,harness);
     }
 
     @Test void queuedToDone() throws Exception { flow(true); }

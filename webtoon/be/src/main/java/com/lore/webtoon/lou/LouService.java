@@ -32,11 +32,13 @@ public class LouService {
     private final WebtoonJobRepository jobs;
     private final SafetyGuard safety;
     private final RegenService regen;
+    private final EditorRegen editor;
     private final UsageService usage;
 
     public LouService(JdbcTemplate db, PageStore pages, RunFiles files,
                       HarnessProcess harness, WebtoonJobRepository jobs, SafetyGuard safety,
-                      RegenService regen, UsageService usage) {
+                      RegenService regen, UsageService usage, EditorRegen editor) {
+        this.editor=editor;
         this.db=db;
         this.pages=pages;
         this.files=files;
@@ -101,7 +103,7 @@ public class LouService {
         Path before=null;
         if(ask) {
             askInput(input,available);
-        } else {
+        } else if (kind.equals("check")) {
             int no=page(input.path("page"),available);
             require(Set.of("text","keep","redraw","textless").contains(input.path("method").asText()));
             String id=text(input,"regen_id",64);
@@ -137,6 +139,80 @@ public class LouService {
         return Map.of("id",id,"status","queued");
     }
 
+    private void restoreReviewPages(String run) throws IOException {
+        List<Integer> available = pages.pageNumbersOf(run);
+        // RunFiles restores every original up to and including its argument.
+        files.restore(run, Collections.max(available));
+        for (int page : available) {
+            if (!Files.isRegularFile(runDir(run).resolve("pages/page%02d.png".formatted(page)))) {
+                throw new IOException("검토할 장을 복구하지 못했습니다");
+            }
+        }
+    }
+
+    @Transactional
+    public Map<String,Object> fixes(String run, Long owner, Map<String,Object> body) {
+        JsonNode input = json.valueToTree(body);
+        String reviewId = text(input, "review_id", 36);
+        require(!reviewId.isBlank());
+        JsonNode ids = input.path("item_ids");
+        require(ids.isArray() && !ids.isEmpty());
+        Set<String> wanted = new LinkedHashSet<>();
+        for (JsonNode id : ids) {
+            require(id.isTextual() && !id.asText().isBlank());
+            wanted.add(id.asText());
+        }
+        var review = view(run, reviewId);
+        require("review".equals(review.get("kind")) && "done".equals(review.get("status")));
+        JsonNode result = json.valueToTree(review.get("result"));
+        ObjectNode request = json.createObjectNode();
+        ArrayNode selected = request.putArray("items");
+        Set<Integer> selectedPages = new HashSet<>();
+        for (String group : List.of("items", "dropped")) {
+            for (JsonNode item : result.path(group)) {
+                if (wanted.remove(item.path("id").asText())) {
+                    selected.add(item);
+                    selectedPages.add(item.path("page").asInt());
+                }
+            }
+        }
+        require(wanted.isEmpty() && selectedPages.size() <= 30);
+        String quality = input.path("quality").asText(null);
+        JsonNode plan = plan(run, request);
+        require(plan.isArray() && plan.size() == selectedPages.size());
+        List<Map<String,Object>> queued = new ArrayList<>();
+        for (JsonNode job : plan) {
+            int page = job.path("page").asInt();
+            String method = job.path("method").asText();
+            require(selectedPages.remove(page) && Set.of("keep", "redraw").contains(method));
+            JsonNode basis = job.path("basis").path(0);
+            var price = editor.price(run, page, owner, quality);
+            String id = editor.enqueue(run, page, owner, price, job.path("note").asText(), method,
+                    basis.isIntegralNumber() ? basis.intValue() : null, method.equals("keep"));
+            queued.add(Map.of("page", page, "method", method, "regen_id", id));
+        }
+        return Map.of("jobs", queued);
+    }
+
+    private JsonNode plan(String run, ObjectNode input) {
+        Path dir = null;
+        try {
+            restoreReviewPages(run);
+            dir = Files.createTempDirectory("lou-plan-");
+            Path request = dir.resolve("input.json"), result = dir.resolve("result.json");
+            json.writeValue(request.toFile(), input);
+            int exit = harness.run(null, List.of("--run-id", run, "--lou-plan", request.toString(),
+                    "--lou-out", result.toString()), Map.of(), line -> {});
+            if (exit != 0) throw new IOException("루 계획 실행 실패");
+            return json.readTree(result.toFile()).path("jobs");
+        } catch (IOException | InterruptedException e) {
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "고칠 장을 묶지 못했습니다.");
+        } finally {
+            clean(dir);
+        }
+    }
+
     private ArrayNode history(String run) {
         ArrayNode history=json.createArrayNode();
         for(var row:list(run)) {
@@ -158,12 +234,12 @@ public class LouService {
             db.update("update webtoon_lou_turn set status='running',updated_at=now() where id=?",id);
             dir=Files.createTempDirectory("lou-");
             int no=input.path("page").asInt(input.path("active_page").asInt());
-            if(kind.equals("ask") && !input.path("pins").isEmpty()) {
-                Set<Integer> selected=new LinkedHashSet<>();
-                input.path("pins").forEach(p->selected.add(p.path("page").asInt()));
-                no=selected.stream().limit(3).mapToInt(Integer::intValue).max().orElse(no);
+            if (kind.equals("review")) {
+                restoreReviewPages(run);
+            } else {
+                for (JsonNode pin : input.path("pins")) no = Math.max(no, pin.path("page").asInt());
+                files.restore(run, no);
             }
-            files.restore(run,no);
             if(before!=null) {
                 input.put("before",before.toString());
                 /* 하네스는 작품 폴더 밖의 그림을 견주지 않는다 — 지금 걸린 장을 그 자리에서 넘긴다. */
@@ -184,9 +260,16 @@ public class LouService {
             try {
                 usage.ingestMetaFile(run,runDir(run).resolve("meta.json"));
             } catch(Exception e) { log.warn("루 원가 적재 실패 {}",id,e); }
-            if(dir!=null) try(var paths=Files.walk(dir)) {
-                for(Path p:paths.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(p);
-            } catch(IOException e) { log.warn("루 임시 파일 정리 실패 {}",id,e); }
+            clean(dir);
+        }
+    }
+
+    private void clean(Path dir) {
+        if (dir == null) return;
+        try (var paths = Files.walk(dir)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(path);
+        } catch (IOException e) {
+            log.warn("루 임시 파일 정리 실패 {}", dir, e);
         }
     }
 

@@ -1,5 +1,6 @@
 package com.lore.webtoon.runs;
 
+import com.lore.webtoon.lou.EditorRegen;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.webtoon.Admins;
@@ -65,6 +66,7 @@ public class RunController {
     private final OverlayStore overlays;
     private final BakeService bakery;
     private final StoryStore stories;
+    private final EditorRegen editorRegen;
     private final RegenService regen;
     private final AfterRun after;
     private final WorkLedger ledger;
@@ -105,7 +107,8 @@ public class RunController {
     public RunController(RunService runs, PageStore pages, EpisodeExport export,
                          OverlayStore overlays, BakeService bakery, StoryStore stories,
                          RegenService regen, AfterRun after, WorkLedger ledger,
-                         CreditGate credits, Admins admins, com.lore.webtoon.safety.SafetyGuard safety) {
+                         CreditGate credits, Admins admins, com.lore.webtoon.safety.SafetyGuard safety, EditorRegen editorRegen) {
+        this.editorRegen = editorRegen;
         this.safety = safety;
         this.runs = runs;
         this.pages = pages;
@@ -543,14 +546,7 @@ public class RunController {
             return ResponseEntity.badRequest().body(Map.of("error", "구도 유지에는 고칠 메모가 필요하며 글자 없이 그리기와 함께 쓸 수 없습니다"));
         }
         String asked = body == null || body.get("quality") == null ? null : String.valueOf(body.get("quality"));
-        String quality = com.lore.webtoon.job.WebtoonQuality.isKnown(asked)
-                ? com.lore.webtoon.job.WebtoonQuality.normalize(asked) : null;
-        int cost = regen.isUnsafe(runId, no) ? 0
-                : quality == null ? regenCost(runId) : com.lore.webtoon.job.WebtoonQuality.regenCreditsOf(quality);
-        String blocked = cost > 0 ? credits.whyBlocked(userId, cost) : null;
-        if (blocked != null) {
-            throw new BusinessException(CreditGate.notEnough(), blocked);
-        }
+        var price = editorRegen.price(runId, no, userId, asked);
         try {
             /* 장면 설명을 고쳐 보냈으면 먼저 적는다(#626) — 걸린 장면은 같은 글로 또 그리면 또 걸린다.
                사람이 적은 글이므로 메모와 함께 입력 검사를 거친다. */
@@ -564,12 +560,8 @@ public class RunController {
                 throw new BusinessException(com.lore.common.exception.ErrorCode.INTERNAL_ERROR, "장면 설명을 저장하지 못했습니다");
             }
             /* 낸 사람은 기록에 적는다 — 실패하면, 서버가 다시 떠도, 그걸로 돌려준다(#626, #864). */
-            Long payer = cost > 0 ? userId : null;
-            String id = regen.queue(runId, no, note, quality, payer, keep ? "keep" : textless ? "textless" : null);
-            if (cost > 0) {
-                credits.charge(userId, cost, RegenService.regenRef(runId, no, id), "장 다시 그리기");
-            }
-            regen.go(id);
+            String id = editorRegen.enqueue(runId, no, userId, price, note,
+                    keep ? "keep" : textless ? "textless" : null, null, false);
             return ResponseEntity.ok(regen.statusOf(id));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));

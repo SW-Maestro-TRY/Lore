@@ -1,5 +1,6 @@
 package com.lore.webtoon.runs;
 
+import com.lore.webtoon.lou.LouRecords;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.art.PageUploader;
 import com.lore.webtoon.job.HarnessProcess;
@@ -65,6 +66,7 @@ public class RegenService {
     private static final Pattern VERSION_FILE =
             Pattern.compile("page(\\d+)\\.v(\\d+)\\.png");
 
+    private final LouRecords records;
     private final PageRegenRepository regens;
     private final ObjectMapper json = new ObjectMapper();
     private final com.lore.webtoon.credit.CreditGate credits;
@@ -82,7 +84,8 @@ public class RegenService {
                         HarnessProcess harness, PageUploader uploader, JobRunner runner,
                         RunFiles files, com.lore.webtoon.job.AfterRun after,
                         com.lore.webtoon.credit.CreditGate credits,
-                        com.lore.webtoon.story.StoryStore stories) {
+                        com.lore.webtoon.story.StoryStore stories, LouRecords records) {
+        this.records = records;
         this.stories = stories;
         this.credits = credits;
         this.regens = regens;
@@ -96,7 +99,7 @@ public class RegenService {
     }
 
     /** 다시 그리기 값의 장부 번호. 받을 때와 돌려줄 때 같은 번호여야 한다. */
-    static String regenRef(String runId, int pageNo, String id) {
+    public static String regenRef(String runId, int pageNo, String id) {
         return "regen:" + runId + ":" + pageNo + ":" + id;
     }
 
@@ -125,13 +128,21 @@ public class RegenService {
 
     @Transactional
     public String queue(String runId, int pageNo, String note, String quality, Long payer, String mode) {
+        return queue(runId, pageNo, note, quality, payer, mode, null, false);
+    }
+
+    @Transactional
+    public String queue(String runId, int pageNo, String note, String quality, Long payer,
+                        String mode, Integer basis, boolean verify) {
         if (!pages.pageNumbersOf(runId).contains(pageNo)) {
             throw new NoSuchElementException("그 페이지가 없습니다");
         }
         String id = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String clean = note == null ? "" : note.strip();
         PageRegen one = PageRegen.queued(id, runId, pageNo,
-                clean.substring(0, Math.min(500, clean.length())), quality, Instant.now());
+                verify || "redraw".equals(mode) ? clean : clean.substring(0, Math.min(500, clean.length())),
+                quality, Instant.now());
+        one.setVerification(basis, verify);
         one.setMode(mode);
         regens.save(payer == null ? one : one.paidBy(payer, regenRef(runId, pageNo, id)));
         return id;
@@ -307,6 +318,7 @@ public class RegenService {
            「빈 장」으로 보이고 다시 그리기가 공짜가 된다. */
         boolean wasUnsafe = runner.isUnsafePage(runId, no);
         /* 아직 안 그린 장을 이어 그리는 것인가 — 크레딧이 모자라 남겨 둔 장(startPending). */
+        Path verification = null;
         boolean wasDrawn = pages.pageNumbersOf(runId).contains(no);
 
         try {
@@ -336,6 +348,17 @@ public class RegenService {
                 args.add("--detail-pages");
             }
             if (keep) {
+                if (one.getBasis() != null) {
+                    files.restore(runId, one.getBasis());
+                    if (!Files.isRegularFile(pageFile(runId, one.getBasis()))) {
+                        throw new IOException("구도를 맞출 기준 장이 없습니다");
+                    }
+                    args.addAll(List.of("--keep-basis", one.getBasis().toString()));
+                }
+                if (one.isVerify()) {
+                    verification = Files.createTempFile("lou-verify-", ".json");
+                    args.addAll(List.of("--lou-verify", verification.toString()));
+                }
                 args.add("--keep-from");
                 args.add(previous.toAbsolutePath().toString());
             } else if (detail && "textless".equals(one.getMode())) {
@@ -403,9 +426,22 @@ public class RegenService {
                다시 그릴 때마다 원본이 서버에 쌓인다(로컬은 RunFiles 가 안 지운다). */
             files.sweepUploaded(runId);
             move(id, RegenStatus.DONE);
+            if (verification != null && Files.isRegularFile(verification) && Files.size(verification) > 0) {
+                try {
+                    records.checked(one, json.readTree(verification.toFile()));
+                } catch (Exception e) {
+                    log.error("루 확인 기록 저장 실패 (regen={})", id, e);
+                }
+            }
         } catch (Exception e) {
             log.error("다시 그리지 못했습니다 (run={}, 장={})", runId, no, e);
             fail(id, "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
+        } finally {
+            if (verification != null) try {
+                Files.deleteIfExists(verification);
+            } catch (IOException e) {
+                log.warn("루 확인 파일 정리 실패 (regen={})", id, e);
+            }
         }
     }
 
@@ -462,7 +498,7 @@ public class RegenService {
     }
 
     /** 남겨 둔 화질. 없으면(옛 작품) 기본값으로 떨어진다. 다시 그리기 값도 이걸 본다(#787). */
-    String qualityOf(String runId) {
+    public String qualityOf(String runId) {
         try {
             return Files.readString(runner.runDir(runId).resolve("quality.txt")).strip();
         } catch (IOException e) {

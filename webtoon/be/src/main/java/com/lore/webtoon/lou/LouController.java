@@ -27,6 +27,16 @@ public class LouController {
         return service.submit(runId, EditorAccess.mustOwn(runId, admins, ledger), "ask", body);
     }
 
+    @PostMapping("/reviews")
+    public Object review(@PathVariable String runId) {
+        return service.submit(runId, EditorAccess.mustOwn(runId, admins, ledger), "review", Map.of());
+    }
+
+    @PostMapping("/fixes")
+    public Object fixes(@PathVariable String runId, @RequestBody Map<String,Object> body) {
+        return service.fixes(runId, EditorAccess.mustOwn(runId, admins, ledger), body);
+    }
+
     @PostMapping("/checks")
     @Operation(summary="루에게 재생성 전후 비교 요청하기")
     public Object check(@PathVariable String runId, @RequestBody Map<String,Object> body) {

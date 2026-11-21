@@ -36,7 +36,7 @@ public class PageRegen {
     private int pageNo;
 
     /** 편집실에서 사람이 적은 한 마디. 하네스가 그리는 프롬프트 뒤에 붙인다. */
-    @Column(length = 500)
+    @Column(columnDefinition = "text")
     private String note;
 
     /**
@@ -48,6 +48,18 @@ public class PageRegen {
 
     @Column(length = 10)
     private String mode;
+
+    private Integer basis;
+    @Column(nullable = false)
+    private boolean verify;
+
+    void setVerification(Integer basis, boolean verify) {
+        this.basis = basis;
+        this.verify = verify;
+    }
+
+    Integer getBasis() { return basis; }
+    boolean isVerify() { return verify; }
 
     void setMode(String mode) {
         this.mode = mode;

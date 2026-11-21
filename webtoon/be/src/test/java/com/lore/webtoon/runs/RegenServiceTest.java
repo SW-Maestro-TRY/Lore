@@ -49,6 +49,8 @@ class RegenServiceTest {
     private com.lore.webtoon.job.AfterRun after;
     private com.lore.webtoon.credit.CreditGate credits;
     private com.lore.webtoon.story.StoryStore stories;
+    private final com.lore.webtoon.job.RunFiles files = mock(com.lore.webtoon.job.RunFiles.class);
+    private final com.lore.webtoon.lou.LouRecords records = mock(com.lore.webtoon.lou.LouRecords.class);
     private RegenService service;
 
     @BeforeEach
@@ -83,7 +85,7 @@ class RegenServiceTest {
         stories = mock(com.lore.webtoon.story.StoryStore.class);
         when(stories.chosenOf("run-1")).thenReturn(java.util.Optional.empty());
         service = new RegenService(regens, pages, bakery, harness, uploader, runner,
-                mock(com.lore.webtoon.job.RunFiles.class), after, credits, stories);
+                files, after, credits, stories, records);
     }
 
     private void 페이지파일(int no, byte[] content) throws IOException {
@@ -103,6 +105,33 @@ class RegenServiceTest {
         String id = service.queue("run-1", 1, note, quality, payer);
         service.go(id);
         return id;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, 1})
+    void verifiedKeepRecordsOnlySuccessfulDrawing(int exit) throws Exception {
+        페이지파일(1, "원본".getBytes());
+        페이지파일(3, "기준".getBytes());
+        var verification = new java.util.concurrent.atomic.AtomicReference<Path>();
+        when(harness.run(any(), any(), anyMap(), any())).thenAnswer(call -> {
+            List<String> args = call.getArgument(1);
+            assertThat(args).containsSubsequence("--keep-basis", "3").contains("--keep-from", "--lou-verify");
+            Path result = Path.of(args.get(args.indexOf("--lou-verify") + 1));
+            verification.set(result);
+            Files.writeString(result, "{\"ok\":false,\"advice\":\"redraw\"}");
+            return exit;
+        });
+        String id = service.queue("run-1", 1, "손", null, 7L, "keep", 3, true);
+        service.go(id);
+        큐를_바로_돌린다();
+        verify(files).restore("run-1", 3);
+        assertThat(verification.get()).doesNotExist();
+        if (exit == 0) {
+            verify(records).checked(eq(regens.findById(id).orElseThrow()), eq(new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree("{\"ok\":false,\"advice\":\"redraw\"}")));
+        } else {
+            org.mockito.Mockito.verifyNoInteractions(records);
+        }
     }
 
     @Test
@@ -248,7 +277,7 @@ class RegenServiceTest {
 
         ArgumentCaptor<List<String>> args = ArgumentCaptor.forClass(List.class);
         verify(harness).run(any(), args.capture(), anyMap(), any());
-        assertThat(args.getValue()).doesNotContain("--detail-pages");
+        assertThat(args.getValue()).containsExactly("--run-id", "run-1", "--page", "1");
     }
 
     @Test

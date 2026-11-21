@@ -1,5 +1,6 @@
 package com.lore.webtoon.runs;
 
+import com.lore.webtoon.lou.EditorRegen;
 import com.lore.webtoon.Admins;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.credit.CreditGate;
@@ -39,13 +40,13 @@ class RegenQualityPriceTest {
     void 세운다() {
         controller = new RunController(mock(RunService.class), mock(PageStore.class), mock(EpisodeExport.class),
                 mock(OverlayStore.class), mock(BakeService.class), mock(StoryStore.class), regen, mock(AfterRun.class),
-                ledger, credits, mock(Admins.class), mock(com.lore.webtoon.safety.SafetyGuard.class));
+                ledger, credits, mock(Admins.class), mock(com.lore.webtoon.safety.SafetyGuard.class), new EditorRegen(regen, credits));
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(7L, null, List.of()));
         when(ledger.mayChange("r1", 7L)).thenReturn(true);
         when(regen.qualityOf("r1")).thenReturn("swell");
         when(regen.queue(anyString(), org.mockito.ArgumentMatchers.anyInt(), anyString(), org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), isNull(), eq(false)))
                 .thenReturn("g1");
         when(regen.statusOf("g1")).thenReturn(new HashMap<>());
     }
@@ -63,9 +64,9 @@ class RegenQualityPriceTest {
     @Test
     void forwardsRegenMode() {
         controller.regen("r1", 2, Map.of("mode", "keep", "feedback", "소매"));
-        verify(regen).queue("r1", 2, "소매", null, 7L, "keep");
+        verify(regen).queue("r1", 2, "소매", null, 7L, "keep", null, false);
         controller.regen("r1", 2, Map.of("textless", true));
-        verify(regen).queue("r1", 2, "", null, 7L, "textless");
+        verify(regen).queue("r1", 2, "", null, 7L, "textless", null, false);
     }
 
     @AfterEach
@@ -78,7 +79,7 @@ class RegenQualityPriceTest {
     void 낮추면_싸다() {
         controller.regen("r1", 2, Map.of("feedback", "", "quality", "surf"));
 
-        verify(regen).queue("r1", 2, "", "surf", 7L, null);
+        verify(regen).queue("r1", 2, "", "surf", 7L, null, null, false);
         verify(credits).charge(eq(7L), eq(3), anyString(), anyString());
     }
 
@@ -88,7 +89,7 @@ class RegenQualityPriceTest {
         controller.regen("r1", 2, Map.of("feedback", ""));
 
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(regen, credits);
-        order.verify(regen).queue(eq("r1"), eq(2), anyString(), isNull(), eq(7L), isNull());
+        order.verify(regen).queue(eq("r1"), eq(2), anyString(), isNull(), eq(7L), isNull(), isNull(), eq(false));
         order.verify(credits).charge(eq(7L), eq(6), eq("regen:r1:2:g1"), anyString());
         order.verify(regen).go("g1");
     }
@@ -100,7 +101,7 @@ class RegenQualityPriceTest {
         verify(credits).charge(eq(7L), eq(6), anyString(), anyString());
 
         controller.regen("r1", 3, Map.of("feedback", "", "quality", "high"));
-        verify(regen).queue(eq("r1"), eq(3), anyString(), isNull(), eq(7L), isNull());
+        verify(regen).queue(eq("r1"), eq(3), anyString(), isNull(), eq(7L), isNull(), isNull(), eq(false));
         verify(credits, org.mockito.Mockito.times(2)).charge(eq(7L), eq(6), anyString(), anyString());
     }
 }
