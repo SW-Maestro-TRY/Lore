@@ -160,7 +160,7 @@ def follow_note(name, changes):
 
 
 def ask(run, req, output, dry=False):
-    hit = find(run, req.get("sheet"))
+    hit = sheet_named(run, req.get("sheet"))      # 이름이 겹치는 다른 사람의 시트로 묻지 않게 온전한 이름으로
     lou.require(hit is not None)
     name, source = hit
     pins = req.get("pins") or []

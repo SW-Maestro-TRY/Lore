@@ -47,19 +47,20 @@ class TextFixTest(unittest.TestCase):
         left, _top, right, _bottom = ImageChops.difference(image, after).getbbox()
         self.assertLess(right, 420)
 
-    def test_side_by_side_bubbles_with_a_narrow_gap(self):
-        """두 글이 붙다시피 해도 말풍선 사이 잘록한 목에서 가른다."""
-        image = Image.new("RGB", (800, 1200), (90, 110, 150))
+    def test_single_bubble_with_a_tail_changes_the_whole_line(self):
+        """꼬리 달린 말풍선 하나 — 꼬리 자리에서 글을 가르지 않고 덩어리 전체를 바꾼다."""
+        image = Image.new("RGB", (600, 900), (90, 110, 150))
         draw = ImageDraw.Draw(image)
-        draw.ellipse((20, 60, 420, 340), fill="white", outline="black", width=3)
-        draw.ellipse((380, 60, 780, 340), fill="white", outline="black", width=3)
-        draw.rectangle((380, 180, 420, 220), fill="white")
+        draw.polygon([(60, 250), (130, 210), (150, 240)], fill="white", outline="black")
+        draw.ellipse((80, 80, 520, 320), fill="white", outline="black", width=3)
+        draw.polygon([(62, 250), (131, 214), (148, 238)], fill="white")
         font = ImageFont.truetype(textfix.font_file(), 26)
-        draw.text((394, 200), "왼쪽 글자", font=font, fill=(20, 20, 20), anchor="rm")
-        draw.text((406, 200), "오른쪽 글자", font=font, fill=(20, 20, 20), anchor="lm")
-        after = textfix.patch(image, 380, 200, "왼쪽 고친 글")
-        _left, _top, right, _bottom = ImageChops.difference(image, after).getbbox()
-        self.assertLessEqual(right, 402)
+        draw.text((300, 200), "이 말풍선의 대사를 고쳐 줘", font=font, fill=(20, 20, 20), anchor="mm")
+        old = image.crop((100, 180, 500, 220)).convert("L").point(lambda v: 255 if v < 100 else 0).getbbox()
+        after = textfix.patch(image, 250, 200, "네")
+        left_ink = after.crop((100, 180, 230, 220)).convert("L").point(lambda v: 255 if v < 100 else 0).getbbox()
+        self.assertIsNotNone(old)
+        self.assertIsNone(left_ink)                            # 원문 첫머리가 남지 않는다
 
     def test_long_lines_wrap_quickly(self):
         import time

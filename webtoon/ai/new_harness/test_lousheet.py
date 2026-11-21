@@ -142,6 +142,17 @@ class LouSheetTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             lousheet.clean(data, self.book, "김 민수", [])
 
+    def test_sheet_question_for_a_namesake_without_a_sheet_is_refused(self):
+        png(self.book / "sheets" / "민수.png", "blue")
+        lou.write_json(self.book / "cast.json", [{"name": "김 민수", "look": ""}, {"name": "민수", "look": ""}])
+        request = self.root / "ask.json"
+        lou.write_json(request, dict(text="머리", sheet="김 민수", pins=[], lang="ko"))
+        with patch.object(lousheet.llm, "Call") as factory, self.assertRaises(ValueError):
+            lousheet.ask(self.book, lou.read(request), self.root / "out.json")
+        factory.assert_not_called()
+        self.assertEqual("민수", lousheet.sheet_named(self.book, "민수")[0])
+        self.assertEqual("마바 사아", lousheet.sheet_named(self.book, "마바")[0])
+
     def test_names_do_not_slide_to_someone_else(self):
         png(self.book / "sheets" / "카를로스.png", "blue")
         png(self.book / "sheets" / "sheet.png", "green")            # 이름이 sheet 인 조연
