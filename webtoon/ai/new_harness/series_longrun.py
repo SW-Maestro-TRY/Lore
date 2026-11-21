@@ -81,7 +81,7 @@ FREE_PROMPT = """너는 웹툰 연재 작가다. 원작은 이미 다 옮겼다.
 
 [직전 화 본문]
 {prev}
-"""
+{arc_block}"""
 
 CHECK_PROMPT = """너는 연재 웹툰의 설정 감수자다. [이전 회차 원문]은 이미 연재된 사실이다. [이번 화]가 그 사실과
 어긋나는지 본다. 이번 화는 작가가 설정집 · 진행 상태 · 직전 화만 보고 썼다.
@@ -295,7 +295,14 @@ def free_step(env: dict, out: Path, n: int, state: dict, source: str, model: str
     note = ("이번 화가 이 연재의 마지막 화다. 남은 큰 미해결을 매듭짓고, 인물들이 어디에 이르렀는지 보여 주며 끝낸다."
             if last else "")
     cn = f"- {state['content_note']}" if state.get("content_note") else ""
-    prompt = FREE_PROMPT.format(n=n, total=total, k=k, last_note=note, content_note=cn, state=st, prev=prev)
+    arc_block = ""
+    arc_file = Path(state["free_arc"]) if state.get("free_arc") else None
+    if arc_file and arc_file.is_file() and arc_file.read_text(encoding="utf-8").strip():
+        # 사람이 정한 이어 쓰기 큰 줄기 — 화마다 파일을 다시 읽어, 도는 중에 고쳐도 다음 화부터 반영된다.
+        arc_block = (f"\n[이어 쓰기 큰 줄기 — 작가가 정한 방향]\n{arc_file.read_text(encoding='utf-8').strip()}\n\n"
+                     f"이번 화는 이어 쓰는 {total}화 가운데 {k}번째다. 이 줄기에서 지금 어디쯤인지 보고 그 대목을 정하되, "
+                     "진행 상태와 직전 화에서 자연스럽게 이어지게 한다. 줄기에 적힌 일을 한 화에 몰아 넣지 않는다.\n")
+    prompt = FREE_PROMPT.format(n=n, total=total, k=k, last_note=note, content_note=cn, state=st, prev=prev, arc_block=arc_block)
     got = {}
     for attempt in range(3):
         got = ask(env, prompt, model, out / "steps" / f"ep{n:02d}-free{attempt}")
@@ -457,6 +464,8 @@ def main() -> int:
                    help="원작을 다 옮긴 뒤 원작 없이 설정을 이어 몇 화를 더 쓴다(0 = 원작 끝에서 완결)")
     p.add_argument("--setup-upto", type=int, default=0,
                    help="설정집(book0)을 원작 앞 몇 자로만 뽑는다(0 = 전체). 뒤에서 바뀌는 사실이 1화부터 들어가지 않게")
+    p.add_argument("--free-arc", default="",
+                   help="원작 뒤 이어 쓰기의 큰 줄기를 적은 파일(화마다 다시 읽는다). 없으면 진행 상태만 보고 정한다")
     p.add_argument("--content-note", default="",
                    help="모든 화의 작가 요청 · 이어 쓰기 회차 정하기에 덧붙이는 수위 규칙(예: 성적인 장면은 암전)")
     p.add_argument("--accept", type=int, default=0,
@@ -485,6 +494,7 @@ def main() -> int:
     for key, val in (("source_to_writer", args.source_to_writer), ("reader_check", args.reader_check),
                      ("reader_gate", args.reader_gate), ("free_episodes", args.free_episodes),
                      ("content_note", args.content_note),
+                     ("free_arc", str(Path(args.free_arc).resolve()) if args.free_arc else ""),
                      ("body_sentences", [int(x) for x in args.body_sentences.split("-")])):
         if not args.resume or key not in state:
             state[key] = val
