@@ -252,6 +252,9 @@ def _named_in(name: str, sheets, hay: str) -> bool:
     for k in _name_keys(name):
         at = hay.find(k)
         while at >= 0:
+            # 별칭(성을 뗀 이름 등)이 다른 시트의 정확한 이름과 같으면 그 자리는 그 시트 사람이다.
+            if k != name and k in sheets:
+                break
             if not any(a <= at and at + len(k) <= b and b - a > len(k) for a, b in covered):
                 return True
             at = hay.find(k, at + 1)
