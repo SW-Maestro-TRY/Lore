@@ -799,20 +799,28 @@ def note_block(note: str) -> str:
 TEXTLESS = "## 글자 없이 그리기\n앞의 대사·나레이션·제목 지시와 관계없이 말풍선, 나레이션 상자, 효과음, 글자를 전혀 그리지 않는다. 빈 말풍선이나 상자도 그리지 않고 행동과 표정으로 보여 준다."
 
 
-def keep_prompt(template: str, note: str) -> str:
-    return template.rstrip().replace("{note}", note)
+def keep_prompt(template: str, note: str, sheet_names=()) -> str:
+    """구도 유지 프롬프트. 시트를 붙였으면 누구 시트인지 붙인 순서대로 적는다. 메모는 적힌 그대로 넣는다."""
+    sheets = (f"둘째 그림부터는 캐릭터 시트다({', '.join(sheet_names)}). 바꾸는 인물은 그 사람의 시트대로 그린다.\n"
+              if sheet_names else "")
+    return template.rstrip().replace("{sheets}", sheets).replace("{note}", note)
 
 
-def keep_refs(source: Path, scene: dict | None, note: str, char: dict | None,
-              hero_sheets: dict[int, Path], cast_sheets: dict[str, Path]) -> list[Path]:
-    selection = dict(scene or {})
-    selection["user_text"] = f"{selection.get('user_text', '')} {note}"
-    who, room = sheet_plan(char, selection if scene is not None else None)
-    heroes = [hero_sheets[i] for i in who[:REF_LIMIT - 1] if i in hero_sheets]
-    if scene is None:
-        room = min(CAST_SHEET_LIMIT, REF_LIMIT - 1 - len(heroes))
-    names = cast_sheets_in_scene(cast_sheets, selection, room)
-    return [source, *heroes, *(cast_sheets[name] for name in names)]
+def keep_refs(source: Path, note: str, char: dict | None,
+              hero_sheets: dict[int, Path], cast_sheets: dict[str, Path]) -> tuple[list[Path], list[str]]:
+    """구도 유지에 붙일 그림과 그 시트 주인 이름 — 지금 장, 그리고 「고칠 것」에 이름이 나온 사람의 시트만.
+
+    장면 글에 이름이 나온다고 붙이지 않는다. 바꾸지 않을 사람의 시트까지 붙이면 그 사람도 시트 쪽으로
+    다시 그려질 수 있다. 직전 장도 붙이지 않는다. 이름이 하나도 없으면 지금 장만 붙는다."""
+    named: list[tuple[str, Path]] = []
+    for i, name in enumerate(protagonist_names(char)):
+        if i in hero_sheets and any(k in note for k in _name_keys(name)):
+            named.append((name, hero_sheets[i]))
+    for name, png in cast_sheets.items():
+        if png not in [p for _n, p in named] and any(k in note for k in _name_keys(name)):
+            named.append((name, png))
+    named = named[:REF_LIMIT - 1]
+    return [source, *(p for _n, p in named)], [n for n, _p in named]
 
 
 def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
@@ -953,9 +961,9 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         if only and page_no not in only:
             continue
         if keep_from:
-            prompt = keep_prompt((HERE / "prompt/keep_page_prompt").read_text(encoding="utf-8"), note)
-            refs = keep_refs(keep_from, scenes[n_ - 1] if n_ else None, note, char,
-                             {i: path for i, path in enumerate(hero_sheets) if path.exists()}, cast_sheets)
+            refs, sheet_names = keep_refs(keep_from, note, char,
+                                          {i: path for i, path in enumerate(hero_sheets) if path.exists()}, cast_sheets)
+            prompt = keep_prompt((HERE / "prompt/keep_page_prompt").read_text(encoding="utf-8"), note, sheet_names)
             log("[구도 유지] 참조 순서: " + " → ".join(map(str, refs)))
         else:
             if n_ == 0:
