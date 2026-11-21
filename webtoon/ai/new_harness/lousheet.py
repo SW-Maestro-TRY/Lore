@@ -235,6 +235,21 @@ def _new_spec(run, plan):
     return spec, sheetmod.build_prompt(spec, from_photo=False)
 
 
+def full_name(run, name):
+    """짧게 부른 이름을 이 작품에서 쓰는 온전한 이름으로.
+
+    정확히 같은 이름(시트든 인물 설정이든)이 먼저다. 「김 민수」와 「민수」가 따로 있으면 「김 민수」가 「민수」의 시트로
+    미끄러지면 안 된다. 정확히 같은 이름이 없을 때만 짧게 부른 이름으로 찾는다.
+    """
+    name = " ".join((name or "").split())
+    names = [n for n, _p in sheets_of(run)] + [str(p.get("name") or "") for p in cast_of(run)]
+    if name in names:
+        return name
+    hit = find(run, name)
+    person = person_of(run, name)
+    return hit[0] if hit else str((person or {}).get("name") or name).strip()
+
+
 def drafts_dir(run):
     return run / "sheets" / "drafts"
 
@@ -248,6 +263,11 @@ def inside(path, folder):
         return False
 
 
+def in_drafts(run, path):
+    """이 작품의 후보 자리 안인가. 후보 폴더 자체가 링크로 작품 밖을 가리키는 것도 막는다."""
+    return Path(path).is_absolute() and inside(path, drafts_dir(run)) and inside(path, run)
+
+
 def draft(run, request, out, dry=False):
     """후보 한 장. request: {method, target, base, refs, note, look} — 묻기가 돌려준 방법 하나.
 
@@ -255,7 +275,7 @@ def draft(run, request, out, dry=False):
     """
     plan = lou.read(request)
     lou.require(plan.get("method") in METHODS and lou.string(plan, "note") and lou.string(plan, "target"))
-    lou.require(out.suffix == ".png" and inside(out, drafts_dir(run)))
+    lou.require(out.suffix == ".png" and in_drafts(run, out))
     found = [find(run, r) for r in plan.get("refs") or []]
     lou.require(all(found))
     base = find(run, plan.get("base") or plan["target"]) if plan["method"] == "sheet_keep" or plan.get("base") else None
@@ -285,7 +305,8 @@ def draft(run, request, out, dry=False):
         return
     meta = imagegen.paint("CAST_SHEET_IMAGE", prompt, out, refs=refs, kind=imagegen.SHEET_KIND)
     record(run, meta)
-    write_json(out.with_suffix(".json"), {"target": plan["target"], "method": plan["method"], "look": plan.get("look", "")})
+    write_json(out.with_suffix(".json"), {"target": full_name(run, plan["target"]), "method": plan["method"],
+                                          "look": plan.get("look", "")})
 
 
 def pick(run, request):
@@ -298,15 +319,16 @@ def pick(run, request):
 
     req = lou.read(request)
     source = Path(req.get("from") or "")
-    lou.require(lou.string(req, "target") and source.suffix == ".png" and source.is_file()
-                and inside(source, drafts_dir(run)))
+    lou.require(lou.string(req, "target") and source.suffix == ".png" and source.is_file() and in_drafts(run, source))
     made = source.with_suffix(".json")
-    lou.require(made.is_file() and same_person([(lou.read(made).get("target", ""), None)], req["target"]) is not None)
+    lou.require(made.is_file())
+    # 후보를 그린 사람의 온전한 이름으로만 건다 — 고를 때 부른 짧은 이름이 다른 사람에게 미끄러지지 않게
+    name = str(lou.read(made).get("target") or "")
+    lou.require(name and full_name(run, req["target"]) == name)
     with Image.open(source) as image:
         image.verify()
-    hit = find(run, req["target"])
-    person = person_of(run, req["target"])
-    name = hit[0] if hit else str((person or {}).get("name") or req["target"]).strip()
+    hit = next(((n, png) for n, png in sheets_of(run) if n == name), None)
+    person = next((p for p in cast_of(run) if str(p.get("name") or "") == name), None)
     dest = hit[1] if hit else run / "sheets" / f"{stem(name)}.png"
     hero = dest.resolve() == (run / "sheet.png").resolve()
     lock = run / "sheets" / ".pick.lock"

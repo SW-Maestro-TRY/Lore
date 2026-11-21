@@ -117,6 +117,16 @@ class LouTest(unittest.TestCase):
         result = self.invoke("ask",req,[json.dumps(dict(self.ask,plans=[plan]))]*2)
         self.assertEqual([],result["plans"])
 
+    def test_text_fix_on_a_pin_from_a_skipped_page_is_refused(self):
+        lou.write_json(self.book/"scenes.json", {"scenes":[{"what":"가"}]*5})
+        for n in (3, 4, 5):
+            Image.new("RGB",(600,1800),"white").save(self.book/f"pages/page{n:02}.png")
+        req = dict(self.req,pins=[dict(self.pin,n=i,page=i+1) for i in range(1,5)])
+        plan = dict(method="text",pages=[2],changes="오자",keeps="그림",note="",text=dict(page=2,pin=4,x=10,y=10,text="글"))
+        result = self.invoke("ask",req,[json.dumps(dict(self.ask,plans=[plan]))]*2)
+        self.assertEqual([],result["plans"])
+        self.assertEqual([5],result["skipped_pages"])
+
     def test_check_only_compares_pictures_of_this_work(self):
         outside = self.root/"other.png"
         Image.new("RGB",(10,10)).save(outside)
@@ -124,12 +134,19 @@ class LouTest(unittest.TestCase):
         lou.write_json(path, dict(page=2,before=str(outside),after=str(self.page),note="손",method="keep",lang="ko"))
         with self.assertRaises(ValueError):
             lou.process(self.book,"check",path,self.root/"out.json")
+        lou.write_json(path, dict(page=2,before="pages/page02.png",after=str(self.page),note="손",method="keep",lang="ko"))
+        with self.assertRaises(ValueError):          # 상대 경로는 어디 기준인지 모호하다
+            lou.process(self.book,"check",path,self.root/"out.json")
 
     def test_text_drift_counts_repeats_and_ignores_line_splits(self):
         self.assertEqual([dict(before="간다 간다",after=""),dict(before="",after="추가 문장")],
                          lou.text_changed(["간다 간다","간다 간다"],["간다 간다","추가 문장"]))
         self.assertEqual([], lou.text_changed(["다시 간다"],["다시","간다"]))
         self.assertEqual([dict(before="",after="새로 생긴 줄")], lou.text_changed(["그대로"],["그대로","새로 생긴 줄"]))
+
+    def test_short_typos_and_rejoined_lines(self):
+        self.assertEqual(["가고라"],[d["seen"] for d in lou.text_diff(2,["가고라","가거라"],{"acting":"“가거라.”"})])
+        self.assertEqual([dict(before="그만",after="그만해")], lou.text_changed(["어서 와","그만"],["어서","와","그만해"]))
 
     def test_text_drift(self):
         self.assertEqual([dict(before="물린 사람을 보면",after="몰린 사람을 보면"),dict(before="쾅쾅",after="")],

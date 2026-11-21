@@ -1,4 +1,5 @@
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -54,7 +55,7 @@ class LouSheetTest(unittest.TestCase):
     def drafted(self, target, colour="red", name="cand.png"):
         out = self.book / "sheets" / "drafts" / name
         png(out, colour)
-        lou.write_json(out.with_suffix(".json"), {"target": target})
+        lou.write_json(out.with_suffix(".json"), {"target": lousheet.full_name(self.book, target)})
         return out
 
     def test_draft_keeps_the_sheet_first(self):
@@ -70,7 +71,7 @@ class LouSheetTest(unittest.TestCase):
         self.assertIn("카렌", prompt)
         self.assertEqual(["마바 사아.png", "카렌.png"], [p.name for p in paint.call_args.kwargs["refs"]])
         self.assertEqual(out, written)
-        self.assertEqual("마바", lou.read(out.with_suffix(".json"))["target"])
+        self.assertEqual("마바 사아", lou.read(out.with_suffix(".json"))["target"])
 
     def test_pick_keeps_old_versions_and_updates_the_look(self):
         candidate = self.drafted("마바")
@@ -99,6 +100,35 @@ class LouSheetTest(unittest.TestCase):
                 lousheet.pick(self.book, request)
         with Image.open(self.book / "sheets" / "마바 사아.png") as now:
             self.assertEqual((128, 128, 128), now.convert("RGB").getpixel((0, 0)))
+
+    def test_drafts_folder_pointing_outside_is_refused(self):
+        outside = self.root / "elsewhere"
+        outside.mkdir()
+        shutil.rmtree(self.book / "sheets" / "drafts", ignore_errors=True)
+        (self.book / "sheets" / "drafts").symlink_to(outside, target_is_directory=True)
+        png(outside / "cand.png", "red")
+        lou.write_json(outside / "cand.json", {"target": "마바 사아"})
+        request = self.root / "pick.json"
+        lou.write_json(request, {"target": "마바", "from": str(self.book / "sheets" / "drafts" / "cand.png")})
+        with self.assertRaises(ValueError):
+            lousheet.pick(self.book, request)
+        plan = self.root / "plan.json"
+        lou.write_json(plan, dict(method="sheet_keep", target="마바", note="눈"))
+        with self.assertRaises(ValueError):
+            lousheet.draft(self.book, plan, self.book / "sheets" / "drafts" / "new.png", dry=True)
+
+    def test_short_name_cannot_pick_for_someone_else(self):
+        png(self.book / "sheets" / "민수.png", "blue")
+        lou.write_json(self.book / "cast.json", [{"name": "김 민수", "look": ""}, {"name": "민수", "look": ""}])
+        candidate = self.drafted("김 민수")
+        request = self.root / "pick.json"
+        lou.write_json(request, {"target": "민수", "from": str(candidate)})
+        with self.assertRaises(ValueError):
+            lousheet.pick(self.book, request)
+        lou.write_json(request, {"target": "김 민수", "from": str(candidate)})
+        self.assertEqual(self.book / "sheets" / "김 민수.png", lousheet.pick(self.book, request))
+        with Image.open(self.book / "sheets" / "민수.png") as other:
+            self.assertEqual((0, 0, 255), other.convert("RGB").getpixel((0, 0)))
 
     def test_names_do_not_slide_to_someone_else(self):
         png(self.book / "sheets" / "카를로스.png", "blue")

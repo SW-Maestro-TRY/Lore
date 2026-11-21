@@ -142,7 +142,7 @@ def patch(page, x, y, text, path=None):
     tall = median(e - s for s, e in rows)
     # 안쪽이 이어진 말풍선이 좌우로 붙어 있으면 같은 높이에 글 덩어리가 둘이다 — 글자 키보다 넓게 벌어진 세로 틈으로 가르고
     # 짚은 쪽만 남긴다(낱말 사이 띄어쓰기는 글자 키보다 좁다).
-    cols = _spans((v > 0 for v in ink.resize((ink.width, 1), Image.Resampling.BOX).tobytes()), bridge=round(tall * 1.2))
+    cols = _spans((v > 0 for v in ink.resize((ink.width, 1), Image.Resampling.BOX).tobytes()), bridge=round(tall * .8))
     if len(cols) > 1:
         at_x = x - l
         left_, right_ = min(cols, key=lambda c: 0 if c[0] <= at_x <= c[1] else min(abs(at_x - c[0]), abs(at_x - c[1])))
@@ -152,6 +152,8 @@ def patch(page, x, y, text, path=None):
         frame = Image.composite(frame, Image.new("L", frame.size, 128), keep)
         rows = [s for s in _spans(v > 0 for v in ink.resize((1, ink.height), Image.Resampling.BOX).tobytes())
                 if s[1] - s[0] >= 5]
+        if not rows:
+            raise NoBubble("짚은 곳에 글자 덩어리가 없습니다")
         tall = median(e - s for s, e in rows)
     blocks = [[rows[0]]]                          # 한 테두리 안에 말풍선 둘이 붙어 있으면 줄 사이가 크게 벌어진다
     for row in rows[1:]:

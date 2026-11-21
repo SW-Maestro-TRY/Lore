@@ -177,6 +177,19 @@ def near(seen, want):
     return best
 
 
+def one_off(seen, wants):
+    """세 글자 이상인 seen 이 어느 대사의 같은 길이 대목과 딱 한 글자만 다르면 그 대사. 짧은 줄은 비율로는 못 잡는다(「가거라」→「가고라」)."""
+    a = squash(seen)
+    if len(a) < 3:
+        return ""
+    for want in wants:
+        b = squash(want)
+        for i in range(len(b) - len(a) + 1):
+            if sum(x != y for x, y in zip(a, b[i:i + len(a)])) == 1:
+                return want
+    return ""
+
+
 def text_diff(page, lines, scene):
     """옮겨 적은 줄 가운데 장면 글의 대사와 거의 같은데 글자가 다른 것."""
     out = []
@@ -184,8 +197,25 @@ def text_diff(page, lines, scene):
         if len(squash(seen)) < 3:
             continue
         score, want = max(((near(seen, w), w) for w in spoken(scene)), default=(0, ""))
-        if .8 <= score < 1:
-            out.append(dict(page=page, seen=seen, want=want))
+        if .8 <= score < 1 or one_off(seen, spoken(scene)):
+            out.append(dict(page=page, seen=seen, want=want if .8 <= score < 1 else one_off(seen, spoken(scene))))
+    return out
+
+
+def _rejoin(lines, other):
+    """lines 의 이웃한 두세 줄을 이어 붙인 것이 other 의 한 줄과 같으면 그 줄로 합친다(같은 말풍선을 몇 줄로 옮겨 적었는지만 다른 것)."""
+    whole = {squash(s) for s in other}
+    out, i = [], 0
+    while i < len(lines):
+        for size in (3, 2):
+            joined = "".join(squash(s) for s in lines[i:i + size])
+            if i + size <= len(lines) and joined in whole and squash(lines[i]) not in whole:
+                out.append(" ".join(lines[i:i + size]))
+                i += size
+                break
+        else:
+            out.append(lines[i])
+            i += 1
     return out
 
 
@@ -197,6 +227,7 @@ def text_changed(before, after):
     """
     if squash("".join(before)) == squash("".join(after)):
         return []
+    before, after = _rejoin(before, after), _rejoin(after, before)
     left = Counter(k for k in map(squash, before) if len(k) >= 2)
     right = Counter(k for k in map(squash, after) if len(k) >= 2)
     gone, new = left - right, right - left
@@ -235,7 +266,7 @@ def clean_check(data):
     return {k: data[k] for k in ("ok", "reply", "kept", "changed", "unexpected")}
 
 
-def clean_ask(data, pages, skipped, spots, scenes):
+def clean_ask(data, pages, skipped, spots, scenes, pinned=None):
     """모델의 답에서 쓸 것만 남긴다. 찾은 곳은 틀린 항목만 버리고, 고치는 방법은 하나라도 틀리면 답 전체를 물린다."""
     require(isinstance(data.get("found"), list) and isinstance(data.get("plans"), list))
     found = []
@@ -260,7 +291,7 @@ def clean_ask(data, pages, skipped, spots, scenes):
                     and isinstance(f["text"], str) and 0 < len(f["text"].strip()) <= 200)
             fix = dict(page=f["page"], pin=0, x=f["x"], y=f["y"], text=" ".join(f["text"].split()))
             # 다른 장에 찍힌 번호를 붙였으면 모델이 장을 헷갈린 것이다 — 그 자리를 고치면 엉뚱한 말풍선이 바뀐다.
-            require(not any(n == f.get("pin") and page != f["page"] for n, page in spots))
+            require(not any(n == f.get("pin") and page != f["page"] for n, page in (pinned or spots)))
             spot = spots.get((f.get("pin"), f["page"]))
             if spot:                     # 작가가 짚은 자리가 모델이 어림한 자리보다 정확하다
                 fix.update(pin=f["pin"], x=spot[0], y=spot[1])
@@ -327,9 +358,13 @@ def process(run, kind, request, output, dry=False):
                           for d in text_diff(p, lines, scenes.get(p) or {}) if (p, squash(d["seen"])) not in seen]
                 extra["text_diff"] = context["text_diff"] = diffs
         else:
-            paths = [Path(context.pop(k)) for k in ("before", "after")]
-            # 견주는 두 그림은 이 작품의 것이어야 한다(서버는 지난 판과 지금 장을 넘긴다)
-            require(all(p.suffix == ".png" and p.is_file() and _inside(p, run) for p in paths))
+            given = [Path(context.pop(k)) for k in ("before", "after")]
+            # 견주는 두 그림은 이 작품의 것이어야 한다(서버는 지난 판과 지금 장을 절대 경로로 넘긴다)
+            require(all(p.is_absolute() and p.suffix == ".png" and p.is_file() and _inside(p, run) for p in given))
+            # 시작할 때 한 번 떠 둔다 — 그사이 같은 장을 다시 그려도 글자 읽기와 모델이 같은 판을 본다
+            paths = [dest / f"{name}.png" for name in ("before", "after")]
+            for src, copy in zip(given, paths):
+                copyfile(src, copy)
             if not dry and context.get("method") == "keep":   # 새로 그린 장은 글자가 달라지는 것이 정상이다
                 cut = [bands(path, dest, tag) for tag, path in zip(("before", "after"), paths)]
                 found = read_all(run, cut[0] + cut[1])
@@ -338,9 +373,6 @@ def process(run, kind, request, output, dry=False):
         prompt = (PROMPTS / f"{kind}_prompt").read_text(encoding="utf-8")
         prompt += "\n" + json.dumps(context, ensure_ascii=False) + "\n" + str([p.name for p in paths])
         if dry:
-            if kind == "check":
-                for name, path in zip(("before.png", "after.png"), paths):
-                    copyfile(path, dest / name)
             (dest / "prompt.txt").write_text(prompt, encoding="utf-8")
             return
         images = llm.load_images(paths)
@@ -356,7 +388,8 @@ def process(run, kind, request, output, dry=False):
             try:
                 data = unwrap(raw)
                 require(isinstance(data, dict) and isinstance(data.get("reply"), str) and data["reply"].strip())
-                result = clean_check(data) if kind == "check" else clean_ask(data, pages, skipped, spots, scenes)
+                result = (clean_check(data) if kind == "check" else
+                          clean_ask(data, pages, skipped, spots, scenes, {(p["n"], p["page"]) for p in req.get("pins", [])}))
                 break
             except (ValueError, KeyError, TypeError, AttributeError) as exc:
                 print(f"[루] 답을 못 씀({type(exc).__name__}): {raw[:600]!r}", file=sys.stderr)
