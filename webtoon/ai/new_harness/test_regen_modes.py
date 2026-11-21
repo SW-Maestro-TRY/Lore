@@ -26,6 +26,11 @@ class KeepPageTest(unittest.TestCase):
         refs, names = detailart.keep_refs(source, "나래의 겉옷을 바꾸고 하늘은 그대로", char, {0: hero}, cast)
         self.assertEqual((refs, names), ([source, hero, cast["나래"]], ["하늘", "나래"]))
 
+    def test_names_inside_quoted_lines_do_not_attach_sheets(self):
+        cast = {name: Path(name + ".png") for name in ("가람", "나래")}
+        refs, names = detailart.keep_refs(Path("p.png"), "가람의 말풍선 「나래에게도 맡기지 않았어」의 꼬리를 돌린다", None, {}, cast)
+        self.assertEqual(names, ["가람"])
+
     def test_refs_stay_within_the_reference_limit(self):
         cast = {name: Path(name + ".png") for name in ("가람", "나래", "다온", "라온")}
         refs, names = detailart.keep_refs(Path("p.png"), "가람 나래 다온 라온", None, {}, cast)

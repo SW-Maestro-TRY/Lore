@@ -834,6 +834,8 @@ def keep_refs(source: Path, note: str, char: dict | None,
     다시 그려질 수 있다. 직전 장은 붙이지 않는다. 이름이 하나도 없으면 지금 장만 붙는다.
     basis — 같은 화의 다른 장(「몇 장과 같은 금관」처럼 이어짐을 맞출 기준). 글로만 「5장과 같게」라고 쓰는 것보다
     그 장을 보여 주는 편이 확실하다. 한도 안에서 시트를 하나 덜 붙이더라도 기준 장은 붙인다(기준 장 하나 + 시트 둘까지)."""
+    # 「」 · “” 안은 말풍선에 들어갈 대사다 — 대사에 나온 이름으로 시트를 붙이지 않는다(그 사람이 그 장에 없을 수 있다).
+    note = re.sub(r"「[^」]*」|“[^”]*”|『[^』]*』", " ", note)
     named: list[tuple[str, Path]] = []
     for i, name in enumerate(protagonist_names(char)):
         if i in hero_sheets and any(k in note for k in _name_keys(name)):
