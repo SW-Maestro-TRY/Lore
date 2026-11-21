@@ -234,7 +234,28 @@ def cast_sheets_in_scene(sheets: dict[str, Path], scene: dict, limit: int = CAST
         hay = " ".join(str(scene.get(k) or "") for k in ("where", "what", "acting", "look", "prev", "ends", "user_text"))
     # 주인공을 찾을 때와 같은 말(_name_keys — 성을 뺀 이름까지)로 찾는다. 이름 전체와 앞 낱말만 보던 때는
     # 장면 글이 「재훈」「도윤」처럼 이름만 쓰면 시트가 안 붙어, 연재 5~7화 장 그림의 조연이 시트 없이 그려졌다(2026-11-20).
-    return [name for name in sheets if any(k in hay for k in _name_keys(name))][:limit]
+    return [name for name in sheets if _named_in(name, sheets, hay)][:limit]
+
+
+def _named_in(name: str, sheets, hay: str) -> bool:
+    """hay 에 이 시트 인물의 이름(_name_keys)이 나오는지. 그 자리가 다른 시트 인물의 더 긴 이름 안에 들어 있으면
+    그 자리는 이 사람이 아니다 — 「카를」 시트가 「재상 카를로스」가 나오는 장면에 붙던 것을 막는다(2026-11-22)."""
+    covered = []
+    for other in sheets:
+        if other == name:
+            continue
+        for o in [other] + list(_name_keys(other)):
+            at = hay.find(o)
+            while at >= 0:
+                covered.append((at, at + len(o)))
+                at = hay.find(o, at + 1)
+    for k in _name_keys(name):
+        at = hay.find(k)
+        while at >= 0:
+            if not any(a <= at and at + len(k) <= b and b - a > len(k) for a, b in covered):
+                return True
+            at = hay.find(k, at + 1)
+    return False
 
 
 def cover_cast_sheets(sheets: dict[str, Path], scenes: list[dict], limit: int = CAST_SHEET_LIMIT) -> list[str]:
