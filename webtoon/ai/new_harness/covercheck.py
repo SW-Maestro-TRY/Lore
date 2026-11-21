@@ -227,6 +227,16 @@ def review_cover(run_dir: Path, title: str, *, dry_run: bool = False,
         log(f"  [표지 검수] 응답을 읽지 못했습니다 — {meta['error']} (원문은 남았습니다)")
         return None, meta
 
+    # 표지는 세로로 긴 그림이어야 한다 — 크기를 요청해도 따르지 않는 연결(Codex 구독 경로)에서 표지가 화마다 가로 · 세로로 섞였다
+    # (2026-11-20, 연재 30화 중 13화가 가로). 모델 판단이 아니라 실제 크기로 본다.
+    try:
+        from PIL import Image
+        w, h = Image.open(cover).size
+    except Exception:                                                 # noqa: BLE001
+        w = h = 0
+    if w and h and w >= h:          # 정사각도 세로형이 아니다
+        review = {**review, "verdict": "재생성",
+                  "issues": list(review.get("issues") or []) + [{"kind": "세로형", "what": f"표지가 가로로 넓다(가로 {w} · 세로 {h}). 세로가 가로의 1.5배인 세로형(2:3) 표지로 그린다."}]}
     (dest / f"page01.review{suffix}.json").write_text(
         json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
     log(f"  [표지 검수] {review['verdict']} · 칸 {review['panels']} · 말풍선 "
