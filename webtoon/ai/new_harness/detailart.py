@@ -266,7 +266,8 @@ def cover_cast_sheets(sheets: dict[str, Path], scenes: list[dict], limit: int = 
     """
     if not sheets or limit <= 0:
         return []
-    count = {name: sum(1 for one in scenes if cast_sheets_in_scene({name: sheets[name]}, one, 1)) for name in sheets}
+    # 시트를 모두 넘겨 센다 — 한 장씩 넘기면 다른 시트의 더 긴 이름(「카를로스」 안의 「카를」)을 못 봐서 엉뚱한 사람이 세어졌다.
+    count = {name: sum(1 for one in scenes if name in cast_sheets_in_scene(sheets, one, len(sheets))) for name in sheets}
     return [n for n in sorted(count, key=lambda n: -count[n]) if count[n]][:limit]
 
 
