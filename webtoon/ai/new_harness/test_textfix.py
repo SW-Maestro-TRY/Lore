@@ -1,0 +1,59 @@
+import json
+import tempfile
+import unittest
+import unittest.mock
+from pathlib import Path
+
+from PIL import Image, ImageChops, ImageDraw, ImageFont
+
+import run
+import textfix
+
+
+def page():
+    """색이 있는 그림 위에 말풍선 둘이 붙어 있는 장. 아래 풍선의 글자가 틀렸다."""
+    image = Image.new("RGB", (600, 800), (90, 110, 150))
+    draw = ImageDraw.Draw(image)
+    draw.ellipse((60, 80, 380, 260), fill="white", outline="black", width=3)
+    draw.ellipse((90, 230, 420, 430), fill="white", outline="black", width=3)
+    draw.ellipse((110, 236, 360, 256), fill="white")          # 두 풍선의 안쪽이 이어져 있다
+    font = ImageFont.truetype(textfix.font_file(), 24)
+    draw.text((220, 170), "위쪽 풍선의 글", font=font, fill=(20, 20, 20), anchor="mm")
+    for i, line in enumerate(("새벽엔 총소리도", "났오.")):
+        draw.text((255, 310 + i * 36), line, font=font, fill=(20, 20, 20), anchor="mm")
+    return image
+
+
+class TextFixTest(unittest.TestCase):
+    def test_only_the_pointed_block_changes(self):
+        before = page()
+        after = textfix.patch(before, 255, 320, "새벽엔 총소리도 났고.")
+        left, top, right, bottom = ImageChops.difference(before, after).getbbox()
+        self.assertGreaterEqual(top, 280)                      # 위쪽 풍선의 글은 그대로
+        self.assertTrue(120 <= left and right <= 400 and bottom <= 400)
+        self.assertEqual((90, 110, 150), after.getpixel((500, 600)))
+
+    def test_no_bubble_under_the_pin(self):
+        with self.assertRaises(textfix.NoBubble):
+            textfix.patch(page(), 520, 700, "글")
+
+    def test_command_keeps_the_old_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            book = Path(tmp) / "episode" / "pages"
+            book.mkdir(parents=True)
+            page().save(book / "page02.png")
+            request = Path(tmp) / "fix.json"
+            request.write_text(json.dumps({"items": [{"x": 42, "y": 40, "text": "새벽엔 총소리도 났고."}]}), encoding="utf-8")
+            with unittest.mock.patch.object(run, "RUNS_DIR", Path(tmp)):
+                self.assertEqual(0, run.main(["--run-id", "episode", "--page", "2", "--fix-text", str(request)]))
+                self.assertTrue((book / "versions" / "page02.v1.png").exists())
+                with Image.open(book / "page02.png") as now, Image.open(book / "versions" / "page02.v1.png") as old:
+                    self.assertIsNotNone(ImageChops.difference(now.convert("RGB"), old.convert("RGB")).getbbox())
+                request.write_text(json.dumps({"items": [{"x": 90, "y": 90, "text": "글"}]}), encoding="utf-8")
+                with self.assertRaises(SystemExit):
+                    run.main(["--run-id", "episode", "--page", "2", "--fix-text", str(request)])
+                self.assertFalse((book / "versions" / "page02.v2.png").exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

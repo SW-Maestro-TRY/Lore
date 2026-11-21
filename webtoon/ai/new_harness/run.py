@@ -2597,7 +2597,40 @@ def main(argv=None) -> int:
     p.add_argument("--chat-sheets", action="store_true", help="시트 보관함에서 1화 시트를 깐다")
     p.add_argument("--chat-save-sheets", action="store_true", help="1화 시트를 보관함에 넣는다")
     p.add_argument("--chat-share-sheets", action="store_true", help="1화 시트를 나머지 화에 복사한다")
+    lou_modes = p.add_mutually_exclusive_group()
+    lou_modes.add_argument("--lou-ask", type=Path)
+    lou_modes.add_argument("--lou-check", type=Path)
+    lou_modes.add_argument("--lou-sheet", type=Path, help="루가 낸 시트 고치기 방법 하나로 후보 시트를 그린다(--lou-out 에)")
+    lou_modes.add_argument("--lou-sheet-pick", type=Path, help="고른 후보를 그 인물의 시트로 건다")
+    p.add_argument("--fix-text", type=Path, metavar="JSON",
+                   help="말풍선 안의 글자만 고친다(그림은 다시 그리지 않는다). --run-id 와 --page 한 장이 필요하다")
+    p.add_argument("--lou-out", type=Path)
     args = p.parse_args(argv)
+    if args.lou_sheet or args.lou_sheet_pick:
+        if not args.run_id or (args.lou_sheet and not args.lou_out):
+            p.error("시트 후보에는 --run-id 와 --lou-out 이, 고르기에는 --run-id 가 필요합니다")
+        import lousheet
+        if args.lou_sheet:
+            lousheet.draft(RUNS_DIR / args.run_id, args.lou_sheet, args.lou_out)
+        else:
+            print(lousheet.pick(RUNS_DIR / args.run_id, args.lou_sheet_pick))
+        return 0
+    if args.lou_ask or args.lou_check:
+        if not args.run_id or not args.lou_out:
+            p.error("루 대화에는 --run-id 와 --lou-out 이 필요합니다")
+        import lou
+        lou.process(RUNS_DIR / args.run_id, "ask" if args.lou_ask else "check",
+                    args.lou_ask or args.lou_check, args.lou_out, args.dry_run)
+        return 0
+    if args.fix_text:
+        if not args.run_id or len(args.page) != 1 or args.page[0] < 1:
+            p.error("--fix-text 에는 --run-id 와 --page 한 장이 필요합니다")
+        import textfix
+        try:
+            textfix.apply(RUNS_DIR / args.run_id, args.page[0], args.fix_text)
+        except textfix.NoBubble as exc:
+            raise SystemExit(f"글자를 고치지 못했습니다: {exc}")
+        return 0
     if (args.keep_from or args.textless) and not args.detail_pages:
         p.error("--keep-from 과 --textless 는 --detail-pages 에서만 씁니다")
     if args.keep_from:
