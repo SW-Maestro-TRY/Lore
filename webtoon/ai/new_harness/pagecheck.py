@@ -45,12 +45,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import os
 from pathlib import Path
 
 import llm
 import charcard
 import runmeta
+import userbook
 from llm import story
 
 HERE = Path(__file__).resolve().parent
@@ -190,7 +192,15 @@ def spec_lines(spec: dict | None) -> list[str]:
     return lines
 
 
-def people_block(char: dict | None, cast, spec: dict | None = None) -> str:
+def now_line(book, name) -> str:
+    """연재 중 이야기 속 사건으로 시트에서 오래 달라진 몸(진행 상태의 [시트와 다름: …], userbook.look_now) — 검수가 시트 사양 대신
+    그 부위를 이 글로 판정하게 한다. 좀비였던 인물의 흰자가 돌아온 뒤에도 시트(검은 흰자)로 판정해 critical 로 다시 그리게 했다(2026-11-21)."""
+    now = userbook.look_now(book, name)
+    return (f" 단, 연재 중 달라진 곳 — {now}. 이 부위는 시트 사양이 아니라 이 글로 판정한다(이 모습이면 인물 문제가 아니다)."
+            if now else "")
+
+
+def people_block(char: dict | None, cast, spec: dict | None = None, sheeted=(), cast_specs=None) -> str:
     """인물 — "다른 사람이 되었다" 를 판정할 기준.
 
     캐릭터 시트 **그림**은 안 붙인다. 이 호출에 붙는 그림은 **직전 장과 지금 장**
@@ -207,6 +217,8 @@ def people_block(char: dict | None, cast, spec: dict | None = None) -> str:
         if who:
             lines.append(f"{who} (주인공) — {desc}" if desc else f"{who} (주인공)")
     lines += spec_lines(spec)
+    if spec and char and now_line(char.get("lorebook"), char.get("name")):
+        lines.append(" " + now_line(char.get("lorebook"), char.get("name")).strip())
     # 함께 주인공인 사람(주인공 여러 명) — 시트 사양은 sheets/<이름>.spec.json 에 있어 여기선 설명만 둔다.
     for one in (char or {}).get("co") or []:
         if not isinstance(one, dict) or not _text(one.get("name")):
@@ -214,12 +226,43 @@ def people_block(char: dict | None, cast, spec: dict | None = None) -> str:
         desc = _text(one.get("description"))
         card = charcard.short(charcard.for_story({**one, "lorebook": char.get("lorebook")}))
         desc = f"{card}. {desc}" if card and desc else (card or desc)
-        lines.append(f"{one['name']} (주인공) — {desc}" if desc else f"{one['name']} (주인공)")
+        lines.append((f"{one['name']} (주인공) — {desc}" if desc else f"{one['name']} (주인공)") + now_line(char.get("lorebook"), one["name"]))
     for one in cast or []:
         if isinstance(one, dict) and _text(one.get("name")):
+            if one["name"] in sheeted or any(one["name"] in nm or nm.endswith(one["name"]) for nm in sheeted):
+                # 시트가 붙은 조연 — 그리는 쪽은 시트를 따르므로 검수가 원작 겉모습 글로 머리·얼굴을 판정하면 반대로 다시 그리게 한다(2026-11-20)
+                # 시트 사양 글이 있으면 그것을 기준으로 준다 — 「같은 화 안에서 같은 사람인지만」 보면 7화 중간부터 도윤이 계속
+                # 원작 글대로 짧은 머리로 그려져도 앞 장과 같아 통과했다(2026-11-20 사람 검토). 주인공 시트 사양(#519)과 같은 생각.
+                specs = {k: v for k, v in (cast_specs or {}).items() if isinstance(v, dict)}
+                sp = specs.get(one["name"]) or next((v for k, v in specs.items() if k.endswith(one["name"])), None)
+                det = [_text(x) for x in (sp or {}).get("design_details") or [] if _text(x)]
+                now = now_line((char or {}).get("lorebook"), one["name"])
+                if det:
+                    lines.append(f"{one['name']} — 조연 시트가 있는 인물. 시트 사양(이 사람의 고정 생김새): " + " / ".join(det)
+                                 + " — 원작 · 장면의 겉모습 글이 아니라 이 사양으로 판정한다. 앞 장과 같아도 머리 모양 · 얼굴이 이 사양과 다르면 "
+                                 "다른 사람으로 그려진 것이다(critical, kind 인물). 옷 · 상처 · 피는 장면 글을 따를 수 있다." + now)
+                    continue
+                lines.append(f"{one['name']} — 조연 시트가 있는 인물: 머리 모양 · 얼굴 · 체형은 이 글로 판정하지 않는다(시트를 따름). 같은 화 안에서 같은 사람으로 보이는지만 본다." + now)
+                continue
             lines.append(f"{one['name']} — {_text(one.get('appearance'))}")
     if not lines:
         return ""
+    # 설정집의 「말하는 방식」(lore_extract.extract_looks) — 그리는 쪽(detailart.character_block)에는 있는데
+    # 검수에는 없어서, 말 못 하는 좀비 장에 말풍선이 없다고 「침묵」으로 다시 그리게 했고 다시 그린 판에서
+    # 그 좀비가 「저리 가.」라고 말했다(2026-11-19, longrun v4-art ep01 10장). 설정집이 없으면 아무것도 안 붙는다.
+    book = (char or {}).get("lorebook")
+    names = [_text((char or {}).get("name"))] + [_text(o.get("name")) for o in (char or {}).get("co") or []
+                                                if isinstance(o, dict)]
+    names += [_text(o.get("name")) for o in cast or [] if isinstance(o, dict)]
+    voices = []
+    for nm in names:
+        if not nm or not book:
+            continue
+        v = _text((userbook.person_look(book, nm) or {}).get("voice"))
+        if v:
+            voices.append(f"  - {nm}: {v}")
+    if voices:
+        lines += ["말하는 방식 (이 범위를 넘는 말풍선은 인물 문제다):"] + voices
     return "## 인물\n" + "\n".join(lines)
 
 
@@ -321,18 +364,71 @@ def scene_block(direction: dict, scene_no: int, total: int, scenes=()) -> str:
 
 def build_prompt(direction: dict, *, scene_no: int, char: dict | None = None,
                  cast=(), has_prev: bool = True, prev_is_cover: bool = False,
-                 next_from: str = "", scenes=(), spec: dict | None = None) -> str:
+                 next_from: str = "", scenes=(), spec: dict | None = None, sheeted=(),
+                 series_ep: int = 0, known=(), cast_specs=None) -> str:
     path = PROMPT_DIR / "page_review_prompt"
     if not path.exists():
         raise SystemExit(f"프롬프트가 없습니다: {path}")
     total = len(scene_texts(direction, scenes))
-    return (path.read_text(encoding="utf-8")
-            .replace("{people}", people_block(char, cast, spec))
+    return (series_note(path.read_text(encoding="utf-8"), series_ep, known)
+            .replace("{people}", people_block(char, cast, spec, sheeted, cast_specs))
             .replace("{story}", story_block(direction, scene_no, scenes))
             .replace("{prev}", prev_block(direction, scene_no, has_prev=has_prev,
                                           prev_is_cover=prev_is_cover,
                                           next_from=next_from, scenes=scenes))
             .replace("{scene}", scene_block(direction, scene_no, total, scenes)))
+
+
+SERIES_HEAD = "## 이 화의 첫 페이지(장면 1)라면 — 특히 엄격하게 본다"
+
+
+def series_note(text: str, series_ep: int, known=()) -> str:
+    """이어 만든 화(연재 2화부터)는 독자가 앞 화를 이미 읽었다 — 앞 화 인물을 매 화 다시 소개하라고 잡지 않는다.
+
+    「첫 페이지」 규칙은 작품의 첫 화를 기준으로 쓰여 있어, 연재 6화 첫 장에도 「침대의 여성과 남성이
+    누구인지 단서가 없다」를 critical 로 잡았다(2026-11-20 사람 검토 — 매 화 인물 소개부터 하면 안 된다).
+    「이미 아는 인물」은 앞 화에 실제로 나온 이름(known)만 적는다 — 이 화에 처음 나오는 조연은 그대로 검사한다.
+    이어짐 정보가 없거나 앞 화 인물을 못 찾으면 한 글자도 안 바뀐다.
+    """
+    known = [k for k in dict.fromkeys(known) if k]
+    if series_ep < 2 or not known:
+        return text
+    note = (f"## 이 화는 연재 {series_ep}화다 — 앞 화를 읽은 독자\n\n"
+            f"독자는 앞 {series_ep - 1}화를 이미 읽었다. 앞 화에서 이미 나온 인물: {' · '.join(known)}. "
+            "이 사람들과 그 관계 · 처지는 다시 소개하지 않아도 된다 — 첫 페이지라도 이들에게 이름 · 설명이 없다는 이유로 지적하지 않는다"
+            "(매 화를 인물 소개로 시작하면 안 된다). 이 목록에 없는 인물이 이 화에 처음 나오면 아래 「첫 페이지」 · 「처음 등장하는 인물」 규칙대로 본다.\n\n")
+    return text.replace(SERIES_HEAD, note + SERIES_HEAD, 1) if SERIES_HEAD in text else note + text
+
+
+def series_known(cont: dict | None, char: dict | None, cast=()) -> tuple[int, tuple[str, ...]]:
+    """continuation.json -> (연재 화 번호, 앞 화에서 이미 나온 인물 이름). 화 번호는 2 이상의 정수일 때만 쓴다(그 밖은 0)."""
+    cont = cont if isinstance(cont, dict) else {}
+    ep = cont.get("episode_number")
+    if isinstance(ep, bool) or not isinstance(ep, int) or ep < 2:
+        return 0, ()
+    from detailart import _name_keys      # 늦게 부른다 — detailart 가 이 모듈을 import 한다
+    hay = " ".join(str(cont.get(k) or "") for k in ("source_body", "source_scenes", "progress_state", "fixed_settings"))
+    names = [_text((char or {}).get("name"))] + [_text(o.get("name")) for o in (char or {}).get("co") or [] if isinstance(o, dict)] \
+        + [_text(c.get("name")) for c in (cast or []) if isinstance(c, dict)]
+
+    # 앞 화에 나온 인물 = 앞 화 장면의 등장인물 목록(source_dir/scenes.json) + 앞 화 글에 **이름 전체**가 경계 있게 나온 사람.
+    # 성을 뺀 이름을 글자로 찾으면 「맑은 하늘 · 하늘은」에서 김하늘을, 「도윤이슬」에서 한도윤을 찾았다(11/20 검증).
+    prev_cast = set()
+    try:
+        sd = Path(str(cont.get("source_dir") or ""))
+        if str(cont.get("source_dir") or "") and (sd / "scenes.json").is_file():
+            prev_cast = {_text(c.get("name")) for c in (json.loads((sd / "scenes.json").read_text(encoding="utf-8")).get("cast") or [])
+                         if isinstance(c, dict)}
+    except (OSError, ValueError):
+        prev_cast = set()
+    josa = r"(?:이|가|은|는|을|를|의|와|과|에게|도|만|아|야|이랑|랑)?"
+
+    def seen(n):
+        if n in prev_cast or any(n in _name_keys(c) or c in _name_keys(n) for c in prev_cast if c):
+            return True
+        return re.search(rf"(?<![가-힣]){re.escape(n)}{josa}(?![가-힣])", hay) is not None
+    lead = {_text((char or {}).get("name"))} | {_text(o.get("name")) for o in (char or {}).get("co") or [] if isinstance(o, dict)}
+    return ep, tuple(n for n in dict.fromkeys(names) if n and (n in lead or seen(n)))
 
 
 # ------------------------------------------------------------------------ 파싱
@@ -503,9 +599,17 @@ def review_page(run_dir: Path, page_no: int, *, scene_no: int, direction: dict,
     has_prev = page_no > 1 and prev.exists()
 
     spec = read_json(run_dir / "sheet_spec.json")
+    sheeted = tuple(f.stem for f in (run_dir / "sheets").glob("*.png")) if (run_dir / "sheets").is_dir() else ()
+    cast_specs = {f.name.removesuffix(".spec.json"): read_json(f) for f in (run_dir / "sheets").glob("*.spec.json")} \
+        if (run_dir / "sheets").is_dir() else {}
+    try:
+        series_ep, known = series_known(read_json(run_dir / "continuation.json"), char, cast)
+    except (ValueError, OSError):     # 깨진 이어짐 정보로 검수를 잃지 않는다 — 예전 프롬프트로
+        series_ep, known = 0, ()
     prompt = build_prompt(direction, scene_no=scene_no, char=char, cast=cast, spec=spec,
                           has_prev=has_prev, prev_is_cover=prev_is_cover,
-                          next_from=next_from, scenes=scenes)
+                          next_from=next_from, scenes=scenes, sheeted=sheeted,
+                          series_ep=series_ep, known=known, cast_specs=cast_specs)
     write_text(dest / f"page{page_no:02d}.review{suffix}_prompt.txt", prompt)
     if dry_run:
         return None, None

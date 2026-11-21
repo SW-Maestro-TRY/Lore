@@ -33,6 +33,7 @@ import llm                                        # noqa: E402
 import imagegen                                   # noqa: E402
 import sheet as sheetmod                          # noqa: E402
 import failure                                    # noqa: E402
+import userbook                                   # noqa: E402
 from llm import story                             # noqa: E402
 
 log, warn = R.log, R.warn
@@ -397,6 +398,23 @@ def stage_story(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang: 
     return d
 
 
+# 설정집 인물 항목에 원작 생김새(lore_extract.extract_looks)가 있을 때만 시트 사양 입력에 붙는다 — 없으면 예전 입력 그대로.
+LOOK_RULE = ("「원작 묘사」는 원작이 이 인물을 직접 그린 문장이다. 위 생김새 글과 어긋나면 원작 묘사가 먼저다 — "
+             "색 · 모양을 다른 말로 바꾸지 않는다.\n"
+             "원작 묘사와 생김새 글 어디에도 없는 눈에 띄는 특징(얼굴에 쓰는 것 · 흉터 · 문신 · 특이한 머리 모양)은 "
+             "새로 붙이지 않는다.\n"
+             "「작품 속 비중」이 주연이나 주요 인물이면, 적힌 것을 지키는 범위 안에서 적히지 않은 부분(얼굴 생김 · "
+             "머리 모양 · 옷의 맵시)을 이 장르 웹툰의 주연급 인물답게 매력적으로 정한다. 「더 예쁘게 고치지 마라」는 "
+             "적힌 것을 바꾸지 말라는 뜻이다.")
+
+
+def look_block(lorebook, name) -> str:
+    lines = userbook.look_lines(userbook.person_look(lorebook, name), quotes=12)
+    if not lines:
+        return ""
+    return "\n\n## 원작 근거 (설정집에서)\n" + "\n".join(lines) + "\n" + LOOK_RULE + "\n"
+
+
 def stage_sheet(run_dir: Path, char: dict, dry_run: bool, note: str = "") -> None:
     """캐릭터 시트. 안전 검사에 걸리면 한 번은 사양부터 다시 쓴다(run.stage_sheet 와 같은 뼈대)."""
     failure.clear(run_dir)
@@ -413,7 +431,7 @@ def _sheet_attempt(run_dir: Path, char: dict, dry_run: bool, note: str, safety: 
                    paths: dict | None = None) -> None:
     paths = paths or R.sheet_paths(run_dir)
     photos = char["photos"]
-    block = input_block(char)
+    block = input_block(char) + look_block(char.get("lorebook"), char.get("name"))
     note = (note or "").strip()
     if note:
         block += f"\n\n## 이번 시도에 추가로 반영할 것\n사용자가 방금 다시 만들기를 요청하며 남긴 말이다. 가능한 한 반영한다:\n{note}"
@@ -535,7 +553,7 @@ def _cast_sheet_attempt(run_dir: Path, person: dict, full: str, stem: str, inp: 
             lines.append(f"{label}: {v}")
     genre = str((inp or {}).get("genre") or "").strip()
     lines.append(f"장르: {genre}" if genre else "장르: (없음)")
-    block = "\n".join(lines) + "\n"
+    block = "\n".join(lines) + "\n" + look_block((inp or {}).get("lorebook"), full)
     if safety:
         block += "\n" + safety
     prompt = R.compose("own/cast_sheet_prompt", block)

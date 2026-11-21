@@ -113,6 +113,44 @@ class LegacyEpisodeTest(unittest.TestCase):
             self.assertIn(head,text); self.assertIn("등급 재측정을 받는다",text)
         self.assertFalse(out.exists())
 
+    def test_digest_carries_the_last_scene_look(self):
+        import json as J
+        scenes=J.loads((self.src/"scenes.json").read_text()) if (self.src/"scenes.json").exists() else {"scenes":[]}
+        scenes["scenes"]=(scenes.get("scenes") or [{"n":1,"what":"장면"}])+[{"n":99,"what":"끝","look":"하린은 외투를 벗어 셔츠 차림이다."}]
+        (self.src/"scenes.json").write_text(J.dumps(scenes,ensure_ascii=False))
+        out=Path(self.temp.name)/"digest4"/"result.json"; out.parent.mkdir()
+        packet=Path(self.temp.name)/"packet4.json"
+        packet.write_text(J.dumps({"source_dir":str(self.src),"episode_number":3,"source_scenes":["장면"],"previous":None},ensure_ascii=False))
+        C.stage_digest(packet,out,True)
+        text=(out.parent/"lore_progress_prompt.txt").read_text()
+        self.assertIn("[3화 마지막 장면의 겉모습 — 캐릭터 시트와 달라진 것]\n하린은 외투를 벗어 셔츠 차림이다.",text)
+        self.assertIn("겉모습: 인물이 지금 그림에 보이는 모습",text)
+        scenes["scenes"][-1]["look"]="시트 그대로"
+        (self.src/"scenes.json").write_text(J.dumps(scenes,ensure_ascii=False))
+        self.assertEqual(C.last_look(self.src),"")
+
+    def test_digest_adds_one_event_row_per_episode_and_replaces_on_redo(self):
+        import lore_extract as X
+        from unittest.mock import patch
+        out=Path(self.temp.name)/"digest3"/"result.json"; out.parent.mkdir()
+        prev={"entries":[],"progress":[{"key":"E001","kind":"사건","ep":1,"title":"1화","text":"옛 기록"},
+                                       {"key":"P001","kind":"지금","title":"위치","text":"집"}]}
+        def fake(prompt,out_dir,stage):
+            return {"LORE_BOOK":{"entries":[]},"LORE_PROGRESS":{"entries":[{"key":"P001","kind":"지금","title":"위치","text":"학교"}],"remove":[]},
+                    "LORE_EVENTS":{"events":["하린이 학교로 갔다","서우와 약속했다"]}}[stage]
+        for redo in ("하린이 학교로 갔다", "하린이 학교로 갔다"):
+            packet=Path(self.temp.name)/"packet3.json"
+            packet.write_text(json.dumps({"source_dir":str(self.src),"episode_number":2,"source_scenes":["장면"],"previous":prev},ensure_ascii=False))
+            with patch.object(X,"_call",side_effect=fake):
+                got=C.stage_digest(packet,out,False)
+            prev={"entries":got["entries"],"progress":got["progress"]}
+        events=[r for r in got["progress"] if r.get("kind")=="사건"]
+        self.assertEqual([(r["key"],r["ep"]) for r in events],[("E001",1),("E002",2)])
+        self.assertEqual(events[1]["text"],"하린이 학교로 갔다\n서우와 약속했다")
+        now=next(r for r in got["progress"] if r["key"]=="P001")
+        self.assertEqual((now["text"],now["ep"]),("학교",2))
+        self.assertIn("사건 기록",(out.parent/"lore_events_prompt.txt").read_text())
+
     def test_carried_entries_without_ids_get_ids_so_digest_adds_to_them(self):
         # 1화에 붙인 설정집 항목은 번호가 없다 — 번호를 달아야 같은 대상이 새 항목으로 또 생기지 않는다
         packet=Path(self.temp.name)/"packet.json"; out=Path(self.temp.name)/"digest2"/"result.json"; out.parent.mkdir()

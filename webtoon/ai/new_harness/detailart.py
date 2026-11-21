@@ -54,6 +54,7 @@ from pathlib import Path
 import imagegen
 import imageprompt
 import lorebook                                  # noqa: E402
+import userbook                                  # noqa: E402
 import llm
 import charcard
 import covercheck
@@ -217,22 +218,84 @@ def cast_sheets_in_scene(sheets: dict[str, Path], scene: dict, limit: int = CAST
     limit — 주인공 시트가 여럿이면 그만큼 줄여서 받는다(참조 넷 한도)."""
     if not sheets or limit <= 0:
         return []
-    hay = " ".join(str(scene.get(k) or "") for k in ("where", "what", "acting", "look", "prev", "ends", "user_text"))
-    out = []
-    for name in sheets:
-        first = name.split()[0] if name.split() else name
-        if name in hay or (first and first in hay):
-            out.append(name)
-    return out[:limit]
+    # 장면의 「생김새」(look) 칸은 그 장에 실제로 그려지는 사람을 적는다. 이 칸이 있으면 거기 적힌 사람에게만 시트를 붙인다 —
+    # 대사 · 행동 글에 이름만 나와도(「레오폴트 대공의 병력이…」, 「라옴 님께서 전하라…」) 그 사람 시트가 붙어, 말하는 조연이
+    # 시트 인물의 얼굴로 그려졌다(2026-11-21, 궁정물 8 · 12화). look 이 없는 옛 장면은 예전처럼 전체 글에서 찾는다.
+    # 다만 look 은 「시트 그대로」처럼 이름을 안 적기도 해서, 행동 · 장소 글도 함께 보되 따옴표 안의 대사는 뺀다 — 대사에 이름만
+    # 나온 사람(보고 · 소문 · 호칭)은 그 장에 없는 사람이다. look 이 없는 옛 장면은 예전처럼 전체 글에서 찾는다.
+    look = str(scene.get("look") or "").strip()
+    if look:
+        # 장소(where: 누가 함께 있는지) · 행동 글(acting)만 더 본다 — 요약(what)은 「라옴의 뜻을 전한다」 「디온의 빈자리」처럼 없는 사람을 간접으로 적기도 한다.
+        # 따옴표 쌍은 200자 안에서만 맞춘다(닫히지 않은 따옴표가 뒤 행동까지 지우지 않게).
+        # 여는 따옴표가 다시 나오면 짝이 아니다 — 닫히지 않은 따옴표가 다음 대사와 짝지어 사이 행동을 지우지 않게.
+        said = re.compile(r"“[^”“]{0,200}”|「[^」「]{0,200}」|『[^』『]{0,200}』|‘[^’‘]{0,200}’|\"[^\"\n]{0,200}\"")
+        hay = look + " " + " ".join(said.sub(" ", str(scene.get(k) or "")) for k in ("where", "acting"))
+    else:
+        hay = " ".join(str(scene.get(k) or "") for k in ("where", "what", "acting", "look", "prev", "ends", "user_text"))
+    # 주인공을 찾을 때와 같은 말(_name_keys — 성을 뺀 이름까지)로 찾는다. 이름 전체와 앞 낱말만 보던 때는
+    # 장면 글이 「재훈」「도윤」처럼 이름만 쓰면 시트가 안 붙어, 연재 5~7화 장 그림의 조연이 시트 없이 그려졌다(2026-11-20).
+    return [name for name in sheets if _named_in(name, sheets, hay)][:limit]
 
 
-def cast_sheet_block(names: list[str]) -> str:
-    """인물 절 뒤에 붙는 「조연 시트」 — 첨부한 조연 시트를 따르라는 한 줄씩."""
+def _named_in(name: str, sheets, hay: str) -> bool:
+    """hay 에 이 시트 인물의 이름(_name_keys)이 나오는지. 그 자리가 다른 시트 인물의 더 긴 이름 안에 들어 있으면
+    그 자리는 이 사람이 아니다 — 「카를」 시트가 「재상 카를로스」가 나오는 장면에 붙던 것을 막는다(2026-11-22)."""
+    covered = []
+    for other in sheets:
+        if other == name:
+            continue
+        for o in [other] + list(_name_keys(other)):
+            at = hay.find(o)
+            while at >= 0:
+                covered.append((at, at + len(o)))
+                at = hay.find(o, at + 1)
+    for k in _name_keys(name):
+        at = hay.find(k)
+        while at >= 0:
+            # 별칭(성을 뗀 이름 등)이 다른 시트의 정확한 이름과 같으면 그 자리는 그 시트 사람이다.
+            if k != name and k in sheets:
+                break
+            if not any(a <= at and at + len(k) <= b and b - a > len(k) for a, b in covered):
+                return True
+            at = hay.find(k, at + 1)
+    return False
+
+
+def cover_cast_sheets(sheets: dict[str, Path], scenes: list[dict], limit: int = CAST_SHEET_LIMIT) -> list[str]:
+    """표지에 붙일 조연 시트 — 이 화 장면 글에 이름이 많이 나오는 조연부터 limit 명.
+
+    예전에는 표지에 조연 시트를 안 붙였다. 표지에 조연이 함께 그려지면 시트 없이 인물 설명 글만으로 얼굴을
+    지어서, 작가가 시트로 바꾼 머리 모양 대신 원작 글의 머리 모양으로 나왔다(2026-11-20, 연재 5화 표지의 한도윤).
+    """
+    if not sheets or limit <= 0:
+        return []
+    # 시트를 모두 넘겨 센다 — 한 장씩 넘기면 다른 시트의 더 긴 이름(「카를로스」 안의 「카를」)을 못 봐서 엉뚱한 사람이 세어졌다.
+    count = {name: sum(1 for one in scenes if name in cast_sheets_in_scene(sheets, one, len(sheets))) for name in sheets}
+    return [n for n in sorted(count, key=lambda n: -count[n]) if count[n]][:limit]
+
+
+def now_note(book, name) -> str:
+    """연재 중 이야기 속 사건으로 시트에서 오래 달라진 몸(진행 상태의 [시트와 다름: …]) — 시트보다 먼저인 한 마디. 없으면 ""."""
+    now = userbook.look_now(book, name)
+    return f" 단, 연재 중 달라진 곳(시트의 같은 부위보다 이 글이 먼저 — 나머지는 시트대로): {now}" if now else ""
+
+
+def cast_sheet_block(names: list[str], book=None) -> str:
+    """인물 절 뒤에 붙는 「조연 시트」 — 첨부한 조연 시트를 따르라는 한 줄씩.
+    book(설정집)에 그 인물의 [시트와 다름: …] 이 있으면 그 줄에 붙인다(userbook.look_now). 없으면 예전과 같다."""
     if not names:
         return ""
+    notes = {name: now_note(book, name) for name in names}
     lines = ["## 조연 시트 (주인공 시트 다음에 붙은 그림들)",
-             "아래 인물은 첨부한 조연 시트를 따른다 — 얼굴·머리·옷차림을 시트 그대로, 이 화 내내 같은 사람으로 그린다."]
-    lines += [f"{name} — 첨부한 조연 시트를 따른다." for name in names]
+             "아래 인물은 첨부한 조연 시트를 따른다 — 얼굴·머리·옷차림을 시트 그대로, 이 화 내내 같은 사람으로 그린다.",
+             # 장면 글의 「시트와 다른 것」 칸에 원작 본문의 머리 모양(「짧게 민 머리」)이 옮겨 적혀, 그 칸이 시트보다 먼저라는
+             # 규칙 때문에 작가가 시트로 정한 머리가 장마다 원작대로 돌아갔다(2026-11-20, 연재 5화).
+             "이 인물들에 대해서는 장면 글의 「시트와 다른 것」에 적힌 것 가운데 옷 · 상처 · 피 · 소지품만 따른다. "
+             "머리 모양 · 얼굴 · 체형처럼 변하지 않는 생김새는 그 칸이나 설정집 · 인물 설명 등 이 프롬프트 어디에 다르게 적혀 있어도 시트가 먼저다. "
+             "다만 회상 · 과거 장면(컷)에서는 위 「회상 · 과거 장면」 규칙대로 얼굴 특징만 시트를 따르고 나이 · 체구 · 옷은 그 시점대로 그린다."
+             + (" 다만 아래 이름 옆에 「연재 중 달라진 곳」이 적혀 있으면, 그것은 이야기 속에서 실제로 달라진 모습이라 그 부위만은 시트보다 먼저다."
+                if any(notes.values()) else "")]
+    lines += [f"{name} — 첨부한 조연 시트를 따른다.{notes[name]}" for name in names]
     return "\n".join(lines)
 
 
@@ -277,7 +340,7 @@ def sheet_plan(char: dict | None, scene: dict | None) -> tuple[list[int], int]:
     return who, min(CAST_SHEET_LIMIT, room - len(who))
 
 
-def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(), attached=None) -> str:
+def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(), attached=None, sheeted=()) -> str:
     """장면마다 **글자까지 같게** 들어가는 인물 고정 앵커.
 
     외모(시트)와 설명(사용자가 적은 원문)은 서로 다른 역할이다 — 시트가 있어도
@@ -292,16 +355,31 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
         # 카드가 바꿔 놓은 종(사람 → 검은여우)을 놓치고 사람으로 그린다.
         card = charcard.short(charcard.for_story(char))
         desc = f"{card}. {desc}" if card and desc else (card or desc)
+    book0 = (char or {}).get("lorebook")
     if spec:
         lines.append(imageprompt.sheet_line(spec))
+        if now_note(book0, (char or {}).get("name")):
+            lines.append("-" + now_note(book0, (char or {}).get("name")))
         if desc:
             lines.append(f"- 설명: {desc}")
     elif char:
         who = (char.get("name") or "").strip()
         lines.append(f"{who} — {desc}" if desc else who)
+    book = (char or {}).get("lorebook")
+    quoted = voiced = False
+
+    def from_book(name):
+        # 설정집 인물 항목의 원작 묘사 · 말하는 방식 · 비중(lore_extract.extract_looks). 없으면 아무것도 안 붙는다.
+        nonlocal quoted, voiced
+        got = userbook.look_lines(userbook.person_look(book, name), quotes=4)
+        quoted = quoted or any(x.startswith("원작 묘사:") for x in got)
+        voiced = voiced or any(x.startswith("말하는 방식:") for x in got)
+        return [f"- {x}" for x in got]
+
     if char:
         for k, v in (char.get("fields") or {}).items():
             lines.append(f"- {k}: {v}")
+        lines += from_book(char.get("name"))
     # 함께 주인공인 사람(co: [(그 사람, 시트 사양)]) — 첫 주인공과 같은 모양으로 한 사람씩.
     for one, one_spec in co:
         one_desc = (one.get("description") or "").strip()
@@ -309,14 +387,25 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
         one_desc = f"{one_card}. {one_desc}" if one_card and one_desc else (one_card or one_desc)
         if one_spec:
             lines.append(imageprompt.sheet_line(one_spec))
+            if now_note(book0, one.get("name")):
+                lines.append("-" + now_note(book0, one.get("name")))
             if one_desc:
                 lines.append(f"- 설명: {one_desc}")
         else:
             lines.append(f"{one['name']} — {one_desc}" if one_desc else one["name"])
         for k, v in (one.get("fields") or {}).items():
             lines.append(f"- {k}: {v}")
+        lines += from_book(one.get("name"))
     for one in cast:
+        if one["name"] in sheeted or any(one["name"] in _name_keys(nm) for nm in sheeted):
+            # 시트가 붙은 조연은 겉모습 글 · 원작 묘사를 빼고 시트를 따르게 한다 — 글이 「짧게 민 머리」처럼 구체적이면
+            # 그림 모델이 시트와 글을 섞어, 작가가 시트로 바꾼 머리 모양이 다시 원작 글대로 나왔다(2026-11-20, 연재 5화 표지).
+            lines.append(f"{one['name']} — 얼굴·머리·체형은 첨부한 조연 시트대로 그린다(이 인물의 겉모습 글은 넣지 않았다). 옷은 장면 글에 따로 없으면 시트대로."
+                         + now_note(book0, one["name"]))
+            lines += [x for x in from_book(one["name"]) if not x.startswith("- 원작 묘사:")]
+            continue
         lines.append(f"{one['name']} — {(one.get('appearance') or '').strip()}")
+        lines += from_book(one["name"])
     lines = [ln for ln in lines if ln and ln.strip()]
     if not lines:
         return ""
@@ -335,6 +424,11 @@ def character_block(char: dict | None, spec: dict | None, cast: list[dict], co=(
             "장면 내용에 「시트와 다른 것」이 적혀 있으면 그 장면에서는 그것이 시트보다 먼저다.\n"
             "설명에 적힌 내용이 지금 장면 상황과 관련 있으면 그 인물의 행동·표정·대사로 "
             "자연스럽게 드러나야 한다. 관련 없으면 억지로 끼워 넣지 않는다.\n"
+            + ("「원작 묘사」는 원작이 그 인물을 직접 그린 문장이다 — 눈 · 피부 · 몸의 특징을 그대로 그린다.\n"
+               if quoted else "")
+            + ("「말하는 방식」이 적힌 인물은 그 범위 안에서만 소리를 낸다. 말을 못 하는 인물에게는 문장으로 된 "
+               "말풍선을 주지 않고, 적힌 소리와 몸짓으로만 뜻을 전한다 — 이 프롬프트의 「말풍선이 들어간다」는 규칙보다 이것이 먼저다.\n"
+               if voiced else "")
             + "\n".join(lines))
 
 
@@ -356,7 +450,7 @@ def fixed_block(fixed) -> str:
 
 def build_cover_prompt(*, title: str, genre: str, intro: str,
                        char: dict | None, spec: dict | None, cast: list[dict],
-                       style: str, fixed_names=(), lang: str = "ko", co=(), attached=None) -> str:
+                       style: str, fixed_names=(), lang: str = "ko", co=(), attached=None, cast_sheet_names=()) -> str:
     """표지 한 장. 컷을 나누지 않는 **한 장짜리 그림**이라 프롬프트 파일부터 다르다
     (`prompt/cover_prompt`).
 
@@ -391,7 +485,8 @@ def build_cover_prompt(*, title: str, genre: str, intro: str,
 
     return (imageprompt.apply_style_sections(text, style)
             .replace("{style}", imageprompt.load_style(style))
-            .replace("{people}", character_block(char, spec, cast, co, attached))
+            .replace("{people}", "\n\n".join(b for b in (character_block(char, spec, cast, co, attached, tuple(cast_sheet_names)),
+                                                    cast_sheet_block(list(cast_sheet_names), (char or {}).get("lorebook"))) if b))
             .replace("{fixed}", fixed_block(fixed_names))
             .replace("{work}", work))
 
@@ -563,7 +658,10 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         # 데이터 바로 옆에 둔다 — 멀리 있는 지시는 안 지켜진다(위 주석과 같다).
         lines += [f"[이 장면에서 시트와 다른 것 — 겉모습·소지품·동행] {look}",
                   "  시트는 기본 외형이고, 이 장면에서는 위에 적힌 차이가 시트보다 먼저다. "
-                  "여기 적히지 않은 것은 시트 그대로 그린다.", ""]
+                  "여기 적히지 않은 것은 시트 그대로 그린다."
+                  # 연재 중 오래 달라진 몸(userbook.look_now)이 있는 작품만 — 「적히지 않은 것은 시트 그대로」가 그 부위까지 시트로 되돌리지 않게
+                  + (" 단, 인물 절에 「연재 중 달라진 곳」이 적힌 부위는 여기 안 적혀 있어도 그 글대로 그린다."
+                     if userbook.SHEET_DIFF_RE.search(json.dumps((char or {}).get("lorebook") or {}, ensure_ascii=False)) else ""), ""]
     fixed = narration_of(scenes, scene_no)
     if fixed:
         # 나레이션 재료는 장면 단계(scene_prompt)에서 글 모델이 화 전체를 한 번에
@@ -603,6 +701,15 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         "",
         f"[여기서 끝낸다 — 다음 장이 이어받을 자리다] {ends}",
         "",
+    ]
+    if (llm.env("NH_NEXT_SCENE") or "").strip() and not last and scene_no < len(scenes):
+        # 채팅 만화: 그림 모델이 다음 장을 몰라서 다음 장의 일(달려와 안기기 등)을
+        # 이 장에 미리 그려 버렸다(2026-11-18, #1020 34317a2e 에서 옮김). 다음 장의 첫 일을 알려 주되 그리지 말라고 못박는다.
+        nxt = scenes[scene_no]
+        lines += [f"[다음 장에서 일어나는 일 — 이 장에서는 아직 일어나지 않았다. 그리지 않는다] "
+                  f"{(nxt.get('what') or '').strip()}",
+                  "  이 장의 인물 자리·거리·자세는 다음 장의 일이 이제 막 시작될 수 있는 상태로 둔다.", ""]
+    lines += [
         "**다른 장면들은 지금 동시에 그려지고 있다.** 위 두 지점이 앞뒤 장과 "
         "맞물리는 자리다 — 옆 장의 그림을 보고 맞추는 것이 아니라 이 글에 "
         "맞춘다.",
@@ -627,14 +734,21 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
         "말풍선으로 들어간다.** 그림과 나레이션만으로 상황이 이해되더라도 마찬가지다 — 한 장 내내 말이 없으면 "
         "독자는 그 침묵을 연출이 아니라 빠진 것으로 읽는다. 무슨 말을 할지는 장면 글과 인물에 맞게 네가 정한다.",
         "- 그 밖에도 인물이 말을 해야 자연스러운 순간은 말 없이 두지 않는다.",
+        # 원작 연재 1화(2026-11-19, haeun longrun v4-art ep01)에서 13장 중 8장을 다시 그렸다 — 한 장 안에서
+        # 같은 손등 클로즈업을 두 번, 앞 장 마지막 컷 구도로 다음 장을 시작, 장면 글의 대사 순서를 뒤집음.
+        "- 한 장 안에서 같은 거리·같은 각도의 컷을 두 번 쓰지 않는다. 같은 인물을 다시 잡으면 거리(전신·중경·"
+        "클로즈업)나 각도를 바꾼다.",
+        "- 장면 글에 따옴표로 적힌 대사·소리는 적힌 순서대로 위에서 아래로 놓는다. 앞뒤를 바꾸지 않는다.",
     ]
     scene_instr = "\n".join(lines)
     if has_prev:
         scene_instr += ("\n\n첨부한 직전 그림이 바로 앞 장이다 — 인물·공간·"
                         "시간대·조명이 뚝 끊기지 않게 참고한다. 이야기가 어디서 "
-                        "시작해 어디서 끝나는지는 위 두 지점이 정한다.")
-    people = "\n\n".join(b for b in (character_block(char, spec, cast, co, attached),
-                                     cast_sheet_block(list(cast_sheet_names)),
+                        "시작해 어디서 끝나는지는 위 두 지점이 정한다. 직전 그림의 "
+                        "컷 구도를 따라 그리지 않는다 — 특히 이 장의 첫 컷은 직전 그림의 "
+                        "마지막 컷과 다른 거리·각도로 잡는다.")
+    people = "\n\n".join(b for b in (character_block(char, spec, cast, co, attached, tuple(cast_sheet_names)),
+                                     cast_sheet_block(list(cast_sheet_names), (char or {}).get("lorebook")),
                                      fixed_block(fixed_names)) if b)
     return (text
             .replace("{{LANGUAGE_LINE}}", lang_mod.instruction(lang))
@@ -817,7 +931,9 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             prompt = build_cover_prompt(title=title, genre=genre, intro=intro,
                                         char=char, spec=spec, cast=cast, style=style,
                                         fixed_names=fixed_names, lang=lang, co=co_people,
-                                        attached=sheet_plan(char, None)[0])
+                                        attached=sheet_plan(char, None)[0],
+                                        cast_sheet_names=cover_cast_sheets(
+                                            cast_sheets, scenes, min(CAST_SHEET_LIMIT, REF_LIMIT - len(sheet_plan(char, None)[0]))))
         else:
             # 직전 그림이 **실제로 있는지**를 본다. 차례로 그릴 때는 늘 있지만,
             # 장면을 동시에 그리면 옆 장이 아직 안 끝나 없을 수 있다 — 그때
@@ -849,8 +965,13 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         note_text = note_block(note) if note.strip() else ""
         # 키워드 항목은 한도 안에 남는 자리만큼만 고른다(돈 안 듦). 항상 참고 · 진행 상태는 늘 넣는다.
         room0 = IMAGE_PROMPT_MAX - len(prompt) - len(note_text) - len(memory) - 8
-        fixed = userbook.block(char, scene_text, "image", cont, budget=0)          # 항상 참고 · 진행 상태만
-        book = userbook.block(char, scene_text, "image", cont, budget=max(0, room0 - len(fixed)))
+        # 시트가 있는 사람(주인공 · 함께 주인공 · 조연 시트)은 설정집의 머리 · 얼굴 · 체형 글을 빼고 넣는다 — 시트와 싸워 이겼다(2026-11-20).
+        hero = str((char or {}).get("name") or "").strip() if (run_dir / "sheet.png").exists() else ""
+        co_sheeted = [str(o.get("name") or "").strip() for o in (char or {}).get("co") or []
+                      if isinstance(o, dict) and (run_dir / "sheets" / f"{str(o.get('name') or '').strip()}.png").exists()]
+        sheet_people = tuple(x for x in [hero] + co_sheeted + list(cast_sheets or {}) if x)
+        fixed = userbook.block(char, scene_text, "image", cont, budget=0, sheeted=sheet_people)          # 항상 참고 · 진행 상태만
+        book = userbook.block(char, scene_text, "image", cont, budget=max(0, room0 - len(fixed)), sheeted=sheet_people)
         extra = "\n\n".join(x for x in (book, memory) if x)
         base_prompt = prompt
 
@@ -886,9 +1007,10 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             continue
 
         prev_img = page_path(run_dir, page_no - 1)
-        # 참조 순서: 주인공 시트 → 이 장면의 조연 시트 → 직전 장. 표지(n_==0)에는 조연 시트를 안 붙인다.
+        # 참조 순서: 주인공 시트 → 이 장면(표지면 이 화)의 조연 시트 → 직전 장.
         who, room = sheet_plan(char, scenes[n_ - 1] if n_ > 0 else None)
-        page_refs = [cast_sheets[nm] for nm in (cast_sheets_in_scene(cast_sheets, scenes[n_ - 1], room) if n_ > 0 else [])]
+        page_refs = [cast_sheets[nm] for nm in (cast_sheets_in_scene(cast_sheets, scenes[n_ - 1], room) if n_ > 0 else
+                                                cover_cast_sheets(cast_sheets, scenes, min(CAST_SHEET_LIMIT, REF_LIMIT - len(who))))]
         refs = sheet_refs(who) + page_refs + ([prev_img] if page_no > 1 and prev_img.exists() else [])
         log(f"[{label}] 참조 {len(refs)}장 …")
         meta = None

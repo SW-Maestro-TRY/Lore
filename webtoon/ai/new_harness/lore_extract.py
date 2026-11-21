@@ -57,8 +57,17 @@ def book_prompt(source: str, lang: str = "ko", known=None) -> str:
     return _prompt("lore/book_prompt", lang) + source + "\n" + known_block(known)
 
 
-def progress_prompt(rows: list[dict], new_text: str, lang: str = "ko") -> str:
-    return (_prompt("lore/progress_prompt", lang) + json.dumps({"entries": rows}, ensure_ascii=False, indent=1)
+def fixed_block(entries) -> str:
+    """진행 상태를 고칠 때 대조할 고정 로어북. 프롬프트가 「고정 로어북과 어긋나면 반영하지 말라」고 하는데
+    예전에는 고정 항목을 안 넘겨서 대조할 수가 없었다(2026-11-18 장기 연재 점검)."""
+    rows = [f"- {e.get('id', '')} {e.get('title', '')}: {e.get('content') or e.get('text') or ''}"
+            for e in entries or [] if isinstance(e, dict) and e.get("enabled", True) and str(e.get("title") or "").strip()]
+    return "[고정 로어북 — key 가 이 id 면 그 항목의 지금 상태다]\n" + ("\n".join(rows) if rows else "(없음)") + "\n\n"
+
+
+def progress_prompt(rows: list[dict], new_text: str, lang: str = "ko", entries=None) -> str:
+    return (_prompt("lore/progress_prompt", lang).replace("[현재 진행 상태]\n", fixed_block(entries) + "[현재 진행 상태]\n")
+            + json.dumps({"entries": rows}, ensure_ascii=False, indent=1)
             + "\n\n[새 화 본문]\n" + new_text + "\n")
 
 
@@ -68,6 +77,7 @@ GENERIC_WORLD = "세계 배경"
 
 def _norm(title) -> str:
     return re.sub(r"\s+", "", str(title or "")).casefold()
+
 
 
 def book_entries(entries: list, existing: list | None = None) -> tuple[list[dict], dict[str, str], dict[str, dict]]:
@@ -132,26 +142,93 @@ def apply_book(existing: list, rows: list, more: dict, renamed: dict | None = No
     return kept + [{**r, "new": True} for r in rows]
 
 
-def merge_progress(rows: list[dict], changes: list, removed: list) -> list[dict]:
-    """실험의 progress_update 합치기 그대로 — 지울 것을 빼고, key 가 있으면 덮어쓰고, 없으면 새 P 번호."""
+def merge_progress(rows: list[dict], changes: list, removed: list, ids=None, ep=None) -> list[dict]:
+    """실험의 progress_update 합치기 — 지울 것을 빼고, key 가 있으면 덮어쓰고, 없으면 새 P 번호.
+
+    새 P 번호는 남은 P 개수 다음 번호에서 시작하되 **이미 쓰는 번호는 건너뛴다.** 예전에는 P001·P002 중 P001
+    을 지우고 새 상태를 넣으면 새 상태가 P002 가 되어 남아 있던 P002 를 덮어썼다(2026-11-18 재현).
+    ids(고정 항목 id 목록)를 주면, 고정 항목에 없는 L 번호는 새 상태로 받는다 — 없는 항목을 덮어쓰는 줄이 생기지 않게."""
     removed = {str(k) for k in removed or []}
+    # 「앎」은 지우지 않는다 — 한 번 안 것은 모르는 상태로 돌아가지 않는다(prompt/lore/progress_prompt).
+    known = {str(r.get("key")) for r in rows if r.get("kind") == "앎"}
+    removed -= known
     merged = {r["key"]: r for r in rows if r.get("key") and r["key"] not in removed}
+    given = {k for k in merged if k.startswith("P")}       # 입력에 있던 P 번호만 고칠 수 있다(옮긴 줄의 새 번호는 아님)
+    ids = None if ids is None else {str(i) for i in ids}
     n = sum(1 for k in merged if k.startswith("P"))
+
+    def fresh():
+        nonlocal n
+        n += 1
+        while f"P{n:03d}" in merged or ids is not None and f"P{n:03d}" in ids:
+            n += 1
+        return f"P{n:03d}"
+
+    def is_entry(key):
+        return key in ids if ids is not None else key.startswith("L")
+
+    moved: dict[str, str] = {}
+    if ids is not None:
+        # 고정 항목이 없어진 「→ 지금」 줄은 새 상태로 돌린다 — 나중에 같은 번호를 받은 다른 항목 밑에 붙지 않게.
+        for key in [k for k in merged if not k.startswith("P") and k not in ids]:
+            row = merged.pop(key)
+            moved[key] = fresh()
+            given.add(moved[key])          # 옛 번호(L0002)로 온 변경만 이 줄을 고친다 — 아래 key = moved.get(...)
+            merged[moved[key]] = {**row, "key": moved[key]}
     for c in changes or []:
         if not isinstance(c, dict) or not str(c.get("text") or "").strip():
             continue
         key = str(c.get("key") or "").strip()
-        if not key or key not in merged and not key.startswith("L"):
-            n += 1
-            key = f"P{n:03d}"
-        merged[key] = {"key": key, "title": str(c.get("title") or "").strip(), "text": str(c["text"]).strip()}
+        if key in moved.values() and key not in moved:
+            key = ""                       # 모델이 입력에 없던 새 번호(옮긴 줄의 번호)를 쓴 것 — 새 줄로 받는다
+        key = moved.get(key, key)
+        if not ((key in given and key in merged) or (key and is_entry(key)) or (ids is None and key in merged)):
+            key = fresh()
+        if key in known and str(c.get("kind") or "앎").strip() != "앎":
+            key = fresh()                  # 「앎」 줄을 다른 종류로 덮어쓰지 않는다 — 새 줄로 받는다
+        before = merged.get(key) or {}
+        kind = str(c.get("kind") or before.get("kind") or "").strip()
+        row = {"key": key, "title": str(c.get("title") or "").strip(), "text": str(c["text"]).strip()}
+        if kind in KINDS:
+            row["kind"] = kind
+        if ep is not None:
+            row["ep"] = ep
+        was = list(before.get("was") or [])
+        if kind == "관계" and before.get("text") and before["text"] != row["text"]:
+            # 관계는 지금 사이만 남기면 「왜 이렇게 됐는지」가 사라져 재회 때 처음으로 돌아간다. 바뀌기 전을 셋까지 남긴다.
+            was = (was + [f"{before.get('ep') or '?'}화까지: {before['text']}"])[-3:]
+        if was:
+            row["was"] = was
+        merged[key] = row
     return list(merged.values())
 
 
+# 진행 상태의 종류(prompt/lore/progress_prompt). 사건 기록은 진행 상태와 같은 목록에 kind 「사건」으로 둔다 —
+# 서버가 진행 상태 목록을 그대로 다음 화로 넘기므로 저장할 자리를 따로 만들지 않아도 된다.
+KINDS = ("지금", "겉모습", "몸", "관계", "앎", "미해결")
+EVENT = "사건"
+KEEP = ("kind", "ep", "was")
+
+
+def is_event(row) -> bool:
+    return isinstance(row, dict) and str(row.get("kind") or "") == EVENT
+
+
 def progress_rows(progress) -> list[dict]:
-    return [{"key": str(p.get("key") or p.get("id") or ""), "title": str(p.get("title") or ""),
-             "text": str(p.get("text") or "")}
-            for p in progress or [] if isinstance(p, dict) and str(p.get("text") or "").strip()]
+    """진행 상태 줄(사건 기록은 뺀다). 종류 · 출처 화 · 바뀌기 전 상태가 있으면 그대로 둔다."""
+    out = []
+    for p in progress or []:
+        if not isinstance(p, dict) or not str(p.get("text") or "").strip() or is_event(p):
+            continue
+        row = {"key": str(p.get("key") or p.get("id") or ""), "title": str(p.get("title") or ""),
+               "text": str(p.get("text") or "")}
+        row.update({k: p[k] for k in KEEP if p.get(k) not in (None, "", [])})
+        out.append(row)
+    return out
+
+
+def event_rows(progress) -> list[dict]:
+    return [p for p in progress or [] if is_event(p) and str(p.get("text") or "").strip()]
 
 
 def extract(source: str, out_dir: Path, lang: str = "ko", existing: list | None = None) -> tuple[list[dict], dict[str, str], dict[str, dict]]:
@@ -161,11 +238,81 @@ def extract(source: str, out_dir: Path, lang: str = "ko", existing: list | None 
     return book_entries(got, existing)
 
 
-def update_progress(rows: list[dict], new_text: str, out_dir: Path, lang: str = "ko") -> tuple[list, list, list]:
-    got = _call(progress_prompt(rows, new_text, lang), out_dir, "LORE_PROGRESS")
+def update_progress(rows: list[dict], new_text: str, out_dir: Path, lang: str = "ko", entries=None, ep=None) -> tuple[list, list, list]:
+    got = _call(progress_prompt(rows, new_text, lang, entries), out_dir, "LORE_PROGRESS")
     changes = got.get("entries", []) if isinstance(got.get("entries"), list) else []
     removed = got.get("remove", []) if isinstance(got.get("remove"), list) else []
-    return merge_progress(rows, changes, removed), changes, removed
+    ids = None if entries is None else [e.get("id") for e in entries if isinstance(e, dict) and e.get("id")]
+    kept_known = {str(r.get("key")) for r in rows if r.get("kind") == "앎"}
+    return merge_progress(rows, changes, removed, ids, ep), changes, [k for k in removed if str(k) not in kept_known]
+
+
+def events_prompt(new_text: str, lang: str = "ko") -> str:
+    return _prompt("lore/events_prompt", lang) + new_text + "\n"
+
+
+def extract_events(new_text: str, out_dir: Path, lang: str = "ko", ep=None) -> dict | None:
+    """이 화의 사건 기록 한 줄(진행 상태 목록에 kind 「사건」으로 붙는다). 뽑은 것이 없으면 None."""
+    got = _call(events_prompt(new_text, lang), out_dir, "LORE_EVENTS")
+    raw = got.get("events") if isinstance(got.get("events"), list) else []
+    lines = [x.strip() for x in raw if isinstance(x, str) and x.strip()]
+    if not lines:
+        return None
+    n = ep if ep is not None else 0
+    return {"key": f"E{n:03d}", "kind": EVENT, "ep": ep, "title": f"{n}화", "text": "\n".join(lines)}
+
+
+LOOK_WEIGHTS = ("주연", "주요 인물", "단역")
+
+
+def looks_prompt(source: str, names, lang: str = "ko") -> str:
+    people = "\n".join(f"- {n}" for n in names)
+    return _prompt("lore/look_prompt", lang) + "[인물]\n" + people + "\n\n[원문]\n" + source + "\n"
+
+
+def _squash(t) -> str:
+    return re.sub(r"\s+", "", str(t or ""))
+
+
+def merge_looks(looks: dict, got: dict, source: str) -> dict:
+    """한 구간에서 뽑은 생김새를 합친다. 인용은 **원문에 실제로 있는 것만** 남긴다(공백 차이만 너그럽게) —
+    모델이 지어낸 묘사(물건 이름을 생김새로 읽은 것, 다른 인물의 묘사)가 원작 근거인 척 시트에 들어가지 않게."""
+    flat = _squash(source)
+    out = {k: {"quotes": list(v.get("quotes") or []), "voice": v.get("voice") or "", "weight": v.get("weight") or ""}
+           for k, v in (looks or {}).items()}
+    for name, v in (got or {}).items():
+        if not isinstance(v, dict):
+            continue
+        one = out.setdefault(str(name), {"quotes": [], "voice": "", "weight": ""})
+        for q in v.get("quotes") or []:
+            q = str(q).strip()
+            if len(_squash(q)) >= 4 and _squash(q) in flat and q not in one["quotes"]:
+                one["quotes"].append(q)
+        voice = str(v.get("voice") or "").strip()
+        if voice and not one["voice"]:
+            one["voice"] = voice                        # 처음 드러난 말하는 방식 — 뒤에 바뀌면 진행 상태가 맡는다
+        w = str(v.get("weight") or "").strip()
+        if w in LOOK_WEIGHTS and (not one["weight"] or LOOK_WEIGHTS.index(w) < LOOK_WEIGHTS.index(one["weight"])):
+            one["weight"] = w
+    return out
+
+
+def extract_looks(source: str, entries: list, out_dir: Path, lang: str = "ko", chunk: int = 30000) -> list[dict]:
+    """인물 항목마다 원작이 적은 생김새 인용 · 말하는 방식 · 비중을 붙인다(entry["look"]).
+
+    고정 로어북 항목은 생김새를 요약해서 적는다 — 요약하다 원작의 눈에 띄는 특징이 흐려지거나(「붉은 홍채」 →
+    「충혈된 눈」) 다른 인물의 묘사가 섞인다. 시트와 장 그림은 이 인용을 기준으로 삼는다."""
+    names = [e["title"] for e in entries if isinstance(e, dict) and e.get("kind") == "person" and e.get("title")]
+    if not names:
+        return entries
+    looks: dict = {}
+    for i, part in enumerate(source[j:j + chunk] for j in range(0, len(source), chunk)):
+        got = _call(looks_prompt(part, names, lang), out_dir, f"LORE_LOOKS_{i + 1}").get("people", {})
+        looks = merge_looks(looks, got if isinstance(got, dict) else {}, part)
+    for e in entries:
+        if isinstance(e, dict) and e.get("title") in looks:
+            e["look"] = {**looks[e["title"]], "quotes": looks[e["title"]]["quotes"][:12]}
+    return entries
 
 
 def main():

@@ -275,12 +275,23 @@ def cast_looks(source_dir):
     return rows
 
 
+def last_look(source_dir):
+    """이 화 마지막 장면의 「겉모습·소지품·동행」(장면 단계가 시트와 달라진 것만 적은 칸). 다음 화가 이 모습에서
+    시작해야 한다 — 예전에는 담을 자리가 없어 다음 화 첫 장면이 시트 차림으로 돌아갔다(#1034)."""
+    data = read(Path(source_dir) / "scenes.json") if (Path(source_dir) / "scenes.json").is_file() else {}
+    scenes = [s for s in (data or {}).get("scenes", []) if isinstance(s, dict)]
+    look = str((scenes[-1] if scenes else {}).get("look") or "").strip()
+    return "" if look in ("", "시트 그대로", "시트 그대로.", "없음", "없음.") else look
+
+
 def episode_text(packet):
     n = packet.get("episode_number") or 1
     body, scenes = digest_source(packet)
     looks = cast_looks(packet["source_dir"])
+    end = last_look(packet["source_dir"])
     return "\n".join([f"[{n}화 본문]", body, "", f"[{n}화 확정 장면]", *scenes,
-                      *(["", f"[{n}화 등장인물의 겉모습 — 그림이 이 모습으로 그려졌다]", *looks] if looks else [])])
+                      *(["", f"[{n}화 등장인물의 겉모습 — 그림이 이 모습으로 그려졌다]", *looks] if looks else []),
+                      *(["", f"[{n}화 마지막 장면의 겉모습 — 캐릭터 시트와 달라진 것]", end] if end else [])])
 
 
 def world_seed(source):
@@ -323,21 +334,49 @@ def stage_digest(packet_path, out_path, dry_run, lang="ko"):
     kept = [e for e in previous.get("entries") or [] if isinstance(e, dict)]
     # 1화에 붙인 설정집 항목은 번호가 없다. 번호가 없으면 정리가 이미 있는 대상에 새 사실을 덧붙이지 못하고
     # 같은 대상을 새 항목으로 또 만들었다(2026-10-26, 마법학교 설정집). 여기서 K 번호를 단다.
-    kept = [e if str(e.get("id") or "").strip() else {**e, "id": f"K{i + 1:03d}"} for i, e in enumerate(kept)]
+    # 진행 상태에만 남은 번호(지운 항목의 K003 등)도 피한다 — 새 항목이 그 상태를 물려받지 않게.
+    used = {str(e.get("id") or "").strip() for e in kept} | {
+        str(p.get("key") or p.get("id") or "").strip() for p in previous.get("progress") or [] if isinstance(p, dict)}
+    numbered = []
+    for i, e in enumerate(kept):
+        if not str(e.get("id") or "").strip():
+            k = i + 1
+            while f"K{k:03d}" in used:       # 번호가 있는 항목과 겹치지 않게(K002 회중시계 뒤의 번호 없는 나침반)
+                k += 1
+            used.add(f"K{k:03d}")
+            e = {**e, "id": f"K{k:03d}"}
+        numbered.append(e)
+    kept = numbered
     if not kept:
         kept = world_seed(packet["source_dir"])
     rows = X.progress_rows(previous.get("progress"))
+    events = X.event_rows(previous.get("progress"))
+    ep = packet.get("episode_number")
     text = episode_text(packet)
     R.write_text(out_dir / "lore_book_prompt.txt", X.book_prompt(text, lang, kept))
-    R.write_text(out_dir / "lore_progress_prompt.txt", X.progress_prompt(rows, text, lang))
+    R.write_text(out_dir / "lore_progress_prompt.txt", X.progress_prompt(rows, text, lang, kept))
+    try:
+        R.write_text(out_dir / "lore_events_prompt.txt", X.events_prompt(text, lang))
+    except BaseException as exc:                                       # noqa: BLE001 — 템플릿이 없어도 정리는 한다
+        print(f"[정리] 사건 기록 프롬프트를 만들지 못했습니다: {exc}", file=__import__("sys").stderr)
     if dry_run:
         return None
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    with ThreadPoolExecutor(max_workers=3) as pool:
         added = pool.submit(X.extract, text, out_dir, lang, kept)
-        progress = pool.submit(X.update_progress, rows, text, out_dir, lang)
+        progress = pool.submit(X.update_progress, rows, text, out_dir, lang, kept, ep)
+        happened = pool.submit(X.extract_events, text, out_dir, lang, ep)
         (rows_new, more, renamed), (merged, changes, removed) = added.result(), progress.result()
-    result = {"entries": X.apply_book(kept, rows_new, more, renamed), "progress": merged,
-              "progress_changes": changes, "progress_removed": removed}
+        try:
+            event = happened.result()
+        except BaseException as exc:                                   # noqa: BLE001 — SystemExit 포함
+            # 사건 기록이 실패해도 고정 설정 · 진행 상태 정리는 살린다. 이 화의 기록만 빠진다.
+            import sys
+            print(f"[정리] 사건 기록을 뽑지 못했습니다: {exc}", file=sys.stderr)
+            event = None
+    # 같은 화를 다시 정리하면 그 화의 기록을 바꾼다.
+    events = [e for e in events if not event or e.get("key") != event["key"]] + ([event] if event else [])
+    result = {"entries": X.apply_book(kept, rows_new, more, renamed), "progress": merged + events,
+              "progress_changes": changes, "progress_removed": removed, "event": event}
     R.write_json(out_path, result)
     return result
