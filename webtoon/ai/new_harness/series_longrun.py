@@ -297,9 +297,10 @@ def free_step(env: dict, out: Path, n: int, state: dict, source: str, model: str
     cn = f"- {state['content_note']}" if state.get("content_note") else ""
     arc_block = ""
     arc_file = Path(state["free_arc"]) if state.get("free_arc") else None
-    if arc_file and arc_file.is_file() and arc_file.read_text(encoding="utf-8").strip():
+    arc = arc_file.read_text(encoding="utf-8").strip() if arc_file and arc_file.is_file() else ""
+    if arc:
         # 사람이 정한 이어 쓰기 큰 줄기 — 화마다 파일을 다시 읽어, 도는 중에 고쳐도 다음 화부터 반영된다.
-        arc_block = (f"\n[이어 쓰기 큰 줄기 — 작가가 정한 방향]\n{arc_file.read_text(encoding='utf-8').strip()}\n\n"
+        arc_block = (f"\n[이어 쓰기 큰 줄기 — 작가가 정한 방향]\n{arc}\n\n"
                      f"이번 화는 이어 쓰는 {total}화 가운데 {k}번째다. 이 줄기에서 지금 어디쯤인지 보고 그 대목을 정하되, "
                      "진행 상태와 직전 화에서 자연스럽게 이어지게 한다. 줄기에 적힌 일을 한 화에 몰아 넣지 않는다.\n")
     prompt = FREE_PROMPT.format(n=n, total=total, k=k, last_note=note, content_note=cn, state=st, prev=prev, arc_block=arc_block)
