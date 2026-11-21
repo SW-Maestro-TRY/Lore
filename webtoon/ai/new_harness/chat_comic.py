@@ -69,7 +69,7 @@ def extract(run_dir: Path) -> None:
             "다음은 채팅 롤플레이 앱 화면 캡처다. 이미지 순서대로 메시지를 정확히 옮겨 적어라. "
             "메시지 하나는 말풍선(또는 한 사람이 한 번에 보낸 글) 하나다. 화자 이름을 적고, 글은 줄바꿈까지 그대로 옮긴다. "
             "서술과 대사가 섞여 있어도 나누거나 고치지 말고 화면에 보이는 그대로 적는다. "
-            "화면에 없는 말을 만들지 않는다. 캡처 사이에 겹쳐 보이는 메시지는 한 번만 적는다. "
+            "성적인 표현도 단어를 순화하거나 생략하지 말고 보이는 문구 그대로 전사한다. 화면에 없는 말을 만들지 않는다. 캡처 사이에 겹쳐 보이는 메시지는 한 번만 적는다. "
             "읽을 수 없는 글자는 [판독 불가]로 남긴다. 상단 메뉴·시계·버튼·광고·안내 문구는 뺀다. "
             "JSON 객체 {\"dialogue\":[{\"speaker\":\"이름\",\"text\":\"원문\"}],\"characters\":[\"화자 이름\"]}만 돌려준다. "
             f"이 묶음은 전체 {len(batches)}개 중 {n}번째다."
@@ -79,13 +79,14 @@ def extract(run_dir: Path) -> None:
         lines = data.get("dialogue")
         if not isinstance(lines, list):
             raise ValueError("대화 전사 형식이 잘못되었습니다")
-        parts.extend({"speaker": str(x.get("speaker") or "").strip(), "text": str(x.get("text") or "").strip()}
-                     for x in lines if isinstance(x, dict) and x.get("text"))
+        batch_lines = [{"speaker": str(x.get("speaker") or "").strip(), "text": str(x["text"])}
+                       for x in lines if isinstance(x, dict) and x.get("text")]
+        overlap = min(len(parts), len(batch_lines))
+        while overlap and parts[-overlap:] != batch_lines[:overlap]:
+            overlap -= 1
+        parts.extend(batch_lines[overlap:])
         _write(run_dir / f"extract-meta-{n}.json", meta)
-    cleaned = []
-    for line in parts:  # 캡처 경계의 똑같은 메시지만 지운다. 비슷한 것은 사람이 확인 화면에서 고친다.
-        if not cleaned or line != cleaned[-1]:
-            cleaned.append(line)
+    cleaned = parts
     if not cleaned:
         raise ValueError("캡처에서 대화를 읽지 못했습니다")
     speakers = list(dict.fromkeys(x["speaker"] for x in cleaned if not is_narrator(x["speaker"])))
@@ -181,6 +182,8 @@ SCENE_RULES = (
     "- 이어짐: 그림 모델은 한 장씩 따로 그리고 다음 장면을 모른다. 그래서 where 에 장면이 시작할 때 인물들이 서로 어디에 있는지"
     "(떨어져 있는지, 붙어 있는지, 어떤 자세인지)를 적고, ends 에는 다음 장면의 첫 동작이 시작되기 바로 전 상태를 적는다. "
     "다음 장면에서 처음 일어나는 일이 이 장면에서 미리 일어나 있으면 안 된다.\n"
+    "- 두 사람이 잠자리로 넘어가는 대목은 그 직전(키스·포옹)까지만 그리고, 다음 컷은 암전(검은 컷에 짧은 효과음이나 「…」)으로 끊은 뒤 "
+    "그다음 장면(다음 날 아침 등)으로 넘어간다. 그 사이의 성적인 행위·노출·묘사는 장면 글에도 그림에도 넣지 않고, 그 사이에 오간 말도 옮기지 않는다.\n"
     "- 피·상처는 작은 얼룩이나 그림자로만.\n"
     "- 「두 번 뽀뽀한다」「여러 번 때린다」처럼 같은 동작을 되풀이하는 말은 「연달아 ~한다」로 쓴다 — "
     "그림 모델이 횟수만큼 같은 인물을 한 컷에 여러 번 그린다.\n"
@@ -244,7 +247,8 @@ def _write_scenes(dialogue: list[dict], ranges: list[tuple], title: str, cast: s
     for i, (a, b) in enumerate(ranges, 1):
         extra = ""
         if fix and i in fix:
-            extra = "\n  (앞서 쓴 글에서 빠진 대사 — 이번엔 원문 그대로 꼭 넣는다: " + " / ".join(fix[i]) + ")"
+            extra = ("\n  (앞서 쓴 글에서 빠진 대사 — 이번엔 원문 그대로 꼭 넣는다. 단 암전으로 넘긴 잠자리 대목 안의 말은 넣지 않는다: "
+                     + " / ".join(fix[i]) + ")")
         blocks.append(f"### 장면 {i} — 메시지 [{a}]~[{b}]{extra}\n{_numbered(dialogue[a - 1:b], a)}")
     prompt = (
         "아래 대화를 장면별로 세로 웹툰 장면 글로 옮겨라.\n" + SCENE_RULES +
@@ -369,7 +373,12 @@ def prepare(run_dir: Path) -> None:
     if notes:
         cast += f"\n[사용자 메모] {notes}"
 
-    plan, meta = _plan(dialogue, title, cast)
+    source_scenes = bool(draft.get("source_scenes"))
+    if source_scenes:
+        spans = [{"from": i, "to": min(i + 1, len(dialogue))} for i in range(1, len(dialogue) + 1, 2)]
+        plan, meta = {"episodes": [{"scenes": spans}]}, {"source": "dialogue"}
+    else:
+        plan, meta = _plan(dialogue, title, cast)
     _write(run_dir / "plan-meta.json", meta)
     episodes = _check_plan(plan, len(dialogue))
 
@@ -386,14 +395,21 @@ def prepare(run_dir: Path) -> None:
     wear: dict[str, str] = dict(draft.get("prev_wear") or {})   # 옷 상태 — 장면마다 저장하고 안 바뀐 사람은 앞 장면 옷을 물려받는다
     for n, ep in enumerate(episodes, 1):
         ranges = ep["ranges"]
-        scenes, meta = _write_scenes(dialogue, ranges, title, cast, prev_end, wear=wear)
-        lost = {i: v for i, ((a, b), s) in enumerate(zip(ranges, scenes), 1)
-                if (v := missing_lines(dialogue[a - 1:b], str(s.get("acting") or "")))}
-        if lost:  # 빠진 대사가 있으면 그 화를 한 번 다시 쓰고, 빠졌던 장면만 바꾼다.
-            again, _ = _write_scenes(dialogue, ranges, title, cast, prev_end, fix=lost, wear=wear)
-            scenes = [again[i - 1] if i in lost else s for i, s in enumerate(scenes, 1)]
+        if source_scenes:
+            scenes = []
+            for a, b in ranges:
+                source = "\n".join(f"{m['speaker']}: {m['text']}" for m in dialogue[a - 1:b])
+                scenes.append({"acting": source, "user_text": source})
+            lost = {}
+        else:
+            scenes, meta = _write_scenes(dialogue, ranges, title, cast, prev_end, wear=wear)
             lost = {i: v for i, ((a, b), s) in enumerate(zip(ranges, scenes), 1)
                     if (v := missing_lines(dialogue[a - 1:b], str(s.get("acting") or "")))}
+            if lost:  # 빠진 대사가 있으면 그 화를 한 번 다시 쓰고, 빠졌던 장면만 바꾼다.
+                again, _ = _write_scenes(dialogue, ranges, title, cast, prev_end, fix=lost, wear=wear)
+                scenes = [again[i - 1] if i in lost else s for i, s in enumerate(scenes, 1)]
+                lost = {i: v for i, ((a, b), s) in enumerate(zip(ranges, scenes), 1)
+                        if (v := missing_lines(dialogue[a - 1:b], str(s.get("acting") or "")))}
         out, prev = [], prev_end
         for i, ((a, b), s) in enumerate(zip(ranges, scenes), 1):
             look = str(s.get("look") or "").strip()
@@ -404,6 +420,7 @@ def prepare(run_dir: Path) -> None:
                     wear[k] = v
             out.append({"n": i, "prev": prev, "where": str(s.get("where") or "").strip(), "wear": dict(wear),
                         **({"always": always} if always else {}),
+                        **({"user_text": s["user_text"]} if source_scenes else {}),
                         "what": str(s.get("what") or "").strip(), "acting": str(s.get("acting") or "").strip(),
                         "look": (look + " " if look else "") + BUBBLE_RULE,
                         "ends": str(s.get("ends") or "").strip(), "narration": [],
