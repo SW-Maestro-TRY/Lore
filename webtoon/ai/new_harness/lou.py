@@ -8,6 +8,7 @@ check — 고친 장을 고치기 전과 견줘, 말한 것만 바뀌었는지 �
 """
 import difflib
 import json
+from collections import Counter
 import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -43,6 +44,14 @@ def percent(value):
 
 def unwrap(raw):
     return json.loads(raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip())
+
+
+def _inside(path, folder):
+    try:
+        Path(path).resolve().relative_to(Path(folder).resolve())
+        return True
+    except ValueError:
+        return False
 
 
 def selection(req):
@@ -172,7 +181,7 @@ def text_diff(page, lines, scene):
     """옮겨 적은 줄 가운데 장면 글의 대사와 거의 같은데 글자가 다른 것."""
     out = []
     for seen in lines:
-        if len(squash(seen)) < 4:
+        if len(squash(seen)) < 3:
             continue
         score, want = max(((near(seen, w), w) for w in spoken(scene)), default=(0, ""))
         if .8 <= score < 1:
@@ -181,16 +190,26 @@ def text_diff(page, lines, scene):
 
 
 def text_changed(before, after):
-    """고치기 전에 있던 줄 가운데 고친 뒤에 똑같이 남아 있지 않은 것."""
-    rest = {squash(s): s for s in after}
-    out = []
-    for line in before:
-        key = squash(line)
-        if len(key) < 2 or key in rest:
-            continue
-        score, twin = max(((difflib.SequenceMatcher(None, key, k).ratio(), s) for k, s in rest.items()),
-                          default=(0, ""))
-        out.append(dict(before=line, after=twin if score >= .6 else ""))
+    """고치기 전과 뒤의 글자가 달라진 줄. 같은 줄이 두 번 나오면 두 번으로 센다.
+
+    한 말풍선을 두 줄로 옮겨 적었는지 한 줄로 옮겨 적었는지만 다른 것은 달라진 것이 아니다 — 전체를 이어 붙여 같으면 없다고 본다.
+    {before, after}: after 가 비면 사라진 줄, before 가 비면 새로 생긴 줄.
+    """
+    if squash("".join(before)) == squash("".join(after)):
+        return []
+    left = Counter(k for k in map(squash, before) if len(k) >= 2)
+    right = Counter(k for k in map(squash, after) if len(k) >= 2)
+    gone, new = left - right, right - left
+    show = {squash(s): s for s in [*before, *after]}
+    out, spare = [], list(new.elements())
+    for key in gone.elements():
+        score, twin = max(((difflib.SequenceMatcher(None, key, k).ratio(), k) for k in spare), default=(0, ""))
+        if score >= .6:
+            spare.remove(twin)
+            out.append(dict(before=show[key], after=show[twin]))
+        else:
+            out.append(dict(before=show[key], after=""))
+    out += [dict(before="", after=show[k]) for k in spare]
     return out
 
 
@@ -240,6 +259,8 @@ def clean_ask(data, pages, skipped, spots, scenes):
             require(f["page"] in targets and percent(f["x"]) and percent(f["y"])
                     and isinstance(f["text"], str) and 0 < len(f["text"].strip()) <= 200)
             fix = dict(page=f["page"], pin=0, x=f["x"], y=f["y"], text=" ".join(f["text"].split()))
+            # 다른 장에 찍힌 번호를 붙였으면 모델이 장을 헷갈린 것이다 — 그 자리를 고치면 엉뚱한 말풍선이 바뀐다.
+            require(not any(n == f.get("pin") and page != f["page"] for n, page in spots))
             spot = spots.get((f.get("pin"), f["page"]))
             if spot:                     # 작가가 짚은 자리가 모델이 어림한 자리보다 정확하다
                 fix.update(pin=f["pin"], x=spot[0], y=spot[1])
@@ -301,12 +322,14 @@ def process(run, kind, request, output, dry=False):
                 context["read_pins"] = {pin["n"]: lines for (pin, _c), lines in zip(crops, close)}
                 diffs = [dict(d, pin=pin["n"]) for (pin, _c), lines in zip(crops, close)
                          for d in text_diff(pin["page"], lines, scenes.get(pin["page"]) or {})]
-                seen = {squash(d["seen"]) for d in diffs}
+                seen = {(d["page"], squash(d["seen"])) for d in diffs}
                 diffs += [dict(d, pin=0) for p, lines in zip(pages, whole)
-                          for d in text_diff(p, lines, scenes.get(p) or {}) if squash(d["seen"]) not in seen]
+                          for d in text_diff(p, lines, scenes.get(p) or {}) if (p, squash(d["seen"])) not in seen]
                 extra["text_diff"] = context["text_diff"] = diffs
         else:
             paths = [Path(context.pop(k)) for k in ("before", "after")]
+            # 견주는 두 그림은 이 작품의 것이어야 한다(서버는 지난 판과 지금 장을 넘긴다)
+            require(all(p.suffix == ".png" and p.is_file() and _inside(p, run) for p in paths))
             if not dry and context.get("method") == "keep":   # 새로 그린 장은 글자가 달라지는 것이 정상이다
                 cut = [bands(path, dest, tag) for tag, path in zip(("before", "after"), paths)]
                 found = read_all(run, cut[0] + cut[1])

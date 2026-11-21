@@ -58,15 +58,35 @@ def _spans(flags, bridge=1):
 
 
 def _wrap(words, widths, measure):
-    """낱말을 원래 줄 수대로 나눈다. 줄마다의 폭이 원래 줄의 폭에 가장 가깝게 — 한 글자만 바뀌면 줄바꿈이 그대로다."""
+    """낱말을 원래 줄 수대로 나눈다. 줄마다의 폭이 원래 줄의 폭에 가장 가깝게 — 한 글자만 바뀌면 줄바꿈이 그대로다.
+
+    줄 수 × 낱말 수² 의 동적 계획법이다(모든 나눔을 늘어놓으면 긴 대사에서 수백만 가지가 된다).
+    """
     n = min(len(widths), len(words))
-    best = None
-    for cuts in combinations(range(1, len(words)), n - 1):
-        lines = [" ".join(words[a:b]) for a, b in zip((0, *cuts), (*cuts, len(words)))]
-        cost = sum(abs(measure(s) - w) for s, w in zip(lines, widths))
-        if best is None or cost < best[0]:
-            best = (cost, lines)
-    return best[1]
+    m = len(words)
+    width = {}
+
+    def cost(a, b, row):
+        if (a, b) not in width:
+            width[a, b] = measure(" ".join(words[a:b]))
+        return abs(width[a, b] - widths[row])
+
+    best = {(0, 0): (0.0, None)}
+    for row in range(n):
+        for start in range(m):
+            if (start, row) not in best:
+                continue
+            ends = [m] if row == n - 1 else range(start + 1, m - (n - row - 1) + 1)
+            for end in ends:
+                total = best[start, row][0] + cost(start, end, row)
+                if (end, row + 1) not in best or total < best[end, row + 1][0]:
+                    best[end, row + 1] = (total, start)
+    lines, end = [], m
+    for row in range(n, 0, -1):
+        start = best[end, row][1]
+        lines.append(" ".join(words[start:end]))
+        end = start
+    return lines[::-1]
 
 
 def _stamp(lines, path, size, pitch, weight):
@@ -120,6 +140,19 @@ def patch(page, x, y, text, path=None):
     if not rows:
         raise NoBubble("말풍선 안에 글자가 없습니다")
     tall = median(e - s for s, e in rows)
+    # 안쪽이 이어진 말풍선이 좌우로 붙어 있으면 같은 높이에 글 덩어리가 둘이다 — 글자 키보다 넓게 벌어진 세로 틈으로 가르고
+    # 짚은 쪽만 남긴다(낱말 사이 띄어쓰기는 글자 키보다 좁다).
+    cols = _spans((v > 0 for v in ink.resize((ink.width, 1), Image.Resampling.BOX).tobytes()), bridge=round(tall * 1.2))
+    if len(cols) > 1:
+        at_x = x - l
+        left_, right_ = min(cols, key=lambda c: 0 if c[0] <= at_x <= c[1] else min(abs(at_x - c[0]), abs(at_x - c[1])))
+        keep = Image.new("L", ink.size, 0)
+        keep.paste(255, (max(0, left_ - 1), 0, min(ink.width, right_ + 1), ink.height))
+        ink = Image.composite(ink, Image.new("L", ink.size, 0), keep)
+        frame = Image.composite(frame, Image.new("L", frame.size, 128), keep)
+        rows = [s for s in _spans(v > 0 for v in ink.resize((1, ink.height), Image.Resampling.BOX).tobytes())
+                if s[1] - s[0] >= 5]
+        tall = median(e - s for s, e in rows)
     blocks = [[rows[0]]]                          # 한 테두리 안에 말풍선 둘이 붙어 있으면 줄 사이가 크게 벌어진다
     for row in rows[1:]:
         (blocks.append([row]) if row[0] - blocks[-1][-1][1] > tall else blocks[-1].append(row))

@@ -51,20 +51,29 @@ class LouSheetTest(unittest.TestCase):
                              self.book, "자차", [])
         self.assertEqual("카렌", new["plans"][0]["base"])
 
+    def drafted(self, target, colour="red", name="cand.png"):
+        out = self.book / "sheets" / "drafts" / name
+        png(out, colour)
+        lou.write_json(out.with_suffix(".json"), {"target": target})
+        return out
+
     def test_draft_keeps_the_sheet_first(self):
         request = self.root / "plan.json"
         lou.write_json(request, dict(method="sheet_keep", target="마바", refs=["카렌"], note="눈만 검게"))
+        out = self.book / "sheets" / "drafts" / "cand.png"
         with patch.object(lousheet.imagegen, "paint", return_value={"stage": "CAST_SHEET_IMAGE"}) as paint:
-            lousheet.draft(self.book, request, self.root / "cand.png")
-        prompt, out = paint.call_args.args[1:3]
+            lousheet.draft(self.book, request, out)
+            with self.assertRaises(ValueError):          # 후보는 그 작품의 drafts 안에만
+                lousheet.draft(self.book, request, self.root / "cand.png")
+        prompt, written = paint.call_args.args[1:3]
         self.assertIn("눈만 검게", prompt)
         self.assertIn("카렌", prompt)
         self.assertEqual(["마바 사아.png", "카렌.png"], [p.name for p in paint.call_args.kwargs["refs"]])
-        self.assertEqual(self.root / "cand.png", out)
+        self.assertEqual(out, written)
+        self.assertEqual("마바", lou.read(out.with_suffix(".json"))["target"])
 
     def test_pick_keeps_old_versions_and_updates_the_look(self):
-        candidate = self.root / "cand.png"
-        png(candidate, "red")
+        candidate = self.drafted("마바")
         request = self.root / "pick.json"
         lou.write_json(request, {"target": "마바", "from": str(candidate), "look": "검은 머리"})
         with patch.object(run, "RUNS_DIR", self.root):
@@ -73,10 +82,40 @@ class LouSheetTest(unittest.TestCase):
         with Image.open(self.book / "sheets" / "마바 사아.png") as now:
             self.assertEqual((255, 0, 0), now.convert("RGB").getpixel((0, 0)))
         self.assertEqual("검은 머리", lou.read(self.book / "cast.json")[0]["look"])
-        lou.write_json(request, {"target": "가나 다라", "from": str(candidate), "look": "붉은 드레스"})
+        hero = self.drafted("가나 다라", name="hero.png")
+        lou.write_json(request, {"target": "가나 다라", "from": str(hero), "look": "붉은 드레스"})
         lousheet.pick(self.book, request)
         self.assertTrue((self.book / "sheets" / "versions" / "sheet.v1.png").exists())
         self.assertEqual("붉은 드레스", lou.read(self.book / "input.json")["description"])
+
+    def test_pick_refuses_other_files_and_other_people(self):
+        request = self.root / "pick.json"
+        outside = self.root / "elsewhere.png"
+        png(outside, "red")
+        lou.write_json(outside.with_suffix(".json"), {"target": "마바"})
+        for source, target in ((outside, "마바"), (self.drafted("카렌"), "마바")):
+            lou.write_json(request, {"target": target, "from": str(source)})
+            with self.assertRaises(ValueError):
+                lousheet.pick(self.book, request)
+        with Image.open(self.book / "sheets" / "마바 사아.png") as now:
+            self.assertEqual((128, 128, 128), now.convert("RGB").getpixel((0, 0)))
+
+    def test_names_do_not_slide_to_someone_else(self):
+        png(self.book / "sheets" / "카를로스.png", "blue")
+        png(self.book / "sheets" / "sheet.png", "green")            # 이름이 sheet 인 조연
+        lou.write_json(self.book / "cast.json", [{"name": "카를로스", "look": "붉은 머리"}, {"name": "카를", "look": ""},
+                                                {"name": "sheet", "look": ""}])
+        self.assertIsNone(lousheet.find(self.book, "카를"))
+        self.assertEqual("카를", lousheet.person_of(self.book, "카를")["name"])
+        request = self.root / "pick.json"
+        lou.write_json(request, {"target": "카를", "from": str(self.drafted("카를")), "look": "검은 머리"})
+        self.assertEqual(self.book / "sheets" / "카를.png", lousheet.pick(self.book, request))
+        with Image.open(self.book / "sheets" / "카를로스.png") as carlos:
+            self.assertEqual((0, 0, 255), carlos.convert("RGB").getpixel((0, 0)))
+        self.assertEqual(["붉은 머리", "검은 머리"], [c["look"] for c in lou.read(self.book / "cast.json")[:2]])
+        lou.write_json(request, {"target": "sheet", "from": str(self.drafted("sheet", name="s.png")), "look": "조연"})
+        lousheet.pick(self.book, request)
+        self.assertEqual("분홍 머리", lou.read(self.book / "input.json")["description"])
 
     def test_sheet_question_goes_to_the_sheet_prompt(self):
         request = self.root / "ask.json"

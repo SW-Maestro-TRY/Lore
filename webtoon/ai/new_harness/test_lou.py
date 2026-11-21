@@ -109,6 +109,28 @@ class LouTest(unittest.TestCase):
         result = self.invoke("check",dict(req,method="redraw"),[json.dumps(check)])
         self.assertEqual(check,result)
 
+    def test_text_fix_on_a_pin_from_another_page_is_refused(self):
+        req = dict(self.req,pins=[self.pin,dict(self.pin,n=2,page=3)])
+        lou.write_json(self.book/"scenes.json", {"scenes":[{"what":"가"},{"what":"가"},{"what":"가"}]})
+        Image.new("RGB",(600,1800),"white").save(self.book/"pages/page03.png")
+        plan = dict(method="text",pages=[3],changes="오자",keeps="그림",note="",text=dict(page=3,pin=1,x=10,y=10,text="글"))
+        result = self.invoke("ask",req,[json.dumps(dict(self.ask,plans=[plan]))]*2)
+        self.assertEqual([],result["plans"])
+
+    def test_check_only_compares_pictures_of_this_work(self):
+        outside = self.root/"other.png"
+        Image.new("RGB",(10,10)).save(outside)
+        path = self.root/"input.json"
+        lou.write_json(path, dict(page=2,before=str(outside),after=str(self.page),note="손",method="keep",lang="ko"))
+        with self.assertRaises(ValueError):
+            lou.process(self.book,"check",path,self.root/"out.json")
+
+    def test_text_drift_counts_repeats_and_ignores_line_splits(self):
+        self.assertEqual([dict(before="간다 간다",after=""),dict(before="",after="추가 문장")],
+                         lou.text_changed(["간다 간다","간다 간다"],["간다 간다","추가 문장"]))
+        self.assertEqual([], lou.text_changed(["다시 간다"],["다시","간다"]))
+        self.assertEqual([dict(before="",after="새로 생긴 줄")], lou.text_changed(["그대로"],["그대로","새로 생긴 줄"]))
+
     def test_text_drift(self):
         self.assertEqual([dict(before="물린 사람을 보면",after="몰린 사람을 보면"),dict(before="쾅쾅",after="")],
                          lou.text_changed(["물린 사람을 보면","그게 다야.","쾅쾅"],["그게 다야.","몰린 사람을 보면"]))

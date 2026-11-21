@@ -33,6 +33,29 @@ class TextFixTest(unittest.TestCase):
         self.assertTrue(120 <= left and right <= 400 and bottom <= 400)
         self.assertEqual((90, 110, 150), after.getpixel((500, 600)))
 
+    def test_side_by_side_bubbles(self):
+        """안쪽이 이어진 말풍선이 좌우로 붙어 있으면 짚은 쪽 글만 바뀐다."""
+        image = Image.new("RGB", (800, 1200), (90, 110, 150))
+        draw = ImageDraw.Draw(image)
+        draw.ellipse((20, 60, 420, 340), fill="white", outline="black", width=3)
+        draw.ellipse((380, 60, 780, 340), fill="white", outline="black", width=3)
+        draw.rectangle((380, 180, 420, 220), fill="white")
+        font = ImageFont.truetype(textfix.font_file(), 26)
+        draw.text((200, 200), "왼쪽 글자", font=font, fill=(20, 20, 20), anchor="mm")
+        draw.text((600, 200), "오른쪽 글자", font=font, fill=(20, 20, 20), anchor="mm")
+        after = textfix.patch(image, 200, 200, "왼쪽 고친 글")
+        left, _top, right, _bottom = ImageChops.difference(image, after).getbbox()
+        self.assertLess(right, 420)
+
+    def test_long_lines_wrap_quickly(self):
+        import time
+        words = [f"낱말{i}" for i in range(30)]
+        started = time.monotonic()
+        lines = textfix._wrap(words, [120] * 8, lambda s: len(s) * 10.0)
+        self.assertLess(time.monotonic() - started, 1)
+        self.assertEqual(8, len(lines))
+        self.assertEqual(" ".join(words), " ".join(lines))
+
     def test_no_bubble_under_the_pin(self):
         with self.assertRaises(textfix.NoBubble):
             textfix.patch(page(), 520, 700, "글")

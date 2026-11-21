@@ -2611,7 +2611,7 @@ def main(argv=None) -> int:
             p.error("시트 후보에는 --run-id 와 --lou-out 이, 고르기에는 --run-id 가 필요합니다")
         import lousheet
         if args.lou_sheet:
-            lousheet.draft(RUNS_DIR / args.run_id, args.lou_sheet, args.lou_out)
+            lousheet.draft(RUNS_DIR / args.run_id, args.lou_sheet, args.lou_out, args.dry_run)
         else:
             print(lousheet.pick(RUNS_DIR / args.run_id, args.lou_sheet_pick))
         return 0

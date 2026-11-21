@@ -166,9 +166,8 @@ public class LouService {
             files.restore(run,no);
             if(before!=null) {
                 input.put("before",before.toString());
-                Path after=dir.resolve("after.png");
-                Files.copy(runDir(run).resolve("pages/page%02d.png".formatted(no)),after);
-                input.put("after",after.toString());
+                /* 하네스는 작품 폴더 밖의 그림을 견주지 않는다 — 지금 걸린 장을 그 자리에서 넘긴다. */
+                input.put("after",runDir(run).resolve("pages/page%02d.png".formatted(no)).toString());
             }
             Path request=dir.resolve("input.json"), result=dir.resolve("result.json");
             json.writeValue(request.toFile(),input);

@@ -45,13 +45,27 @@ def sheets_of(run):
     return out
 
 
-def find(run, name):
-    """이름으로 시트를 찾는다. 성 없이 불러도 찾는다. 없으면 None."""
-    pairs = sheets_of(run)
-    name = (name or "").strip()
+def same_person(pairs, name):
+    """이름이 같은 사람 하나. 정확히 같은 이름이 먼저다. 없으면 성이나 이름 한 낱말이 통째로 같은 사람이 딱 하나일 때만.
+
+    「카를」이 「카를로스」로, 「로제로」가 같은 성의 다른 사람으로 가면 그 사람의 시트를 덮는다 — 그래서 글자 일부가 겹치는
+    것으로는 맞추지 않고, 여럿이 걸리면 못 찾은 것으로 친다.
+    """
+    name = " ".join((name or "").split())
+    if not name:
+        return None
     exact = [pair for pair in pairs if pair[0] == name]
-    loose = [pair for pair in pairs if lou.name_in(pair[0], name) or lou.name_in(name, pair[0])]
-    return (exact or loose or [None])[0]
+    if exact:
+        return exact[0]
+    words = set(name.split())
+    loose = [pair for pair in pairs
+             if len(name) >= 2 and (name in pair[0].split() or set(pair[0].split()) <= words)]
+    return loose[0] if len(loose) == 1 else None
+
+
+def find(run, name):
+    """이름으로 시트를 찾는다. 성 없이 불러도 찾는다. 없거나 여럿이 걸리면 None."""
+    return same_person(sheets_of(run), name)
 
 
 def cast_of(run):
@@ -61,11 +75,8 @@ def cast_of(run):
 
 
 def person_of(run, name):
-    for person in cast_of(run):
-        full = str(person.get("name") or "")
-        if full == name or lou.name_in(full, name) or lou.name_in(name, full):
-            return person
-    return None
+    hit = same_person([(str(p.get("name") or ""), p) for p in cast_of(run)], name)
+    return hit[1] if hit else None
 
 
 def appears(run, name):
@@ -214,17 +225,37 @@ def _new_spec(run, plan):
     call = llm.Call("CAST_SHEET")
     text, meta = call(R.compose("own/cast_sheet_prompt", "\n".join(lines) + "\n"), temperature=0.4)
     record(run, meta)
-    spec = sheetmod.parse_spec(text)
-    bad = sheetmod.gate_spec(spec)
+    try:
+        spec = sheetmod.parse_spec(text)
+        bad = sheetmod.gate_spec(spec)
+    except Exception as exc:                      # noqa: BLE001 — 모델 답이 사양 모양이 아니다
+        raise SystemExit(f"시트 사양을 읽지 못했습니다({type(exc).__name__})") from exc
     if bad:
         raise SystemExit("시트 사양이 모자랍니다: " + " / ".join(bad))
     return spec, sheetmod.build_prompt(spec, from_photo=False)
 
 
-def draft(run, request, out):
-    """후보 한 장. request: {method, target, base, refs, note, look} — 묻기가 돌려준 방법 하나."""
+def drafts_dir(run):
+    return run / "sheets" / "drafts"
+
+
+def inside(path, folder):
+    """path 가 folder 안의 파일인가(심볼릭 링크를 풀어서)."""
+    try:
+        Path(path).resolve().relative_to(Path(folder).resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def draft(run, request, out, dry=False):
+    """후보 한 장. request: {method, target, base, refs, note, look} — 묻기가 돌려준 방법 하나.
+
+    후보는 그 작품의 sheets/drafts/ 안에만 쓴다. 누구의 후보인지 옆에 남겨(.json) 고를 때 맞춰 본다.
+    """
     plan = lou.read(request)
     lou.require(plan.get("method") in METHODS and lou.string(plan, "note") and lou.string(plan, "target"))
+    lou.require(out.suffix == ".png" and inside(out, drafts_dir(run)))
     found = [find(run, r) for r in plan.get("refs") or []]
     lou.require(all(found))
     base = find(run, plan.get("base") or plan["target"]) if plan["method"] == "sheet_keep" or plan.get("base") else None
@@ -236,6 +267,11 @@ def draft(run, request, out):
         prompt = ((lou.PROMPTS / "sheet_keep_prompt").read_text(encoding="utf-8")
                   .replace("{refs}", line).replace("{note}", plan["note"]))
     else:
+        if dry:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.with_suffix(".prompt.txt").write_text("(새로 그리기는 사양을 먼저 써야 해서 드라이런에서는 그림 지시를 못 만든다)\n"
+                                                      + plan["note"], encoding="utf-8")
+            return
         spec, prompt = _new_spec(run, plan)
         write_json(out.with_suffix(".spec.json"), spec)
         shown = ([base] if base else []) + others
@@ -245,39 +281,59 @@ def draft(run, request, out):
     refs = ([base[1]] if base else []) + [p for _n, p in others]
     out.parent.mkdir(parents=True, exist_ok=True)
     out.with_suffix(".prompt.txt").write_text(prompt, encoding="utf-8")
+    if dry:
+        return
     meta = imagegen.paint("CAST_SHEET_IMAGE", prompt, out, refs=refs, kind=imagegen.SHEET_KIND)
     record(run, meta)
+    write_json(out.with_suffix(".json"), {"target": plan["target"], "method": plan["method"], "look": plan.get("look", "")})
 
 
 def pick(run, request):
-    """고른 후보를 시트로 건다. request: {target, from, look}. 지금 시트는 versions/ 에 지난 판으로 남긴다."""
+    """고른 후보를 시트로 건다. request: {target, from, look}. 지금 시트는 sheets/versions/ 에 지난 판으로 남긴다.
+
+    from 은 이 작품의 sheets/drafts/ 안에서 같은 사람에게 그린 후보여야 한다. 두 사람이 동시에 골라도 지난 판 번호가
+    겹치거나 그림과 설정 글이 서로 다른 후보에서 남지 않게, 지난 판 뜨기 · 걸기 · 설정 고치기를 한 잠금 안에서 한다.
+    """
+    import fcntl
+
     req = lou.read(request)
-    source = Path(req["from"])
-    lou.require(source.is_file() and lou.string(req, "target"))
+    source = Path(req.get("from") or "")
+    lou.require(lou.string(req, "target") and source.suffix == ".png" and source.is_file()
+                and inside(source, drafts_dir(run)))
+    made = source.with_suffix(".json")
+    lou.require(made.is_file() and same_person([(lou.read(made).get("target", ""), None)], req["target"]) is not None)
+    with Image.open(source) as image:
+        image.verify()
     hit = find(run, req["target"])
     person = person_of(run, req["target"])
     name = hit[0] if hit else str((person or {}).get("name") or req["target"]).strip()
     dest = hit[1] if hit else run / "sheets" / f"{stem(name)}.png"
-    if dest.exists():
-        versions = run / "sheets" / "versions"          # 첫 주인공(sheet.png)의 지난 판도 같은 곳에
-        versions.mkdir(parents=True, exist_ok=True)
-        have = [int(m.group(1)) for m in (re.fullmatch(rf"{re.escape(dest.stem)}\.v(\d+)\.png", f.name)
-                                           for f in versions.iterdir()) if m]
-        shutil.copy2(dest, versions / f"{dest.stem}.v{max(have, default=0) + 1}.png")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, dest)
-    spec = source.with_suffix(".spec.json")
-    if spec.exists() and dest.name != "sheet.png":
-        shutil.copy2(spec, dest.with_suffix(".spec.json"))
-    look = lou.string(req, "look")
-    if look and dest.name == "sheet.png":          # 첫 주인공의 생김새는 input.json 의 설명에 있다
-        inp = lou.read(run / "input.json")
-        inp["description"] = look
-        write_json(run / "input.json", inp)
-    elif look and person is not None:
-        cast = cast_of(run)
-        for one in cast:
-            if one.get("name") == person.get("name"):
-                one["look"] = look
-        write_json(run / "cast.json", cast)
+    hero = dest.resolve() == (run / "sheet.png").resolve()
+    lock = run / "sheets" / ".pick.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock, "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        if dest.exists():
+            versions = run / "sheets" / "versions"          # 첫 주인공(sheet.png)의 지난 판도 같은 곳에
+            versions.mkdir(parents=True, exist_ok=True)
+            have = [int(m.group(1)) for m in (re.fullmatch(rf"{re.escape(dest.stem)}\.v(\d+)\.png", f.name)
+                                               for f in versions.iterdir()) if m]
+            shutil.copy2(dest, versions / f"{dest.stem}.v{max(have, default=0) + 1}.png")
+        scratch = dest.with_name(dest.name + ".picking")
+        shutil.copy2(source, scratch)
+        scratch.replace(dest)
+        spec = source.with_suffix(".spec.json")
+        if spec.exists() and not hero:
+            shutil.copy2(spec, dest.with_suffix(".spec.json"))
+        look = lou.string(req, "look")
+        if look and hero:                       # 첫 주인공의 생김새는 input.json 의 설명에 있다
+            inp = lou.read(run / "input.json")
+            inp["description"] = look
+            write_json(run / "input.json", inp)
+        elif look and person is not None:
+            cast = cast_of(run)
+            for one in cast:
+                if one is not None and one.get("name") == person.get("name"):
+                    one["look"] = look
+            write_json(run / "cast.json", cast)
     return dest
