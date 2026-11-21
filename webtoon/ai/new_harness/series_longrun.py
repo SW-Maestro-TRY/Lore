@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -307,6 +308,12 @@ def free_step(env: dict, out: Path, n: int, state: dict, source: str, model: str
         arc_block = (f"\n[이어 쓰기 큰 줄기 — 작가가 정한 방향]\n{arc}\n\n"
                      f"이번 화는 이어 쓰는 {total}화 가운데 {k}번째다. 이 줄기에서 지금 어디쯤인지 보고 그 대목을 정하되, "
                      "진행 상태와 직전 화에서 자연스럽게 이어지게 한다. 줄기에 적힌 일을 한 화에 몰아 넣지 않는다.\n")
+    # 줄기에 화 번호를 붙인 줄(「23화 — …」)이 있으면 그 줄을 이번 화에 꼭 일어날 일로 못 박는다 — 줄기만 보여 주면
+    # 회차 정하기가 앞 화의 장면을 늘이다 한두 화씩 밀리거나, 클라이맥스 · 작별처럼 정해 둔 사건을 건너뛰었다(2026-11-22).
+    this_line = arc_line_for(arc, n)
+    if this_line:
+        arc_block += (f"\n[이번 화({n}화)에 반드시 일어날 일 — 줄기의 이 줄]\n{this_line}\n"
+                      "이 줄의 사건을 이번 화의 중심으로 삼는다. 이 줄의 사건을 다음 화로 미루지 않고, 다음 화 줄의 사건을 미리 쓰지 않는다.\n")
     prompt = FREE_PROMPT.format(n=n, total=total, k=k, last_note=note, content_note=cn, state=st, prev=prev, arc_block=arc_block)
     got = {}
     for attempt in range(3):
@@ -315,8 +322,26 @@ def free_step(env: dict, out: Path, n: int, state: dict, source: str, model: str
             break
     else:
         raise SystemExit(f"{n}화 이어 쓰기 회차 정하기가 세 번 모두 빈 요청이었습니다 ({out / 'steps'})")
-    return {"n": n, "request": str(got["request"]).strip(), "start": len(source), "end": len(source),
+    request = str(got["request"]).strip()
+    if this_line:
+        request += f"\n\n[줄거리에 정해 둔 이번 화 — 이 사건들이 본문에 모두 나와야 한다]\n{this_line}"
+    return {"n": n, "request": request, "start": len(source), "end": len(source),
             "end_quote": "", "last": last, "free": True}
+
+
+def arc_line_for(arc: str, n: int) -> str:
+    """줄기 글에서 「{n}화」로 시작하는 줄(다음 「…화」 줄 앞까지)을 돌려준다. 없으면 빈 문자열 — 예전 줄기 파일은 그대로 돈다."""
+    lines, out, on = arc.splitlines(), [], False
+    head = re.compile(r"^\s*(\d+)화")
+    for ln in lines:
+        m = head.match(ln)
+        if m:
+            if on:
+                break
+            on = int(m.group(1)) == n
+        if on:
+            out.append(ln)
+    return "\n".join(out).strip()
 
 
 def free_after(state: dict, item: dict) -> bool:
