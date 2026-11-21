@@ -2445,7 +2445,8 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
                        allow_no_sheet: bool = False,
                        review: bool | None = None,
                        note: str = "", lang: str = "ko",
-                       cover_first: bool = False, keep_from: Path | None = None, textless: bool = False) -> None:
+                       cover_first: bool = False, keep_from: Path | None = None, textless: bool = False,
+                       keep_basis: tuple[int, ...] = ()) -> None:
     """이어그리기(최종 방식) — **구체화·콘티·컷 대본을 전부 건너뛰고**
     scene_prompt 산출물(scenes.json)만으로 표지+전체 씬을 그린다.
 
@@ -2476,7 +2477,7 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
     made = detailart.draw_continue(run_dir, dry_run=dry_run, only=only,
                                    allow_no_sheet=allow_no_sheet, review=review,
                                    note=note, lang=lang, cover_first=cover_first,
-                                   keep_from=keep_from, textless=textless,
+                                   keep_from=keep_from, textless=textless, keep_basis=keep_basis,
                                    on_page=lambda meta: record(run_dir, meta))
     if made:
         log(f"[이어그리기] {len(made)}장 그렸습니다 -> {run_dir / detailart.PAGE_DIR}")

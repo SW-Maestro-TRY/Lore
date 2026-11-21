@@ -50,5 +50,31 @@ class KeepPageTest(unittest.TestCase):
         self.assertIn("적히지 않은 인물, 말풍선, 글자는", text)
 
 
+class CommandLineTest(unittest.TestCase):
+    """run.py 가 구도 유지 인자를 그림 함수까지 넘기는지 — 앞 단계 함수가 새 인자를 안 받아 다시 그리기가 전부 멈춘 적이 있다(2026-11-22)."""
+
+    def test_detail_pages_reach_the_drawer_with_and_without_new_flags(self):
+        import tempfile
+        from unittest.mock import patch
+        import run
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            book = Path(tmp) / "episode"
+            (book / "pages").mkdir(parents=True)
+            source = book / "pages" / "page02.png"
+            source.write_bytes(b"x")
+            for name, value in (("input.json", {"name": "가"}), ("scenes.json", {"scenes": [{"what": "가"}]}),
+                                ("directions.json", [{"n": 1, "body": "본문"}])):
+                (book / name).write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+            for extra, basis in (([], ()), (["--keep-basis", "3"], (3,))):
+                with patch.object(run, "RUNS_DIR", Path(tmp)), \
+                        patch.object(detailart, "draw_continue", return_value=[]) as drawer:
+                    self.assertEqual(0, run.main(["--run-id", "episode", "--detail-pages", "--page", "2",
+                                                  "--keep-from", str(source), "--note", "손만", *extra]))
+                    self.assertTrue(drawer.called, extra)
+                    self.assertEqual(basis, drawer.call_args.kwargs.get("keep_basis"))
+                    self.assertEqual("손만", drawer.call_args.kwargs.get("note"))
+
+
 if __name__ == "__main__":
     unittest.main()
