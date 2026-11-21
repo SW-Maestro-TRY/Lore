@@ -225,8 +225,10 @@ def cast_sheets_in_scene(sheets: dict[str, Path], scene: dict, limit: int = CAST
     # 나온 사람(보고 · 소문 · 호칭)은 그 장에 없는 사람이다. look 이 없는 옛 장면은 예전처럼 전체 글에서 찾는다.
     look = str(scene.get("look") or "").strip()
     if look:
-        said = re.compile(r"“[^”]*”|\"[^\"]*\"|「[^」]*」|『[^』]*』|‘[^’]*’")
-        hay = look + " " + " ".join(said.sub(" ", str(scene.get(k) or "")) for k in ("where", "what", "acting"))
+        # 행동 글(acting)만 더 본다 — 요약(what)은 「라옴의 뜻을 전한다」 「디온의 빈자리」처럼 없는 사람을 간접으로 적기도 한다.
+        # 따옴표 쌍은 200자 안에서만 맞춘다(닫히지 않은 따옴표가 뒤 행동까지 지우지 않게).
+        said = re.compile(r"“[^”]{0,200}”|\"[^\"]{0,200}\"|「[^」]{0,200}」|『[^』]{0,200}』|‘[^’]{0,200}’")
+        hay = look + " " + said.sub(" ", str(scene.get("acting") or ""))
     else:
         hay = " ".join(str(scene.get(k) or "") for k in ("where", "what", "acting", "look", "prev", "ends", "user_text"))
     # 주인공을 찾을 때와 같은 말(_name_keys — 성을 뺀 이름까지)로 찾는다. 이름 전체와 앞 낱말만 보던 때는
