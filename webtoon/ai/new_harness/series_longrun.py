@@ -369,6 +369,14 @@ def writer_request(state: dict, source: str, item: dict) -> str:
     --source-to-writer 면 이번 화로 옮길 원작 구간을 통째로 같이 준다 — 소설을 웹툰으로 옮기는 사람은 원작 장을 보고
     쓴다. 2~3문장만 주면 원작의 상황 · 이유 · 인물의 상태가 빠진 줄거리 요약이 된다(2026-11-19, 원작 7천 자 → 본문 770자)."""
     note = f"\n\n{state['content_note']}" if state.get("content_note") else ""
+    if item.get("free") and state.get("source_to_writer"):
+        # 원작 없이 이어 쓰는 화도 원작 화와 같은 분량 · 밀도로 — 요청 두세 문장만 주면 원작 화(1,700자 안팎)의 3분의 1(500자)짜리
+        # 줄거리 요약이 됐다(2026-11-21).
+        lo, hi = state.get("body_sentences", [20, 30])
+        return (f"[이번 화 내용 — 원작 없이 이어 쓴다]\n{item['request']}\n\n"
+                f"본문은 {lo}~{hi}문장으로 쓴다. 장면 4~6개에 걸쳐 장소 · 시간 · 상황, 인물이 그렇게 하는 이유, 인물의 몸 · 마음 상태가 "
+                "독자에게 전해지게 쓴다. 대사와 행동으로 보여 주고, 사건이 한 번 크게 움직인 뒤 다음 화가 궁금해지는 자리에서 끝낸다. "
+                "인물이 자리를 옮기면 어디로 · 왜 가는지 쓴다.") + note
     if not state.get("source_to_writer") or item.get("free"):
         return item["request"] + note
     lo, hi = state.get("body_sentences", [20, 30])
