@@ -32,6 +32,23 @@ class KeepPageTest(unittest.TestCase):
         self.assertEqual(len(refs), detailart.REF_LIMIT)
         self.assertEqual(names, ["가람", "나래", "다온"])
 
+    def test_basis_page_is_attached_last_and_named(self):
+        cast = {name: Path(name + ".png") for name in ("가람", "나래", "다온")}
+        basis = Path("page05.png")
+        refs, names = detailart.keep_refs(Path("p.png"), "가람 나래 다온, 5장과 같은 왕관", None, {}, cast, (basis,))
+        self.assertEqual(refs[-1], basis)
+        self.assertEqual(len(refs), detailart.REF_LIMIT)
+        self.assertEqual(names, ["가람", "나래"])              # 기준 장 자리를 위해 시트 하나를 덜 붙인다
+        prompt = detailart.keep_prompt(self.template(), "왕관", names, [5])
+        self.assertIn("마지막 그림은 같은 화의 5장이다", prompt)
+        self.assertNotIn("마지막 그림", detailart.keep_prompt(self.template(), "왕관", names))
+
+    def test_keep_prompt_allows_bubble_edits_but_guards_the_rest(self):
+        text = self.template()
+        self.assertIn("꼬리를 다른 사람 쪽으로 돌리기", text)
+        self.assertIn("「」 안의 글은 한 글자도 다르지 않게", text)
+        self.assertIn("적히지 않은 인물, 말풍선, 글자는", text)
+
 
 if __name__ == "__main__":
     unittest.main()

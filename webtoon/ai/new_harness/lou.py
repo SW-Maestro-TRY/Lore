@@ -207,6 +207,66 @@ def text_diff(page, lines, scene):
     return out
 
 
+def confirm_changes(run, changed, cut, found):
+    """옮겨 적은 줄이 달라졌다고 나온 것을, 그 줄이 나온 띠를 고치기 전 · 후로 나란히 보여 주고 정말 다른지 다시 묻는다.
+
+    따로 옮겨 적으면 같은 글을 다르게 읽는 일이 잦았다(실제 지시 13건 가운데 달라졌다고 나온 5건 중 3건이 잘못 읽은 것,
+    2026-11-22). 다시 물어 같다고 하면 뺀다. 묻기가 실패하면 그대로 남긴다(모르면 알린다)."""
+    if not changed:
+        return []
+    bands_b, bands_a = cut[0], cut[1]
+    lines_b, lines_a = found[:len(bands_b)], found[len(bands_b):]
+
+    def band_of(line, groups):
+        key = squash(line)
+        return next((i for i, lines in enumerate(groups) if key and key in {squash(s) for s in lines}), None)
+
+    jobs = []
+    for c in changed:
+        i = band_of(c["before"], lines_b) if c["before"] else None
+        j = band_of(c["after"], lines_a) if c["after"] else None
+        k = i if i is not None else j
+        jobs.append((c, k if k is not None and k < min(len(bands_b), len(bands_a)) else None))
+    prompt = (PROMPTS / "textsame_prompt").read_text(encoding="utf-8")
+
+    def ask(job):
+        c, k = job
+        if k is None:
+            return c, None
+        call = Call_for_text()
+        try:
+            raw, meta = call(prompt + "\n" + json.dumps({"before": c["before"], "after": c["after"]}, ensure_ascii=False),
+                             images=llm.load_images([bands_b[k], bands_a[k]]), temperature=0)
+            return c, (unwrap(raw), meta)
+        except Exception as exc:                          # noqa: BLE001 — 모르면 알린다
+            return c, (None, {"stage": "LOU", "provider": call.provider, "model": call.model, "usage": None,
+                              "cost": {}, "error": type(exc).__name__})
+
+    out = []
+    with ThreadPoolExecutor(6) as pool:
+        for c, got in pool.map(ask, jobs):
+            if got is None:
+                out.append(c)
+                continue
+            data, meta = got
+            record(run, meta)
+            if isinstance(data, dict) and data.get("same") is True:
+                continue
+            if isinstance(data, dict) and data.get("same") is False:
+                c = dict(before=string(data, "before") or c["before"], after=string(data, "after") if "after" in data else c["after"])
+            out.append(c)
+    return out
+
+
+def Call_for_text():
+    return llm.Call("LOU")
+
+
+def quoted(note):
+    """지시에 「」로 적은 글 — 고치라고 한 말풍선 · 상자 · 효과음의 글."""
+    return [q.strip() for q in re.findall(r"「([^」]+)」", note or "") if squash(q)]
+
+
 def _rejoin(lines, other):
     """lines 의 이웃한 두세 줄을 이어 붙인 것이 other 의 한 줄과 같으면 그 줄로 합친다(같은 말풍선을 몇 줄로 옮겨 적었는지만 다른 것)."""
     whole = {squash(s) for s in other}
@@ -268,7 +328,8 @@ def clean_check(data):
     require(type(data.get("ok")) is bool)
     for key in ("kept", "changed", "unexpected"):
         require(isinstance(data.get(key), list) and all(isinstance(s, str) for s in data[key]))
-    return {k: data[k] for k in ("ok", "reply", "kept", "changed", "unexpected")}
+    return {**{k: data[k] for k in ("ok", "reply", "kept", "changed", "unexpected")},
+            "retry_note": string(data, "retry_note") if data["unexpected"] else ""}
 
 
 def clean_ask(data, pages, skipped, spots, scenes, pinned=None):
@@ -368,13 +429,20 @@ def process(run, kind, request, output, dry=False):
             require(all(p.is_absolute() and p.suffix == ".png" and p.is_file() and _inside(p, run) for p in given))
             # 시작할 때 한 번 떠 둔다 — 그사이 같은 장을 다시 그려도 글자 읽기와 모델이 같은 판을 본다
             paths = [dest / f"{name}.png" for name in ("before", "after")]
+            import lousheet
+            context["sheets"] = [n for n, _p in lousheet.sheets_of(run)]
             for src, copy in zip(given, paths):
                 copyfile(src, copy)
             if not dry and context.get("method") == "keep":   # 새로 그린 장은 글자가 달라지는 것이 정상이다
                 cut = [bands(path, dest, tag) for tag, path in zip(("before", "after"), paths)]
                 found = read_all(run, cut[0] + cut[1])
                 before, after = join_bands(found[:len(cut[0])]), join_bands(found[len(cut[0]):])
-                extra["text_changed"] = context["text_changed"] = text_changed(before, after)
+                changed = text_changed(before, after)
+                asked = quoted(context.get("note", ""))
+                expected = [c for c in changed if any(near(c[k], q) >= .9 for q in asked for k in ("before", "after") if c[k])]
+                drift = confirm_changes(run, [c for c in changed if c not in expected], cut, found)
+                extra["text_changed"] = context["text_changed"] = drift
+                extra["text_expected"] = context["text_expected"] = expected
         prompt = (PROMPTS / f"{kind}_prompt").read_text(encoding="utf-8")
         prompt += "\n" + json.dumps(context, ensure_ascii=False) + "\n" + str([p.name for p in paths])
         if dry:
@@ -406,3 +474,44 @@ def process(run, kind, request, output, dry=False):
                       if kind == "ask" else dict(reply=reply, ok=False, kept=[], changed=[], unexpected=[]))
         safe_output(output)
         write_json(output, {**result, **extra})
+
+
+# ── 고치고 확인하고, 필요하면 한 번 더 ────────────────────────────────────────
+
+ATTEMPTS = 2          # 같은 장을 세 번 넘게 그리지 않는다 — 두 번째도 안 되면 새로 그리기를 권한다
+
+
+def verified_keep(run, page, source, note, lang, draw, output):
+    """구도 유지로 그리고 → 확인하고 → 다른 것까지 바뀌었으면 처음 원본(source)에서 확인이 준 지시로 한 번 더.
+
+    두 번째 시도는 실패한 그림이 아니라 처음 원본에서 다시 그린다. 실패한 그림 위에 고치면 바뀐 것이 쌓인다.
+    마지막 확인과 몇 번 그렸는지를 output 에 남긴다. 확인이 실패해도(모델 오류) 그린 그림은 그대로 둔다."""
+    page_png = run / "pages" / f"page{page:02}.png"
+    source = Path(source).resolve()
+    keep_copy = run / "pages" / f".lou-source-{page:02}.png"           # 그리는 동안 원본이 바뀌어도 같은 것에서 다시 그린다
+    copyfile(source, keep_copy)
+    tries, current, last = [], note, None
+    try:
+        for attempt in range(1, ATTEMPTS + 1):
+            draw(current)
+            request = run / "lou" / f"verify-{page:02}-{attempt}.json"
+            request.parent.mkdir(parents=True, exist_ok=True)
+            write_json(request, dict(page=page, before=str(keep_copy.resolve()), after=str(page_png.resolve()),
+                                     note=current, method="keep", lang=lang))
+            result_path = request.with_name(request.stem + ".out.json")
+            try:
+                process(run, "check", request, result_path)
+                last = read(result_path)
+            except Exception as exc:                      # noqa: BLE001 — 확인을 못 해도 그린 것은 남긴다
+                last = dict(ok=False, reply="고친 장을 확인하지 못했어요.", kept=[], changed=[], unexpected=[],
+                            retry_note="", error=type(exc).__name__)
+            tries.append(dict(attempt=attempt, note=current, ok=last.get("ok"), unexpected=last.get("unexpected", [])))
+            retry = string(last, "retry_note")
+            if last.get("ok") or not retry or attempt == ATTEMPTS:
+                break
+            current = retry
+    finally:
+        keep_copy.unlink(missing_ok=True)
+    advice = "" if (last or {}).get("ok") else ("redraw" if len(tries) == ATTEMPTS else "")
+    safe_output(output)
+    write_json(output, {**(last or {}), "attempts": tries, "advice": advice})

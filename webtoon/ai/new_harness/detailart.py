@@ -799,19 +799,41 @@ def note_block(note: str) -> str:
 TEXTLESS = "## 글자 없이 그리기\n앞의 대사·나레이션·제목 지시와 관계없이 말풍선, 나레이션 상자, 효과음, 글자를 전혀 그리지 않는다. 빈 말풍선이나 상자도 그리지 않고 행동과 표정으로 보여 준다."
 
 
-def keep_prompt(template: str, note: str, sheet_names=()) -> str:
-    """구도 유지 프롬프트. 시트를 붙였으면 누구 시트인지 붙인 순서대로 적는다. 메모는 적힌 그대로 넣는다."""
+def guard_text(run_dir: Path, before: Path, after: Path, note: str) -> list[tuple[str, str]]:
+    """구도 유지로 고친 장에서, 고치라고 하지 않은 말풍선의 글자가 바뀌었으면 그 말풍선 안쪽을 고치기 전 그림에서 되살린다
+    (textguard). 꺼 두려면 NH_TEXT_GUARD=0. 글자 옮겨 적기가 실패하면 아무것도 바꾸지 않는다."""
+    if os.environ.get("NH_TEXT_GUARD", "1").strip().lower() in ("0", "off", "false", "no"):
+        return []
+    import lou
+    import textguard
+    try:
+        return textguard.restore(before, after, note, lambda paths: lou.read_all(run_dir, paths),
+                                 lou.squash, lou.near, lou.quoted)
+    except Exception as exc:                                  # noqa: BLE001 — 지키기가 실패해도 고친 그림은 남긴다
+        log(f"  [글자 지키기] 건너뜀: {type(exc).__name__}: {exc}")
+        return []
+
+
+def keep_prompt(template: str, note: str, sheet_names=(), basis_pages=()) -> str:
+    """구도 유지 프롬프트. 시트를 붙였으면 누구 시트인지 붙인 순서대로 적는다. 기준 장을 붙였으면 맨 뒤 그림이 몇 장인지 적는다.
+    메모는 적힌 그대로 넣는다."""
     sheets = (f"둘째 그림부터는 캐릭터 시트다({', '.join(sheet_names)}). 바꾸는 인물은 그 사람의 시트대로 그린다.\n"
               if sheet_names else "")
+    if basis_pages:
+        sheets += (f"마지막 그림은 같은 화의 {', '.join(map(str, basis_pages))}장이다. 「고칠 것」이 그 장과 같게 하라고 한 것"
+                   "(옷, 장식, 상처와 붕대의 자리, 소품의 모양, 때와 빛)은 이 그림을 기준으로 맞춘다. 이 그림의 구도와 말풍선은 가져오지 않는다.\n")
     return template.rstrip().replace("{sheets}", sheets).replace("{note}", note)
 
 
 def keep_refs(source: Path, note: str, char: dict | None,
-              hero_sheets: dict[int, Path], cast_sheets: dict[str, Path]) -> tuple[list[Path], list[str]]:
-    """구도 유지에 붙일 그림과 그 시트 주인 이름 — 지금 장, 그리고 「고칠 것」에 이름이 나온 사람의 시트만.
+              hero_sheets: dict[int, Path], cast_sheets: dict[str, Path],
+              basis: tuple[Path, ...] = ()) -> tuple[list[Path], list[str]]:
+    """구도 유지에 붙일 그림과 그 시트 주인 이름 — 지금 장, 「고칠 것」에 이름이 나온 사람의 시트, 기준 장.
 
     장면 글에 이름이 나온다고 붙이지 않는다. 바꾸지 않을 사람의 시트까지 붙이면 그 사람도 시트 쪽으로
-    다시 그려질 수 있다. 직전 장도 붙이지 않는다. 이름이 하나도 없으면 지금 장만 붙는다."""
+    다시 그려질 수 있다. 직전 장은 붙이지 않는다. 이름이 하나도 없으면 지금 장만 붙는다.
+    basis — 같은 화의 다른 장(「몇 장과 같은 금관」처럼 이어짐을 맞출 기준). 글로만 「5장과 같게」라고 쓰는 것보다
+    그 장을 보여 주는 편이 확실하다. 한도 안에서 시트를 하나 덜 붙이더라도 기준 장은 붙인다(기준 장 하나 + 시트 둘까지)."""
     named: list[tuple[str, Path]] = []
     for i, name in enumerate(protagonist_names(char)):
         if i in hero_sheets and any(k in note for k in _name_keys(name)):
@@ -819,14 +841,16 @@ def keep_refs(source: Path, note: str, char: dict | None,
     for name, png in cast_sheets.items():
         if png not in [p for _n, p in named] and any(k in note for k in _name_keys(name)):
             named.append((name, png))
-    named = named[:REF_LIMIT - 1]
-    return [source, *(p for _n, p in named)], [n for n, _p in named]
+    basis = tuple(basis)[:1]
+    named = named[:REF_LIMIT - 1 - len(basis)]
+    return [source, *(p for _n, p in named), *basis], [n for n, _p in named]
 
 
 def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                   allow_no_sheet: bool = False, on_page=None,
                   review: bool | None = None, note: str = "",
-                  lang: str = "ko", cover_first: bool = False, keep_from: Path | None = None, textless: bool = False) -> list[dict]:
+                  lang: str = "ko", cover_first: bool = False, keep_from: Path | None = None, textless: bool = False,
+                  keep_basis: tuple[int, ...] = ()) -> list[dict]:
     """이어그리기 — **지금의 최종 방식.** 구체화(detail.json)·콘티(board.json)·
     컷 대본을 전부 건너뛰고, story 단계(방향 후보) 산출물만으로 그린다.
 
@@ -961,9 +985,12 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         if only and page_no not in only:
             continue
         if keep_from:
+            basis = [(b, page_path(run_dir, b)) for b in keep_basis if b != page_no and page_path(run_dir, b).exists()][:1]
             refs, sheet_names = keep_refs(keep_from, note, char,
-                                          {i: path for i, path in enumerate(hero_sheets) if path.exists()}, cast_sheets)
-            prompt = keep_prompt((HERE / "prompt/keep_page_prompt").read_text(encoding="utf-8"), note, sheet_names)
+                                          {i: path for i, path in enumerate(hero_sheets) if path.exists()}, cast_sheets,
+                                          tuple(p for _b, p in basis))
+            prompt = keep_prompt((HERE / "prompt/keep_page_prompt").read_text(encoding="utf-8"), note, sheet_names,
+                                 [b for b, _p in basis])
             log("[구도 유지] 참조 순서: " + " → ".join(map(str, refs)))
         else:
             if n_ == 0:
@@ -1065,6 +1092,8 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                         with Image.open(keep_from) as original, Image.open(painted) as result:
                             if result.size != original.size:
                                 result.resize(original.size, Image.Resampling.LANCZOS).save(painted)
+                        for old, new in guard_text(run_dir, keep_from, painted, note):
+                            log(f"  [글자 지키기] 「{new}」 → 「{old}」 로 되살림")
                         painted.replace(out)
                         meta["output_path"] = str(out)
                 else:

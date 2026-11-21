@@ -36,6 +36,7 @@ class LouTest(unittest.TestCase):
             lines = next((v for k, v in (seen or {}).items() if picture.name.startswith(k)), [])
             return lines, {"stage":"LOU","model":"reader"}
         with patch.object(run,"RUNS_DIR",self.root), patch.object(lou,"read_text",side_effect=reader), \
+                patch.object(lou,"confirm_changes",side_effect=lambda run_dir, changed, cut, found: changed), \
                 patch.object(lou.llm,"Call") as factory:
             factory.return_value.side_effect = [(s,{"stage":"LOU","model":"fixture"}) for s in replies]
             run.main(["--run-id","episode","--lou-"+kind,str(path),"--lou-out",str(out)])
@@ -105,9 +106,9 @@ class LouTest(unittest.TestCase):
         check = dict(ok=True,reply="확인했어요.",kept=["구도"],changed=["손"],unexpected=[])
         req = dict(page=2,before=str(self.page),after=str(self.page),note="손",method="keep",lang="ko")
         result = self.invoke("check",req,[json.dumps(check)],seen={"before":["물린 사람"],"after":["몰린 사람"]})
-        self.assertEqual(dict(check,text_changed=[dict(before="물린 사람",after="몰린 사람")]),result)
+        self.assertEqual(dict(check,text_changed=[dict(before="물린 사람",after="몰린 사람")],text_expected=[],retry_note=""),result)
         result = self.invoke("check",dict(req,method="redraw"),[json.dumps(check)])
-        self.assertEqual(check,result)
+        self.assertEqual(dict(check,retry_note=""),result)
 
     def test_text_fix_on_a_pin_from_another_page_is_refused(self):
         req = dict(self.req,pins=[self.pin,dict(self.pin,n=2,page=3)])
@@ -175,6 +176,81 @@ class LouTest(unittest.TestCase):
             factory.return_value.side_effect = [(json.dumps(dict(ok=True,reply="네",kept=[],changed=[],unexpected=[])),{"stage":"LOU"})]
             lou.process(self.book,"check",path,link)
         self.assertEqual({"keep": True}, lou.read(target))
+
+    def test_asked_text_changes_are_counted_apart(self):
+        req = dict(page=2,before=str(self.page),after=str(self.page),method="keep",lang="ko",
+                   note="1번째 컷 효과음 「의자 소리..」를 「드르륵」으로 바꾼다. 나머지는 그대로.")
+        check = dict(ok=True,reply="확인했어요.",kept=[],changed=[],unexpected=[])
+        result = self.invoke("check",req,[json.dumps(check)],
+                             seen={"before":["의자 소리..","그대로 둔 말"],"after":["드르륵","그대로 둔 말","몰래 바뀐 말"]})
+        self.assertEqual([dict(before="",after="몰래 바뀐 말")],result["text_changed"])
+        self.assertEqual({"의자 소리..","드르륵"},{c["before"] or c["after"] for c in result["text_expected"]})
+
+    def test_check_offers_a_retry_note_only_when_something_else_changed(self):
+        req = dict(page=2,before=str(self.page),after=str(self.page),method="keep",lang="ko",note="손만")
+        bad = dict(ok=False,reply="옆 사람 머리도 바뀌었어요.",kept=[],changed=["손"],unexpected=["옆 사람 머리"],
+                   retry_note="손만. 2번째 컷 검은 머리 남자는 그대로.")
+        self.assertEqual("손만. 2번째 컷 검은 머리 남자는 그대로.",
+                         self.invoke("check",req,[json.dumps(bad)],seen={})["retry_note"])
+        good = dict(bad,ok=True,unexpected=[],retry_note="쓸데없는 지시")
+        self.assertEqual("", self.invoke("check",req,[json.dumps(good)],seen={})["retry_note"])
+
+    def test_confirm_drops_misreads_and_keeps_real_changes(self):
+        bands = [self.root/"b0.png", self.root/"a0.png"]
+        for path in bands:
+            Image.new("RGB",(10,10)).save(path)
+        cut = [[bands[0]],[bands[1]]]
+        found = [["가겠다고 했어","라옴은 갔다"],["가져다고 했어","라움은 갔다"]]
+        changed = [dict(before="가겠다고 했어",after="가져다고 했어"),dict(before="라옴은 갔다",after="라움은 갔다"),
+                   dict(before="어디에도 없는 줄",after="")]
+        answers = {"가겠다고 했어": dict(same=True,found=True,before="",after=""),
+                   "라옴은 갔다": dict(same=False,found=True,before="라옴은 갔다",after="라움은 갔다")}
+
+        class Fake:
+            provider = model = "fake"
+            def __call__(self, prompt, images=None, temperature=None):
+                line = json.loads(prompt.rsplit("\n",1)[1])["before"]
+                return json.dumps(answers[line], ensure_ascii=False), {"stage":"LOU"}
+
+        with patch.object(lou,"Call_for_text",Fake), patch.object(lou.llm,"load_images",side_effect=lambda p: p):
+            got = lou.confirm_changes(self.book, changed, cut, found)
+        self.assertEqual([dict(before="라옴은 갔다",after="라움은 갔다"),dict(before="어디에도 없는 줄",after="")], got)
+
+    def test_verified_keep_retries_once_from_the_original(self):
+        source = self.book/"pages/versions/page02.v1.png"
+        source.parent.mkdir(parents=True)
+        Image.new("RGB",(600,1800),"blue").save(source)
+        drawn, seen_before = [], []
+
+        def draw(note):
+            drawn.append(note)
+            Image.new("RGB",(600,1800),"green").save(self.page)
+
+        def run_check(outcomes):
+            answers = iter(outcomes)
+            def fake(run_dir, kind, request, output, dry=False):
+                req = lou.read(request)
+                seen_before.append(Image.open(req["before"]).convert("RGB").getpixel((0,0)))
+                lou.write_json(output, next(answers))
+            return fake
+
+        bad = dict(ok=False,reply="옆 사람도 바뀜",kept=[],changed=[],unexpected=["옆 사람 머리"],retry_note="손만. 옆 사람은 그대로.")
+        good = dict(ok=True,reply="됐어요",kept=[],changed=["손"],unexpected=[],retry_note="")
+        out = self.root/"verify.json"
+        with patch.object(lou,"process",side_effect=run_check([bad,good])):
+            lou.verified_keep(self.book,2,source,"손만","ko",draw,out)
+        result = lou.read(out)
+        self.assertEqual(["손만","손만. 옆 사람은 그대로."],drawn)
+        self.assertEqual([(0,0,255),(0,0,255)],seen_before)                    # 두 번 다 처음 원본과 견준다
+        self.assertTrue(result["ok"])
+        self.assertEqual([False,True],[a["ok"] for a in result["attempts"]])
+        self.assertEqual("",result["advice"])
+        drawn.clear()
+        with patch.object(lou,"process",side_effect=run_check([bad,bad])):
+            lou.verified_keep(self.book,2,source,"손만","ko",draw,out)
+        self.assertEqual(2,len(drawn))                                          # 세 번째는 없다
+        self.assertEqual("redraw",lou.read(out)["advice"])
+        self.assertFalse((self.book/"pages/.lou-source-02.png").exists())
 
     def test_text_drift(self):
         self.assertEqual([dict(before="물린 사람을 보면",after="몰린 사람을 보면"),dict(before="쾅쾅",after="")],

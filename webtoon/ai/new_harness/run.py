@@ -2567,6 +2567,8 @@ def main(argv=None) -> int:
                    help="장면을 나누기 전에 표지만 먼저 그린다. --detail-pages --page 1 과 함께 쓴다")
     modes = p.add_mutually_exclusive_group()
     modes.add_argument("--keep-from", type=Path, help="구도를 유지할 원본 장 그림")
+    p.add_argument("--keep-basis", type=int, action="append", default=[],
+                   help="구도 유지에서 이어짐을 맞출 기준 장 번호(같은 화의 다른 장, 하나만 쓴다)")
     modes.add_argument("--textless", action="store_true", help="글자 없이 그리기")
     p.add_argument("--page", type=int, action="append", default=[],
                    help="그 번호 페이지만 다시 (여러 번 가능)")
@@ -2600,12 +2602,25 @@ def main(argv=None) -> int:
     lou_modes = p.add_mutually_exclusive_group()
     lou_modes.add_argument("--lou-ask", type=Path)
     lou_modes.add_argument("--lou-check", type=Path)
+    p.add_argument("--lou-verify", type=Path, metavar="JSON",
+                   help="구도 유지로 고친 뒤 루가 확인하고, 다른 것까지 바뀌었으면 같은 원본에서 한 번 더 고친다(최대 2번). 마지막 확인을 이 파일에")
+    lou_modes.add_argument("--lou-review", type=Path, help="루가 이 화를 먼저 검토해 고칠 것 목록을 낸다(--lou-out 에)")
+    lou_modes.add_argument("--lou-plan", type=Path, help="체크한 검토 항목을 장마다 고치기 하나로 묶는다(모델 호출 없음)")
     lou_modes.add_argument("--lou-sheet", type=Path, help="루가 낸 시트 고치기 방법 하나로 후보 시트를 그린다(--lou-out 에)")
     lou_modes.add_argument("--lou-sheet-pick", type=Path, help="고른 후보를 그 인물의 시트로 건다")
     p.add_argument("--fix-text", type=Path, metavar="JSON",
                    help="말풍선 안의 글자만 고친다(그림은 다시 그리지 않는다). --run-id 와 --page 한 장이 필요하다")
     p.add_argument("--lou-out", type=Path)
     args = p.parse_args(argv)
+    if args.lou_review or args.lou_plan:
+        if not args.run_id or not args.lou_out:
+            p.error("검토와 묶기에는 --run-id 와 --lou-out 이 필요합니다")
+        import loureview
+        if args.lou_review:
+            loureview.review(RUNS_DIR / args.run_id, args.lou_review, args.lou_out, args.dry_run)
+        else:
+            loureview.plan(RUNS_DIR / args.run_id, args.lou_plan, args.lou_out)
+        return 0
     if args.lou_sheet or args.lou_sheet_pick:
         if not args.run_id or (args.lou_sheet and not args.lou_out):
             p.error("시트 후보에는 --run-id 와 --lou-out 이, 고르기에는 --run-id 가 필요합니다")
@@ -2638,6 +2653,10 @@ def main(argv=None) -> int:
             p.error("--keep-from 에는 --page 한 장과 --note 가 필요합니다")
         if not args.keep_from.is_file():
             p.error("--keep-from 그림이 없습니다")
+    if args.keep_basis and not args.keep_from:
+        p.error("--keep-basis 는 --keep-from 과 같이 씁니다")
+    if args.lou_verify and not args.keep_from:
+        p.error("--lou-verify 는 --keep-from 과 같이 씁니다")
     if args.chat_extract or args.chat_prepare or args.chat_sheets or args.chat_save_sheets or args.chat_share_sheets:
         if not args.run_id or not re.fullmatch(r"test-[0-9a-f]{32}", args.run_id):
             raise SystemExit("비공개 테스트 run 번호가 필요합니다")
@@ -2806,11 +2825,17 @@ def main(argv=None) -> int:
             done = read_json(run_dir / "scenes.json") if (run_dir / "scenes.json").exists() else {}
             stage_branch(run_dir, char, direction, args.dry_run, scenes=(done or {}).get("scenes") or [])
         if args.detail_pages:
-            stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
-                               cover_first=args.cover_first, keep_from=args.keep_from, textless=args.textless,
-                               allow_no_sheet=args.no_sheet,
-                               review=False if args.no_page_review else None,
-                               note=args.note, lang=args.lang)
+            def draw(note):
+                stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
+                                   cover_first=args.cover_first, keep_from=args.keep_from, textless=args.textless,
+                                   keep_basis=tuple(args.keep_basis), allow_no_sheet=args.no_sheet,
+                                   review=False if args.no_page_review else None,
+                                   note=note, lang=args.lang)
+            if args.lou_verify and not args.dry_run:
+                import lou
+                lou.verified_keep(run_dir, args.page[0], args.keep_from, args.note, args.lang, draw, args.lou_verify)
+            else:
+                draw(args.note)
         return 0
 
     if new_run:
