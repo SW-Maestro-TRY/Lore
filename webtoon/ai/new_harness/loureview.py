@@ -108,6 +108,20 @@ def clean_items(data, pages, every=None):
     return out
 
 
+def clean_settings(raw, pages):
+    """설정 층 제안 — 같은 문제가 두 장 이상에서 되풀이될 때만. 고치지는 않는다(작가가 고르면 서버가 설정을 고친다)."""
+    out = []
+    for s in raw if isinstance(raw, list) else []:
+        if not isinstance(s, dict) or s.get("target") not in ("cast", "progress", "name"):
+            continue
+        where = [p for p in s.get("pages") or [] if type(p) is int and p in pages]
+        if len(set(where)) < 2 or not lou.string(s, "change") or not lou.string(s, "who"):
+            continue
+        out.append(dict(id=f"s{len(out) + 1}", target=s["target"], who=lou.string(s, "who"), now=lou.string(s, "now"),
+                        change=lou.string(s, "change"), why=lou.string(s, "why"), pages=sorted(set(where))))
+    return out
+
+
 # ── 검토 ─────────────────────────────────────────────────────────────────────
 
 def _verify_page(run, dest, page, items, script, state, lang):
@@ -228,6 +242,7 @@ def review(run, request, output, dry=False):
         for meta in metas:
             record(run, meta)
         items += clean_items(dict(items=(data or {}).get("items", [])), numbers)
+        settings = clean_settings((data or {}).get("settings"), numbers)
         reply = lou.string(data or {}, "reply") or (f"{len(items)}곳을 찾았어요." if items else "고칠 곳을 찾지 못했어요.")
         for i, it in enumerate(items):
             it["id"] = f"r{i + 1}"
@@ -251,7 +266,7 @@ def review(run, request, output, dry=False):
         order = {"P1": 0, "P2": 1}
         kept.sort(key=lambda it: (not it["recommend"], order[it["sev"]], it["page"]))
         lou.safe_output(output)
-        write_json(output, dict(reply=reply, items=kept, dropped=dropped, pages=numbers, failed_pages=failed,
+        write_json(output, dict(reply=reply, items=kept, dropped=dropped, settings=settings, pages=numbers, failed_pages=failed,
                                 skipped_pages=[n for n, _p in pages[PAGES_SHOWN:]]))
 
 

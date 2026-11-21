@@ -257,6 +257,52 @@ def sheet_named(run, name):
     return next(((n, png) for n, png in sheets_of(run) if n == full), None)
 
 
+TITLES = ("황제", "황후", "황비", "황태자", "황자", "황녀", "대공", "공작", "후작", "백작", "자작", "남작", "영애", "영식", "부인",
+          "재상", "대신", "대신관", "신관", "사제", "성녀", "교황", "기사", "단장", "근위대장", "시녀", "집사", "하인", "전령",
+          "왕", "왕비", "왕자", "공주", "선생", "선배", "후배", "대표", "팀장", "사장", "의사", "형사", "경찰", "병사", "군의관")
+
+
+def name_clashes(run, name, owner=""):
+    """새 시트 이름에서 나오는 찾는 말(장면 글에서 이 사람을 찾는 말 — detailart._name_keys)이 다른 사람과 겹치는 곳.
+
+    시트는 장면 글에 그 찾는 말이 나오면 붙는다. 「로제로 백작」의 「로제로」는 주인공 「엘리아나 드 로제로」에도, 직함 「재상」은
+    재상이 된 다른 인물에도 걸려 엉뚱한 사람에게 시트가 붙을 뻔했다(2026-11-22). [{key, other, why}]
+    - 시트가 있는 다른 사람의 더 긴 이름 안에 든 자리는 장 그림이 이미 그 사람으로 본다(detailart._named_in) — 겹침이 아니다.
+    - 직함은 다른 사람도 그 직함으로 불릴 때만(이름이나 역할에 그 직함이 있을 때) 겹친다."""
+    import detailart
+
+    own = " ".join((name or "").split())
+    sheeted = {p.stem for p in (run / "sheets").glob("*.png")}
+    people = {}
+    for c in cast_of(run):
+        people[str(c.get("name") or "").strip()] = str(c.get("role") or "")
+    for n in sheeted:
+        people.setdefault(n, "")
+    inp = lou.read(run / "input.json") if (run / "input.json").exists() else {}
+    for who in [inp, *[o for o in inp.get("co") or [] if isinstance(o, dict)]]:
+        people.setdefault(str(who.get("name") or "").strip(), str(who.get("role") or ""))
+    owner = " ".join((owner or name or "").split())        # 같은 사람의 온전한 이름은 겹침이 아니다(「백작」은 「로제로 백작」 자신)
+    people = {n: r for n, r in people.items() if n and n not in (own, owner)}
+    out = []
+    for key in detailart._name_keys(own):
+        for other, role in sorted(people.items()):
+            if key in TITLES:
+                if key in other or key in role:
+                    out.append(dict(key=key, other=other, why="title"))
+            elif key in other and other not in own and not (other in sheeted and len(other) > len(key)):
+                out.append(dict(key=key, other=other, why="name"))
+    return out
+
+
+def safe_name(run, name):
+    """겹치지 않는 시트 이름 하나(못 찾으면 빈 글) — 이름의 낱말 가운데 겹치지 않는 가장 긴 것.
+    장면 글이 그 사람을 그 낱말로 부르므로 낱말을 붙여 새 말을 만들지는 않는다."""
+    for cand in sorted({w for w in (name or "").split() if len(w) >= 2}, key=len, reverse=True):
+        if not name_clashes(run, cand, name):
+            return cand
+    return ""
+
+
 def drafts_dir(run):
     return run / "sheets" / "drafts"
 
@@ -337,7 +383,16 @@ def pick(run, request):
         image.verify()
     hit = next(((n, png) for n, png in sheets_of(run) if n == name), None)
     person = next((p for p in cast_of(run) if str(p.get("name") or "") == name), None)
-    dest = hit[1] if hit else run / "sheets" / f"{stem(name)}.png"
+    file_name = lou.string(req, "file_name")
+    if hit is None:
+        # 새 시트 — 파일 이름이 곧 장면 글에서 이 사람을 찾는 말이다. 다른 사람과 겹치면 다른 이름을 쓰게 한다.
+        clashes = name_clashes(run, file_name or name, name)
+        if clashes:
+            hint = safe_name(run, name)
+            raise SystemExit(f"시트 이름 「{file_name or name}」이 " + ", ".join(
+                f"「{c['key']}」(「{c['other']}」에도 걸림)"
+                for c in clashes) + (f" — 「{hint}」 같은 이름으로 다시 골라 주세요(file_name)." if hint else " — 다른 이름을 정해 주세요(file_name)."))
+    dest = hit[1] if hit else run / "sheets" / f"{stem(file_name or name)}.png"
     hero = dest.resolve() == (run / "sheet.png").resolve()
     lock = run / "sheets" / ".pick.lock"
     lock.parent.mkdir(parents=True, exist_ok=True)

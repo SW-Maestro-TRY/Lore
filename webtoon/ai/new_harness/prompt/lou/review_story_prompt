@@ -13,9 +13,11 @@
 - 대본의 중요한 일이 그림에서 빠지거나 순서가 바뀌어 흐름이 끊김
 본문에는 있지만 그림에 꼭 필요하지 않은 것은 적지 않는다. 독자가 실제로 헷갈릴 것만 적는다.
 
+같은 문제가 두 장 이상에서 되풀이되면(found까지 합쳐서 — 같은 인물의 생김새나 나이, 말투, 다 나은 상처가 다시 나옴, 지어낸 이름이 되풀이됨) 그림만 고쳐서는 다음 화에 또 나온다. 원인이 설정이나 진행 상태나 이름에 있을 수 있으니 settings에 제안한다. 한 가지마다 target(cast는 인물 설정, progress는 지금 인물 상태, name은 인물을 부르는 말), who(인물), now(지금 설정이나 상태의 구절, 없으면 빈 글), change(고칠 글 — 설정에 넣을 문장 그대로), why(작가에게 보이는 한 문장), pages(되풀이된 장)를 넣는다. 그림과 대본과 설정이 서로 다르면 대본과 대부분의 장을 기준으로 설정을 고치자고 한다. 되풀이되지 않으면 settings는 빈 배열이다.
+
 고치는 방법은 keep이 기본이다(상자 넣기, 짧은 말풍선 넣기, 작은 삽입 컷). 컷을 새로 짜야 할 때만 redraw다.
 note는 그림 그리는 쪽에 그대로 전해지는 지시다. 몇 번째 컷에 무엇을 어떻게 넣는지 적고 끝에 「나머지는 그대로.」를 붙인다. 넣는 글은 「」 안에 정확히 적는다.
 sev는 P2가 기본이다. 독자가 이야기를 놓칠 만한 것만 P1이고 recommend를 true로 한다.
 reply는 작가에게 보이는 두세 문장으로, 이 화에서 찾은 것과 무엇부터 고치길 권하는지 말한다(found까지 합쳐서). lang의 언어로, 한국어라면 「~요」로 끝낸다. where와 what도 작가에게 보이는 말이다. note는 항상 한국어로 쓴다.
 아래 구조의 JSON 객체 하나만 답한다.
-{"reply":"","items":[{"page":2,"x":50,"y":30,"kind":"understanding","sev":"P2","recommend":false,"where":"","what":"","cause":"scene","method":"keep","note":"","basis":[]}]}
+{"reply":"","items":[{"page":2,"x":50,"y":30,"kind":"understanding","sev":"P2","recommend":false,"where":"","what":"","cause":"scene","method":"keep","note":"","basis":[]}],"settings":[{"target":"cast|progress|name","who":"","now":"","change":"","why":"","pages":[]}]}

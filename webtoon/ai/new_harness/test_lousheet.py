@@ -153,6 +153,25 @@ class LouSheetTest(unittest.TestCase):
         self.assertEqual("민수", lousheet.sheet_named(self.book, "민수")[0])
         self.assertEqual("마바 사아", lousheet.sheet_named(self.book, "마바")[0])
 
+    def test_new_sheet_names_are_checked_against_other_people(self):
+        lou.write_json(self.book / "input.json", {"name": "엘리아나 드 로제로", "description": "분홍 머리"})
+        lou.write_json(self.book / "cast.json", [{"name": "로제로 백작", "role": "주인공의 아버지"},
+                                                {"name": "재상 카를로스", "role": "재상"}, {"name": "재상 보좌", "role": "재상의 비서"},
+                                                {"name": "마바 사아", "look": "은발"}])
+        # 제품의 찾는 말에는 세 글자 낱말의 성을 뺀 꼴(「제로」)도 들어간다 — 그것도 겹친다
+        self.assertEqual([("로제로", "엘리아나 드 로제로"), ("제로", "엘리아나 드 로제로")],
+                         [(c["key"], c["other"]) for c in lousheet.name_clashes(self.book, "로제로 백작")])
+        self.assertEqual("백작", lousheet.safe_name(self.book, "로제로 백작"))       # 이 작품에 백작은 하나뿐
+        self.assertIn(("재상", "재상 보좌"), [(c["key"], c["other"]) for c in lousheet.name_clashes(self.book, "재상 카를로스")])
+        self.assertEqual("카를로스", lousheet.safe_name(self.book, "재상 카를로스"))
+        request = self.root / "pick.json"
+        lou.write_json(request, {"target": "로제로 백작", "from": str(self.drafted("로제로 백작"))})
+        with self.assertRaises(SystemExit) as stop:
+            lousheet.pick(self.book, request)
+        self.assertIn("「백작」", str(stop.exception))
+        lou.write_json(request, {"target": "로제로 백작", "from": str(self.drafted("로제로 백작")), "file_name": "백작"})
+        self.assertEqual(self.book / "sheets" / "백작.png", lousheet.pick(self.book, request))
+
     def test_names_do_not_slide_to_someone_else(self):
         png(self.book / "sheets" / "카를로스.png", "blue")
         png(self.book / "sheets" / "sheet.png", "green")            # 이름이 sheet 인 조연
