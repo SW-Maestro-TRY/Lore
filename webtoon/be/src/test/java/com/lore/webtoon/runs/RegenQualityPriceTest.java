@@ -45,9 +45,27 @@ class RegenQualityPriceTest {
         when(ledger.mayChange("r1", 7L)).thenReturn(true);
         when(regen.qualityOf("r1")).thenReturn("swell");
         when(regen.queue(anyString(), org.mockito.ArgumentMatchers.anyInt(), anyString(), org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.any()))
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn("g1");
         when(regen.statusOf("g1")).thenReturn(new HashMap<>());
+    }
+
+    @Test
+    void keepRequiresNoteAndCannotBeTextless() {
+        for (Map<String, Object> body : List.<Map<String, Object>>of(
+                Map.of("mode", "keep", "feedback", "  "),
+                Map.of("mode", "keep", "feedback", "소매", "textless", true))) {
+            org.junit.jupiter.api.Assertions.assertEquals(400, controller.regen("r1", 2, body).getStatusCode().value());
+        }
+        org.mockito.Mockito.verifyNoInteractions(credits);
+    }
+
+    @Test
+    void forwardsRegenMode() {
+        controller.regen("r1", 2, Map.of("mode", "keep", "feedback", "소매"));
+        verify(regen).queue("r1", 2, "소매", null, 7L, "keep");
+        controller.regen("r1", 2, Map.of("textless", true));
+        verify(regen).queue("r1", 2, "", null, 7L, "textless");
     }
 
     @AfterEach
@@ -60,7 +78,7 @@ class RegenQualityPriceTest {
     void 낮추면_싸다() {
         controller.regen("r1", 2, Map.of("feedback", "", "quality", "surf"));
 
-        verify(regen).queue("r1", 2, "", "surf", 7L);
+        verify(regen).queue("r1", 2, "", "surf", 7L, null);
         verify(credits).charge(eq(7L), eq(3), anyString(), anyString());
     }
 
@@ -70,7 +88,7 @@ class RegenQualityPriceTest {
         controller.regen("r1", 2, Map.of("feedback", ""));
 
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(regen, credits);
-        order.verify(regen).queue(eq("r1"), eq(2), anyString(), isNull(), eq(7L));
+        order.verify(regen).queue(eq("r1"), eq(2), anyString(), isNull(), eq(7L), isNull());
         order.verify(credits).charge(eq(7L), eq(6), eq("regen:r1:2:g1"), anyString());
         order.verify(regen).go("g1");
     }
@@ -82,7 +100,7 @@ class RegenQualityPriceTest {
         verify(credits).charge(eq(7L), eq(6), anyString(), anyString());
 
         controller.regen("r1", 3, Map.of("feedback", "", "quality", "high"));
-        verify(regen).queue(eq("r1"), eq(3), anyString(), isNull(), eq(7L));
+        verify(regen).queue(eq("r1"), eq(3), anyString(), isNull(), eq(7L), isNull());
         verify(credits, org.mockito.Mockito.times(2)).charge(eq(7L), eq(6), anyString(), anyString());
     }
 }

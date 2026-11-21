@@ -120,6 +120,11 @@ public class RegenService {
      */
     @Transactional
     public String queue(String runId, int pageNo, String note, String quality, Long payer) {
+        return queue(runId, pageNo, note, quality, payer, null);
+    }
+
+    @Transactional
+    public String queue(String runId, int pageNo, String note, String quality, Long payer, String mode) {
         if (!pages.pageNumbersOf(runId).contains(pageNo)) {
             throw new NoSuchElementException("그 페이지가 없습니다");
         }
@@ -127,6 +132,7 @@ public class RegenService {
         String clean = note == null ? "" : note.strip();
         PageRegen one = PageRegen.queued(id, runId, pageNo,
                 clean.substring(0, Math.min(500, clean.length())), quality, Instant.now());
+        one.setMode(mode);
         regens.save(payer == null ? one : one.paidBy(payer, regenRef(runId, pageNo, id)));
         return id;
     }
@@ -308,13 +314,32 @@ public class RegenService {
                그리는데, 올린 뒤 서버 사본을 치우므로 그 그림이 디스크에 없을
                수 있다(RunFiles). 없으면 그 장만 앞뒤가 안 맞게 나온다. */
             files.restore(runId, no);
-            archive(runId, no);
-            Files.deleteIfExists(dest);           // run.py 는 파일이 있으면 안 그린다
+            /* 구도 유지 · 글자 없이는 이어그리기(--detail-pages)에만 있다(#1036). 옛 방식(pages.json)으로
+               그린 작품은 글자 없이를 예전처럼 무시하고 그냥 다시 그린다. 구도 유지는 통째로 다시 그리면
+               약속과 다른 결과가 되므로 그리지 않고 실패로 돌려준다(값은 환급된다). */
+            boolean detail = !wasDrawn || !Files.isRegularFile(runner.runDir(runId).resolve("pages.json"));
+            boolean keep = "keep".equals(one.getMode());
+            if (keep && !detail) {
+                throw new IOException("이 작품은 구도를 유지한 다시 그리기를 할 수 없습니다");
+            }
+            Path previous = archive(runId, no);
+            if (keep && previous == null) {
+                throw new IOException("구도를 유지할 원본 장이 없습니다");
+            }
+            if (!keep) {
+                Files.deleteIfExists(dest);           // run.py 는 파일이 있으면 안 그린다
+            }
 
             List<String> args = new ArrayList<>(List.of("--run-id", runId, "--page",
                     String.valueOf(no)));
-            if (!wasDrawn || !Files.isRegularFile(runner.runDir(runId).resolve("pages.json"))) {
+            if (detail) {
                 args.add("--detail-pages");
+            }
+            if (keep) {
+                args.add("--keep-from");
+                args.add(previous.toAbsolutePath().toString());
+            } else if (detail && "textless".equals(one.getMode())) {
+                args.add("--textless");
             }
             if (one.getNote() != null && !one.getNote().isBlank()) {
                 args.add("--note");
@@ -394,37 +419,38 @@ public class RegenService {
     }
 
     /** 지금 걸려 있는 그림을 판본으로 떠 둔다. 없으면 아무 일도 안 한다. */
-    private void archive(String runId, int pageNo) throws IOException {
+    private Path archive(String runId, int pageNo) throws IOException {
         Path src = pageFile(runId, pageNo);
         if (!Files.isRegularFile(src)) {
-            return;
+            return null;
         }
         Path vdir = versionsDir(runId);
         Files.createDirectories(vdir);
         /* 지금 그림이 이미 있는 판과 똑같으면 또 남기지 않는다(#993). 「이 판으로 바꾸기」는 그 판을
            복사해 지금 그림으로 걸기 때문에, 다른 판을 누를 때마다 방금 건 그림이 새 번호로 한 장씩
            늘었다 — 판을 오가기만 해도 같은 그림이 줄줄이 쌓였다. */
-        if (sameAsAVersion(src, vdir, pageNo)) {
-            return;
+        Path existing = matchingVersion(src, vdir, pageNo);
+        if (existing != null) {
+            return existing;
         }
         int next = versionsOf(runId, pageNo).stream()
                 .mapToInt(row -> (int) row.get("version")).max().orElse(0) + 1;
-        Files.copy(src, vdir.resolve("page%02d.v%d.png".formatted(pageNo, next)));
+        return Files.copy(src, vdir.resolve("page%02d.v%d.png".formatted(pageNo, next)));
     }
 
     /** 이 장의 남긴 판 가운데 {@code src} 와 바이트까지 같은 것이 있는가. */
-    private static boolean sameAsAVersion(Path src, Path vdir, int pageNo) throws IOException {
+    private static Path matchingVersion(Path src, Path vdir, int pageNo) throws IOException {
         long size = Files.size(src);
         try (var found = Files.list(vdir)) {
             for (Path p : found.toList()) {
                 Matcher m = VERSION_FILE.matcher(p.getFileName().toString());
                 if (m.matches() && Integer.parseInt(m.group(1)) == pageNo
                         && Files.size(p) == size && Files.mismatch(src, p) == -1L) {
-                    return true;
+                    return p;
                 }
             }
         }
-        return false;
+        return null;
     }
 
     private Path pageFile(String runId, int pageNo) {

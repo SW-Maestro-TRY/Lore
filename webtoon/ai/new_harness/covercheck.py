@@ -184,7 +184,7 @@ def genre_of(run_dir: Path) -> str:
 
 # -------------------------------------------------------------------- 호출 한 번
 
-def review_cover(run_dir: Path, title: str, *, dry_run: bool = False,
+def review_cover(run_dir: Path, title: str, *, dry_run: bool = False, textless: bool = False,
                  suffix: str = "") -> tuple[dict | None, dict | None]:
     """표지를 검수한다. -> (판정, 호출기록). dry-run 이면 (None, None).
 
@@ -197,6 +197,8 @@ def review_cover(run_dir: Path, title: str, *, dry_run: bool = False,
     if not path.exists():
         raise SystemExit(f"프롬프트가 없습니다: {path}")
     prompt = path.read_text(encoding="utf-8")
+    if textless:
+        prompt += "\n글자 없이 그린 장이다. 말풍선·대사·나레이션·효과음·제목이 없는 것은 의도한 연출이므로 누락으로 판정하지 않는다."
     dest.mkdir(parents=True, exist_ok=True)
     (dest / f"page01.review{suffix}_prompt.txt").write_text(prompt, encoding="utf-8")
     if dry_run:
@@ -221,7 +223,7 @@ def review_cover(run_dir: Path, title: str, *, dry_run: bool = False,
     (dest / f"page01.review{suffix}.txt").write_text(text, encoding="utf-8")
     meta["page"] = 1
     try:
-        review = parse(text, title, genre_of(run_dir))
+        review = parse(text, "" if textless else title, genre_of(run_dir))
     except Exception as exc:                                          # noqa: BLE001
         meta["error"] = f"{type(exc).__name__}: {exc}"
         log(f"  [표지 검수] 응답을 읽지 못했습니다 — {meta['error']} (원문은 남았습니다)")

@@ -526,7 +526,7 @@ public class RunController {
      * 곧바로 그리지 않는다 — 이미지 호출이라 줄을 선다({@link RegenService}).
      * 화면은 돌려받은 번호로 {@link #regenStatus} 를 2초 간격으로 물어야 한다.
      */
-    @Operation(summary = "장 다시 그리기", description = "곧바로 안 그린다 — id 로 진행을 물어야 한다.")
+    @Operation(summary = "장 다시 그리기", description = "feedback과 tags를 메모로 합친다. mode가 keep이면 메모가 필요하며 현재 구도를 유지한다. textless=true는 글자 없이 그린다. 두 방식은 함께 쓸 수 없다. id로 진행을 조회한다.")
     @PostMapping("/{runId}/scenes/{no}/regen")
     public ResponseEntity<Map<String, Object>> regen(@PathVariable String runId,
                                                       @PathVariable int no,
@@ -541,6 +541,16 @@ public class RunController {
         /* 안전 검사에 걸려 빈 장으로 완성된 장은 다시 그리기가 무료다(#626) — 크레딧은 처음에 그대로 받았다. */
         /* 값은 작품을 만든 화질을 따른다 — 너울은 한 장 원가가 커서 6이다(#787).
            편집실에서 화질을 골라 보냈으면 그 화질 값이다 — 너울 작품도 이 장만 파도로 그리면 파도 값. */
+        /* 고른 항목(tags)과 적은 글(feedback)을 같이 넘긴다 — 전에는 글만 넘겨서, 항목만 고른
+           사람의 다시 그리기는 아무 지시 없이 그려졌다(#548). */
+        String typed = body == null || body.get("feedback") == null ? "" : String.valueOf(body.get("feedback")).trim();
+        String picked = body == null || !(body.get("tags") instanceof List<?> ids) ? "" : FeedbackTags.sceneNote(ids);
+        String note = picked.isEmpty() ? typed : typed.isEmpty() ? picked : picked + "\n" + typed;
+        boolean keep = body != null && "keep".equals(body.get("mode"));
+        boolean textless = body != null && Boolean.TRUE.equals(body.get("textless"));
+        if (keep && (note.isBlank() || textless)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "구도 유지에는 고칠 메모가 필요하며 글자 없이 그리기와 함께 쓸 수 없습니다"));
+        }
         String asked = body == null || body.get("quality") == null ? null : String.valueOf(body.get("quality"));
         String quality = com.lore.webtoon.job.WebtoonQuality.isKnown(asked)
                 ? com.lore.webtoon.job.WebtoonQuality.normalize(asked) : null;
@@ -551,11 +561,6 @@ public class RunController {
             throw new BusinessException(CreditGate.notEnough(), blocked);
         }
         try {
-            /* 고른 항목(tags)과 적은 글(feedback)을 같이 넘긴다 — 전에는 글만 넘겨서, 항목만 고른
-               사람의 다시 그리기는 아무 지시 없이 그려졌다(#548). */
-            String typed = body == null ? "" : String.valueOf(body.getOrDefault("feedback", "")).trim();
-            String picked = body == null || !(body.get("tags") instanceof List<?> ids) ? "" : FeedbackTags.sceneNote(ids);
-            String note = picked.isEmpty() ? typed : typed.isEmpty() ? picked : picked + "\n" + typed;
             /* 장면 설명을 고쳐 보냈으면 먼저 적는다(#626) — 걸린 장면은 같은 글로 또 그리면 또 걸린다.
                사람이 적은 글이므로 메모와 함께 입력 검사를 거친다. */
             Map<?, ?> scene = body != null && body.get("scene") instanceof Map<?, ?> m ? m : null;
@@ -568,7 +573,8 @@ public class RunController {
                 throw new BusinessException(com.lore.common.exception.ErrorCode.INTERNAL_ERROR, "장면 설명을 저장하지 못했습니다");
             }
             /* 낸 사람은 기록에 적는다 — 실패하면, 서버가 다시 떠도, 그걸로 돌려준다(#626, #864). */
-            String id = regen.queue(runId, no, note, quality, cost > 0 ? userId : null);
+            Long payer = cost > 0 ? userId : null;
+            String id = regen.queue(runId, no, note, quality, payer, keep ? "keep" : textless ? "textless" : null);
             if (cost > 0) {
                 credits.charge(userId, cost, RegenService.regenRef(runId, no, id), "장 다시 그리기");
             }

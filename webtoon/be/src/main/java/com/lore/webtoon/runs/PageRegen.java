@@ -46,6 +46,17 @@ public class PageRegen {
     @Column(length = 10)
     private String quality;
 
+    @Column(length = 10)
+    private String mode;
+
+    void setMode(String mode) {
+        this.mode = mode;
+    }
+
+    String getMode() {
+        return mode;
+    }
+
     @Column(nullable = false, length = 20)
     private String status;
 

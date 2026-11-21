@@ -2445,7 +2445,7 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
                        allow_no_sheet: bool = False,
                        review: bool | None = None,
                        note: str = "", lang: str = "ko",
-                       cover_first: bool = False) -> None:
+                       cover_first: bool = False, keep_from: Path | None = None, textless: bool = False) -> None:
     """이어그리기(최종 방식) — **구체화·콘티·컷 대본을 전부 건너뛰고**
     scene_prompt 산출물(scenes.json)만으로 표지+전체 씬을 그린다.
 
@@ -2476,6 +2476,7 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
     made = detailart.draw_continue(run_dir, dry_run=dry_run, only=only,
                                    allow_no_sheet=allow_no_sheet, review=review,
                                    note=note, lang=lang, cover_first=cover_first,
+                                   keep_from=keep_from, textless=textless,
                                    on_page=lambda meta: record(run_dir, meta))
     if made:
         log(f"[이어그리기] {len(made)}장 그렸습니다 -> {run_dir / detailart.PAGE_DIR}")
@@ -2564,6 +2565,9 @@ def main(argv=None) -> int:
                         "화면에서 '다시 만들기' — --note 와 같이 쓸 수 있다)")
     p.add_argument("--cover-first", action="store_true",
                    help="장면을 나누기 전에 표지만 먼저 그린다. --detail-pages --page 1 과 함께 쓴다")
+    modes = p.add_mutually_exclusive_group()
+    modes.add_argument("--keep-from", type=Path, help="구도를 유지할 원본 장 그림")
+    modes.add_argument("--textless", action="store_true", help="글자 없이 그리기")
     p.add_argument("--page", type=int, action="append", default=[],
                    help="그 번호 페이지만 다시 (여러 번 가능)")
     p.add_argument("--no-sheet", action="store_true",
@@ -2594,6 +2598,13 @@ def main(argv=None) -> int:
     p.add_argument("--chat-save-sheets", action="store_true", help="1화 시트를 보관함에 넣는다")
     p.add_argument("--chat-share-sheets", action="store_true", help="1화 시트를 나머지 화에 복사한다")
     args = p.parse_args(argv)
+    if (args.keep_from or args.textless) and not args.detail_pages:
+        p.error("--keep-from 과 --textless 는 --detail-pages 에서만 씁니다")
+    if args.keep_from:
+        if len(args.page) != 1 or args.page[0] < 1 or not args.note.strip():
+            p.error("--keep-from 에는 --page 한 장과 --note 가 필요합니다")
+        if not args.keep_from.is_file():
+            p.error("--keep-from 그림이 없습니다")
     if args.chat_extract or args.chat_prepare or args.chat_sheets or args.chat_save_sheets or args.chat_share_sheets:
         if not args.run_id or not re.fullmatch(r"test-[0-9a-f]{32}", args.run_id):
             raise SystemExit("비공개 테스트 run 번호가 필요합니다")
@@ -2763,7 +2774,7 @@ def main(argv=None) -> int:
             stage_branch(run_dir, char, direction, args.dry_run, scenes=(done or {}).get("scenes") or [])
         if args.detail_pages:
             stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
-                               cover_first=args.cover_first,
+                               cover_first=args.cover_first, keep_from=args.keep_from, textless=args.textless,
                                allow_no_sheet=args.no_sheet,
                                review=False if args.no_page_review else None,
                                note=args.note, lang=args.lang)
