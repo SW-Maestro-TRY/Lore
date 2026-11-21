@@ -141,8 +141,8 @@ def clean(data, run, target_name, shown_appears):
         refs = [r for r in (p.get("refs") or []) if isinstance(r, str) and r.strip()]
         lou.require(method in METHODS and lou.string(p, "changes") and lou.string(p, "note"))
         lou.require(target in names or any(lou.name_in(n, target) for n in names))
-        lou.require(all(find(run, r) for r in [*refs, *([base] if base else [])]))
-        lou.require(method == "sheet_new" or find(run, base or target))
+        lou.require(all(sheet_named(run, r) for r in [*refs, *([base] if base else [])]))
+        lou.require(method == "sheet_new" or sheet_named(run, base or target))
         plans.append(dict(id=f"p{len(plans) + 1}", method=method, target=target, base=base, refs=refs[:3],
                           **{k: lou.string(p, k) for k in ("changes", "keeps", "note", "look")},
                           more_pages=appears(run, target), follow_note=follow_note(target, lou.string(p, "changes"))))
@@ -202,6 +202,7 @@ def ask(run, req, output, dry=False):
             result = dict(reply=lou.FALLBACK.get(req.get("lang"), "제가 잘 확인하지 못했어요. 한 번만 다시 보내 주세요."),
                           found=[], plans=[], appears=context["appears"],
                           cause=dict(layer="unknown", text="", quote=""), ask_back="")
+        lou.safe_output(output)
         write_json(output, {**result, "sheet": name})
 
 
@@ -250,6 +251,12 @@ def full_name(run, name):
     return hit[0] if hit else str((person or {}).get("name") or name).strip()
 
 
+def sheet_named(run, name):
+    """그 사람의 시트 — 온전한 이름이 정확히 같은 것만. 짧은 이름으로 다른 사람의 시트를 집지 않는다."""
+    full = full_name(run, name)
+    return next(((n, png) for n, png in sheets_of(run) if n == full), None)
+
+
 def drafts_dir(run):
     return run / "sheets" / "drafts"
 
@@ -276,9 +283,10 @@ def draft(run, request, out, dry=False):
     plan = lou.read(request)
     lou.require(plan.get("method") in METHODS and lou.string(plan, "note") and lou.string(plan, "target"))
     lou.require(out.suffix == ".png" and in_drafts(run, out))
-    found = [find(run, r) for r in plan.get("refs") or []]
+    found = [sheet_named(run, r) for r in plan.get("refs") or []]
     lou.require(all(found))
-    base = find(run, plan.get("base") or plan["target"]) if plan["method"] == "sheet_keep" or plan.get("base") else None
+    base = (sheet_named(run, plan.get("base") or plan["target"])
+            if plan["method"] == "sheet_keep" or plan.get("base") else None)
     lou.require(plan["method"] == "sheet_new" or base is not None)
     others = [(n, p) for n, p in found if not base or p != base[1]]
     if plan["method"] == "sheet_keep":

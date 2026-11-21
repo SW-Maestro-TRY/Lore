@@ -89,6 +89,26 @@ def _wrap(words, widths, measure):
     return lines[::-1]
 
 
+def _neck(frame, ink):
+    """안쪽이 이어진 두 말풍선 사이의 잘록한 곳(열). 양쪽에 글이 있고, 그 열의 안쪽 높이가 양쪽 말풍선 높이의 60% 아래일 때만."""
+    inside = frame.point(lambda v: 0 if v == 128 else 255)     # frame 에서 128 은 말풍선 바깥이다
+    heights = [round(v * frame.height / 255) for v in inside.resize((frame.width, 1), Image.Resampling.BOX).tobytes()]
+    has_ink = [v > 0 for v in ink.resize((ink.width, 1), Image.Resampling.BOX).tobytes()]
+    best = None
+    for c in range(1, len(heights) - 1):
+        left, right = max(heights[:c]), max(heights[c:])
+        if heights[c] < .6 * min(left, right) and any(has_ink[:c]) and any(has_ink[c:]):
+            ratio = heights[c] / min(left, right)
+            if best is None or ratio < best[0]:
+                best = (ratio, c)
+    return best[1] if best else None
+
+
+def _clip(spans, part):
+    a, b = part
+    return [(max(s, a), min(e, b)) for s, e in spans if min(e, b) > max(s, a)]
+
+
 def _stamp(lines, path, size, pitch, weight):
     """줄들을 가운데로 맞춰 찍은 글자 판(L, 글자가 밝다)."""
     font = ImageFont.truetype(path, size * SCALE)
@@ -143,6 +163,11 @@ def patch(page, x, y, text, path=None):
     # 안쪽이 이어진 말풍선이 좌우로 붙어 있으면 같은 높이에 글 덩어리가 둘이다 — 글자 키보다 넓게 벌어진 세로 틈으로 가르고
     # 짚은 쪽만 남긴다(낱말 사이 띄어쓰기는 글자 키보다 좁다).
     cols = _spans((v > 0 for v in ink.resize((ink.width, 1), Image.Resampling.BOX).tobytes()), bridge=round(tall * .8))
+    neck = _neck(frame, ink)
+    room = (0, ink.width)             # 새 글이 들어갈 수 있는 가로 범위(말풍선 안쪽 기준)
+    if neck is not None:              # 글 사이가 좁아도 말풍선 사이의 잘록한 목이 있으면 거기서 가른다
+        cols = [c for part in ((0, neck), (neck, ink.width)) for c in _clip(cols, part)]
+        room = (0, neck) if x - l < neck else (neck, ink.width)
     if len(cols) > 1:
         at_x = x - l
         left_, right_ = min(cols, key=lambda c: 0 if c[0] <= at_x <= c[1] else min(abs(at_x - c[0]), abs(at_x - c[1])))
@@ -184,11 +209,15 @@ def patch(page, x, y, text, path=None):
     size = max(8, round(100 * tall / (probe[3] - probe[1])))
     fit = ImageFont.truetype(path, size)
     out = _wrap(words, widths, fit.getlength)
-    while max(ImageFont.truetype(path, size).getlength(s) for s in out) > (r - l) * .94 and size > 8:
+    gap = max(2, round(tall * .3))
+    while max(ImageFont.truetype(path, size).getlength(s) for s in out) > (room[1] - room[0]) * .94 - 2 * gap and size > 8:
         size -= 1
     stamp = min((_stamp(out, path, size, pitch, weight) for weight in range(0, 7)),
                 key=lambda m: abs(_amount(m) - old))
     sl, st, sr, sb = stamp.getbbox()
+    # 원래 글의 가운데에 두되, 붙은 옆 말풍선 쪽으로 넘어가지 않게 그 말풍선 안으로 민다
+    half = (sr - sl) / 2
+    centre = min(max(centre, room[0] + gap + half), room[1] - gap - half)
     piece.paste(colour, (round(centre - (sl + sr) / 2), round(middle - (st + sb) / 2)), mask=stamp)
     done = page.copy()
     done.paste(piece, (l, t))

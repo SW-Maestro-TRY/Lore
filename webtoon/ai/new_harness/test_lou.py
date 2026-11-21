@@ -127,6 +127,19 @@ class LouTest(unittest.TestCase):
         self.assertEqual([],result["plans"])
         self.assertEqual([5],result["skipped_pages"])
 
+    def test_check_relative_path_is_refused_even_if_it_exists(self):
+        import os
+        path = self.root/"input.json"
+        lou.write_json(path, dict(page=2,before="pages/page02.png",after=str(self.page),note="손",method="keep",lang="ko"))
+        here = os.getcwd()
+        os.chdir(self.book)
+        try:
+            self.assertTrue(Path("pages/page02.png").exists())
+            with self.assertRaises(ValueError):
+                lou.process(self.book,"check",path,self.root/"out.json")
+        finally:
+            os.chdir(here)
+
     def test_check_only_compares_pictures_of_this_work(self):
         outside = self.root/"other.png"
         Image.new("RGB",(10,10)).save(outside)
@@ -146,7 +159,22 @@ class LouTest(unittest.TestCase):
 
     def test_short_typos_and_rejoined_lines(self):
         self.assertEqual(["가고라"],[d["seen"] for d in lou.text_diff(2,["가고라","가거라"],{"acting":"“가거라.”"})])
+        self.assertEqual([],lou.text_diff(2,["가거라"],{"acting":"“가거라.” “가고라.”"}))
         self.assertEqual([dict(before="그만",after="그만해")], lou.text_changed(["어서 와","그만"],["어서","와","그만해"]))
+        self.assertEqual([dict(before="그만",after="그만해")],
+                         lou.text_changed(["우리 모두 여기 모여","그만"],["우리","모두","여기","모여","그만해"]))
+
+    def test_result_is_not_written_through_a_link(self):
+        target = self.root/"keep.json"
+        lou.write_json(target, {"keep": True})
+        link = self.root/"out-link.json"
+        link.symlink_to(target)
+        path = self.root/"input.json"
+        lou.write_json(path, dict(page=2,before=str(self.page),after=str(self.page),note="손",method="redraw",lang="ko"))
+        with patch.object(lou.llm,"Call") as factory, self.assertRaises(ValueError):
+            factory.return_value.side_effect = [(json.dumps(dict(ok=True,reply="네",kept=[],changed=[],unexpected=[])),{"stage":"LOU"})]
+            lou.process(self.book,"check",path,link)
+        self.assertEqual({"keep": True}, lou.read(target))
 
     def test_text_drift(self):
         self.assertEqual([dict(before="물린 사람을 보면",after="몰린 사람을 보면"),dict(before="쾅쾅",after="")],

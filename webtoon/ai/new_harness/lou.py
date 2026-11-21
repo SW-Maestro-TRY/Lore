@@ -54,6 +54,11 @@ def _inside(path, folder):
         return False
 
 
+def safe_output(path):
+    """결과 파일 자리가 링크면 쓰지 않는다 — 링크가 가리키는 작품 파일을 덮어쓰게 된다."""
+    require(not Path(path).is_symlink() and not Path(path).parent.is_symlink())
+
+
 def selection(req):
     """짚은 장(없으면 보고 있던 장). 한 번에 그림 세 장까지만 보고 나머지는 건너뛴 장으로 돌려준다."""
     pins = req.get("pins", [])
@@ -197,7 +202,7 @@ def text_diff(page, lines, scene):
         if len(squash(seen)) < 3:
             continue
         score, want = max(((near(seen, w), w) for w in spoken(scene)), default=(0, ""))
-        if .8 <= score < 1 or one_off(seen, spoken(scene)):
+        if score < 1 and (.8 <= score or one_off(seen, spoken(scene))):
             out.append(dict(page=page, seen=seen, want=want if .8 <= score < 1 else one_off(seen, spoken(scene))))
     return out
 
@@ -207,7 +212,7 @@ def _rejoin(lines, other):
     whole = {squash(s) for s in other}
     out, i = [], 0
     while i < len(lines):
-        for size in (3, 2):
+        for size in (6, 5, 4, 3, 2):
             joined = "".join(squash(s) for s in lines[i:i + size])
             if i + size <= len(lines) and joined in whole and squash(lines[i]) not in whole:
                 out.append(" ".join(lines[i:i + size]))
@@ -399,4 +404,5 @@ def process(run, kind, request, output, dry=False):
             result = (dict(reply=reply, found=[], plans=[], cause=dict(layer="unknown", text="", quote=""),
                            ask_back="", skipped_pages=skipped)
                       if kind == "ask" else dict(reply=reply, ok=False, kept=[], changed=[], unexpected=[]))
+        safe_output(output)
         write_json(output, {**result, **extra})

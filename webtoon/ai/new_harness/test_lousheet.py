@@ -130,6 +130,18 @@ class LouSheetTest(unittest.TestCase):
         with Image.open(self.book / "sheets" / "민수.png") as other:
             self.assertEqual((0, 0, 255), other.convert("RGB").getpixel((0, 0)))
 
+    def test_draft_does_not_start_from_a_namesakes_sheet(self):
+        png(self.book / "sheets" / "민수.png", "blue")
+        lou.write_json(self.book / "cast.json", [{"name": "김 민수", "look": ""}, {"name": "민수", "look": ""}])
+        plan = self.root / "plan.json"
+        lou.write_json(plan, dict(method="sheet_keep", target="김 민수", note="머리"))
+        with patch.object(lousheet.imagegen, "paint") as paint, self.assertRaises(ValueError):
+            lousheet.draft(self.book, plan, self.book / "sheets" / "drafts" / "c.png")
+        paint.assert_not_called()
+        data = dict(reply="네", found=[], plans=[dict(method="sheet_keep", target="김 민수", changes="머리", note="머리")])
+        with self.assertRaises(ValueError):
+            lousheet.clean(data, self.book, "김 민수", [])
+
     def test_names_do_not_slide_to_someone_else(self):
         png(self.book / "sheets" / "카를로스.png", "blue")
         png(self.book / "sheets" / "sheet.png", "green")            # 이름이 sheet 인 조연

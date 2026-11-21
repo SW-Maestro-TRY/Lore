@@ -47,6 +47,20 @@ class TextFixTest(unittest.TestCase):
         left, _top, right, _bottom = ImageChops.difference(image, after).getbbox()
         self.assertLess(right, 420)
 
+    def test_side_by_side_bubbles_with_a_narrow_gap(self):
+        """두 글이 붙다시피 해도 말풍선 사이 잘록한 목에서 가른다."""
+        image = Image.new("RGB", (800, 1200), (90, 110, 150))
+        draw = ImageDraw.Draw(image)
+        draw.ellipse((20, 60, 420, 340), fill="white", outline="black", width=3)
+        draw.ellipse((380, 60, 780, 340), fill="white", outline="black", width=3)
+        draw.rectangle((380, 180, 420, 220), fill="white")
+        font = ImageFont.truetype(textfix.font_file(), 26)
+        draw.text((394, 200), "왼쪽 글자", font=font, fill=(20, 20, 20), anchor="rm")
+        draw.text((406, 200), "오른쪽 글자", font=font, fill=(20, 20, 20), anchor="lm")
+        after = textfix.patch(image, 380, 200, "왼쪽 고친 글")
+        _left, _top, right, _bottom = ImageChops.difference(image, after).getbbox()
+        self.assertLessEqual(right, 402)
+
     def test_long_lines_wrap_quickly(self):
         import time
         words = [f"낱말{i}" for i in range(30)]
