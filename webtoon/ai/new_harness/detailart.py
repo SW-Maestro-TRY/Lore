@@ -218,7 +218,11 @@ def cast_sheets_in_scene(sheets: dict[str, Path], scene: dict, limit: int = CAST
     limit — 주인공 시트가 여럿이면 그만큼 줄여서 받는다(참조 넷 한도)."""
     if not sheets or limit <= 0:
         return []
-    hay = " ".join(str(scene.get(k) or "") for k in ("where", "what", "acting", "look", "prev", "ends", "user_text"))
+    # 장면의 「생김새」(look) 칸은 그 장에 실제로 그려지는 사람을 적는다. 이 칸이 있으면 거기 적힌 사람에게만 시트를 붙인다 —
+    # 대사 · 행동 글에 이름만 나와도(「레오폴트 대공의 병력이…」, 「라옴 님께서 전하라…」) 그 사람 시트가 붙어, 말하는 조연이
+    # 시트 인물의 얼굴로 그려졌다(2026-11-21, 궁정물 8 · 12화). look 이 없는 옛 장면은 예전처럼 전체 글에서 찾는다.
+    look = str(scene.get("look") or "").strip()
+    hay = look if look else " ".join(str(scene.get(k) or "") for k in ("where", "what", "acting", "look", "prev", "ends", "user_text"))
     # 주인공을 찾을 때와 같은 말(_name_keys — 성을 뺀 이름까지)로 찾는다. 이름 전체와 앞 낱말만 보던 때는
     # 장면 글이 「재훈」「도윤」처럼 이름만 쓰면 시트가 안 붙어, 연재 5~7화 장 그림의 조연이 시트 없이 그려졌다(2026-11-20).
     return [name for name in sheets if any(k in hay for k in _name_keys(name))][:limit]
