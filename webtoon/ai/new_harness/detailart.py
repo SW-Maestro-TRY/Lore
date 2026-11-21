@@ -47,6 +47,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import hashlib
 import re
 import shutil
 from pathlib import Path
@@ -876,6 +877,11 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
     # 세계 재료(#502) — lore.json 이 있는 run 만. 없으면(옛 run) 프롬프트가 안 바뀐다.
     lore_world = lorebook.page_world(run_dir, int(n or 0)) if lorebook.enabled() and not (char or {}).get("lorebook") else ""
 
+    policy = llm.env("NH_PREV_REF") or "always"
+    if policy not in ("always", "off", "place_change"):
+        raise ValueError("NH_PREV_REF 값은 always, off, place_change 중 하나여야 합니다")
+    table_on = llm.env("NH_REF_TABLE") == "1"
+    audit_on = llm.env("NH_CONTEXT_LOG") == "1"
     made = []
     one = {}
     # 세계관 체험(input.json play=true)은 표지를 안 그린다(하은 2026-11-03) — 제목이 사건 그 자체라 표지가
@@ -900,6 +906,10 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             # 장면을 동시에 그리면 옆 장이 아직 안 끝나 없을 수 있다 — 그때
             # "첨부한 직전 그림" 이라고 적으면 없는 그림을 가리키게 된다.
             has_prev = page_path(run_dir, page_no - 1).exists()
+            if policy == "off":
+                has_prev = False
+            elif policy == "place_change":
+                has_prev = has_prev and n_ > 1 and scenes[n_ - 2].get("where") != scenes[n_ - 1].get("where")
             one = scenes[n_ - 1]
             lore = lorebook.page_block(lorebook.page_entries(
                 lore_world, " ".join(str(one.get(k) or "") for k in ("where", "what", "acting", "prev", "ends"))
@@ -932,7 +942,8 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                       if isinstance(o, dict) and (run_dir / "sheets" / f"{str(o.get('name') or '').strip()}.png").exists()]
         sheet_people = tuple(x for x in [hero] + co_sheeted + list(cast_sheets or {}) if x)
         fixed = userbook.block(char, scene_text, "image", cont, budget=0, sheeted=sheet_people)          # 항상 참고 · 진행 상태만
-        book = userbook.block(char, scene_text, "image", cont, budget=max(0, room0 - len(fixed)), sheeted=sheet_people)
+        audit = {"선택 항목": [], "시트 때문에 지운 문구": []} if audit_on else None
+        book = userbook.block(char, scene_text, "image", cont, budget=max(0, room0 - len(fixed)), sheeted=sheet_people, audit=audit)
         extra = "\n\n".join(x for x in (book, memory) if x)
         base_prompt = prompt
 
@@ -951,7 +962,34 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         # 모든 장을 줄이면 같은 호출이 장 수의 제곱만큼 나갔다(2026-10-26, 6장에 36번 · 947원).
         if only and page_no not in only:
             continue
+        prev_img = page_path(run_dir, page_no - 1)
+        # 참조 순서: 주인공 시트 → 이 장면(표지면 이 화)의 조연 시트 → 직전 장.
+        who, room = sheet_plan(char, scenes[n_ - 1] if n_ > 0 else None)
+        page_refs = [cast_sheets[nm] for nm in (cast_sheets_in_scene(cast_sheets, scenes[n_ - 1], room) if n_ > 0 else
+                                                cover_cast_sheets(cast_sheets, scenes, min(CAST_SHEET_LIMIT, REF_LIMIT - len(who))))]
+        refs = sheet_refs(who) + page_refs + ([prev_img] if n_ > 0 and has_prev else [])
+        rows = []
+        if table_on or audit_on:
+            for index, path in enumerate(refs, 1):
+                name = (char or {}).get("name", "주인공") if path == sheet else path.stem
+                label = "직전 장" if path == prev_img else f"{name} 시트"
+                rows.append({"번호": index, "설명": label, "파일": str(path.relative_to(run_dir))})
+        if table_on:
+            if rows:
+                base_prompt = "\n".join(f"그림 {r['번호']}: {r['설명']}" for r in rows) + "\n\n" + base_prompt
+            write_json(dest / f"page{page_no:02d}.refs.json", rows)
         prompt = assemble()
+        if audit_on:
+            write_json(dest / f"page{page_no:02d}.context.json", {
+                **audit, "축약 전 길이": len(extra),
+                "축약 후 길이": len(prompt[len(base_prompt):].removesuffix("\n\n" + note_text).strip()),
+                "참조": [{**row, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+                         for row, path in zip(rows, refs)],
+                "직전 장 첨부": prev_img in refs, "세계관": lore if n_ else "",
+                "선택 설정집": book, "삭제 또는 축약된 줄": [
+                    line for line in extra.splitlines() if line.strip() and line not in prompt],
+                "최종 추가 문맥": prompt[len(base_prompt):].removesuffix("\n\n" + note_text).strip(),
+            })
         # 프롬프트는 **그릴 장의 것만 쓴다.** 장면을 동시에 그리면 프로세스마다
         # 이 반복문을 다 도는데, 자기가 안 그릴 장의 파일까지 쓰면 여럿이 같은
         # 파일에 동시에 써서 반 토막이 남는다.
@@ -967,12 +1005,6 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             log(f"  {label}: 이미 있습니다 (다시 그리려면 지우세요)")
             continue
 
-        prev_img = page_path(run_dir, page_no - 1)
-        # 참조 순서: 주인공 시트 → 이 장면(표지면 이 화)의 조연 시트 → 직전 장.
-        who, room = sheet_plan(char, scenes[n_ - 1] if n_ > 0 else None)
-        page_refs = [cast_sheets[nm] for nm in (cast_sheets_in_scene(cast_sheets, scenes[n_ - 1], room) if n_ > 0 else
-                                                cover_cast_sheets(cast_sheets, scenes, min(CAST_SHEET_LIMIT, REF_LIMIT - len(who))))]
-        refs = sheet_refs(who) + page_refs + ([prev_img] if page_no > 1 and prev_img.exists() else [])
         log(f"[{label}] 참조 {len(refs)}장 …")
         meta = None
         for attempt in (1, 2):

@@ -258,19 +258,19 @@ def look_now(lorebook, name) -> str:
     return f"{best[1]} ({best[0]}화 진행 상태)" if best[0] >= 0 else best[1]
 
 
-def drop_looks(text: str) -> str:
+def drop_looks(text: str, removed=None) -> str:
     """머리 · 얼굴 · 체형 · 눈 색을 적은 **마디**만 뺀다 — 시트가 있는 인물은 그림이 시트를 따르므로 설정집 겉모습 글이 시트와 싸우지 않게.
     문장째 지우면 「짧게 민 머리에 턱선을 따라 마른 핏자국이 남아 있다」의 핏자국까지 사라져서, 쉼표 · 「~에」 · 「~고」 · 「~며」 마디로 나눠 본다.
     상처 · 피 · 옷 · 소지품 · 관계 · 위치는 남긴다. [시트와 다름: …] 은 이야기 속에서 실제로 달라진 몸이라 그대로 남긴다."""
     text = str(text or "")
     marks = [m.group(0) for m in SHEET_DIFF_RE.finditer(text)]
     if marks:
-        rest = _drop_plain(SHEET_DIFF_RE.sub(" ", text))
+        rest = _drop_plain(SHEET_DIFF_RE.sub(" ", text), removed)
         return " ".join(marks + ([rest] if rest else [])).strip()
-    return _drop_plain(text)
+    return _drop_plain(text, removed)
 
 
-def _drop_plain(text: str) -> str:
+def _drop_plain(text: str, removed=None) -> str:
     out = []
     for sent in re.split(r"(?<=[.다])\s+", str(text or "")):
         if not sent or not LOOK_RE.search(sent):
@@ -282,29 +282,32 @@ def _drop_plain(text: str) -> str:
             continue
         clauses = re.split(r"(?<=[,에고며])\s+", sent)
         keep = [c for c in clauses if not LOOK_RE.search(c) or HURT_RE.search(c)]
+        if removed is not None:
+            removed.extend(c for c in clauses if c not in keep)
         if keep:
             out.append(" ".join(keep))
     return " ".join(x for x in out if x).strip()
 
 
-def block(char, context="", stage="story", continuation=False, everything=False, budget=BUDGET, sheeted=()):
+def block(char, context="", stage="story", continuation=False, everything=False, budget=BUDGET, sheeted=(), audit=None):
     """sheeted — 그림 단계(stage="image")에서 시트가 붙은 인물 이름. 그 인물의 고정 항목 · 진행 상태에서
     머리 · 얼굴 · 체형 문장을 뺀다. 원작 글 「짧게 민 머리」(설정집 고정 항목 + 진행 상태 「한도윤의 겉모습」)가
     모든 장 그림 프롬프트 끝에 붙어, 앞머리를 내린 시트를 이기고 연재 5~11화 도윤이 짧은 머리로 그려졌다(2026-11-20).
     비어 있으면(기본) 예전과 한 글자도 같다."""
     book = (char or {}).get("lorebook") or {}
+    removed = audit["시트 때문에 지운 문구"] if audit is not None else None
     if sheeted and stage == "image" and book:
         book = dict(book)
-        book["entries"] = [({**e, "content": drop_looks(e.get("content"))} if isinstance(e, dict) and _sheet_hit(e.get("title"), sheeted) else e)
+        book["entries"] = [({**e, "content": drop_looks(e.get("content"), removed)} if isinstance(e, dict) and _sheet_hit(e.get("title"), sheeted) else e)
                            for e in book.get("entries") or []]
-        book["progress"] = [({**q, "text": drop_looks(q.get("text")), "was": [w for w in (drop_looks(x) for x in q.get("was") or []) if w]}
+        book["progress"] = [({**q, "text": drop_looks(q.get("text"), removed), "was": [w for w in (drop_looks(x, removed) for x in q.get("was") or []) if w]}
                              if isinstance(q, dict) and _sheet_hit(q.get("title"), sheeted) else q)
                             for q in book.get("progress") or []]
     if not book or not book.get("confirmed"):
         return ""
     if isinstance(book.get("books"), list):
         share = max(0, budget // max(1, len(book["books"])))
-        parts = [block({"lorebook": child}, context, stage, continuation, everything, share, sheeted) for child in book["books"] if isinstance(child, dict)]
+        parts = [block({"lorebook": child}, context, stage, continuation, everything, share, sheeted, audit) for child in book["books"] if isinstance(child, dict)]
         return "[함께 붙인 설정집 — 나열된 순서대로 참고한다. 설정이 충돌하면 뒤에 붙인 설정을 우선한다.]\n" + "\n\n".join(p for p in parts if p)
     lines = ["[작가가 확인한 설정집]", "이 설정집은 선택한 작품 세계다. 캐릭터 카드의 옛 세계보다 우선하며 인물의 외형은 유지한다."]
     if not continuation:
@@ -333,6 +336,8 @@ def block(char, context="", stage="story", continuation=False, everything=False,
     # everything: 줄거리 없이 설정집만 붙인 1화 이야기 단계 — 설정집 전체가 요청이라 키워드를 안 보고
     # 원래 순서대로 예산까지 넣는다.
     chosen = select_all(keyed, budget) if everything else select(keyed, query, budget)
+    if audit is not None:
+        audit["선택 항목"].extend({"id": e.get("id"), "제목": e.get("title")} for e in rules + chosen)
     if chosen:
         lines.append("설정집 항목")
         for e in chosen:
