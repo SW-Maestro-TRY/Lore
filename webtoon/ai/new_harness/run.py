@@ -2604,6 +2604,10 @@ def main(argv=None) -> int:
     lou_modes.add_argument("--lou-check", type=Path)
     p.add_argument("--lou-verify", type=Path, metavar="JSON",
                    help="구도 유지로 고친 뒤 루가 확인하고, 다른 것까지 바뀌었으면 같은 원본에서 한 번 더 고친다(최대 2번). 마지막 확인을 이 파일에")
+    lou_modes.add_argument("--lou-find", type=Path,
+                           help="여러 화에서 한 가지 문제(「이 인물 나오는 장면 다 고쳐」)를 찾는다. 요청에 화 목록. --lou-out 에 결과")
+    lou_modes.add_argument("--lou-story", type=Path, help="그림 그리기 전에 이번 화 본문을 루가 읽고 고칠 곳을 낸다(--lou-out 에)")
+    lou_modes.add_argument("--lou-story-fix", type=Path, help="글 검토에서 고른 문장을 본문에서 바꾼다(바꾸기 전 판을 남긴다)")
     lou_modes.add_argument("--lou-review", type=Path, help="루가 이 화를 먼저 검토해 고칠 것 목록을 낸다(--lou-out 에)")
     lou_modes.add_argument("--lou-plan", type=Path, help="체크한 검토 항목을 장마다 고치기 하나로 묶는다(모델 호출 없음)")
     lou_modes.add_argument("--lou-sheet", type=Path, help="루가 낸 시트 고치기 방법 하나로 후보 시트를 그린다(--lou-out 에)")
@@ -2612,6 +2616,21 @@ def main(argv=None) -> int:
                    help="말풍선 안의 글자만 고친다(그림은 다시 그리지 않는다). --run-id 와 --page 한 장이 필요하다")
     p.add_argument("--lou-out", type=Path)
     args = p.parse_args(argv)
+    if args.lou_story or args.lou_story_fix:
+        if not args.run_id or not args.lou_out:
+            p.error("글 검토에는 --run-id 와 --lou-out 이 필요합니다")
+        import loustory
+        if args.lou_story:
+            loustory.review(RUNS_DIR / args.run_id, args.lou_story, args.lou_out, args.dry_run)
+        else:
+            loustory.fix(RUNS_DIR / args.run_id, args.lou_story_fix, args.lou_out)
+        return 0
+    if args.lou_find:
+        if not args.lou_out:
+            p.error("찾기에는 --lou-out 이 필요합니다")
+        import loufind
+        loufind.find(RUNS_DIR, args.lou_find, args.lou_out, args.dry_run)
+        return 0
     if args.lou_review or args.lou_plan:
         if not args.run_id or not args.lou_out:
             p.error("검토와 묶기에는 --run-id 와 --lou-out 이 필요합니다")
