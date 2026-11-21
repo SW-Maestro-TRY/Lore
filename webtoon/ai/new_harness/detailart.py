@@ -270,6 +270,9 @@ def _name_keys(name: str) -> list[str]:
     words = name.split()
     keys = [name] + ([words[0]] if words else [])
     keys += [w[1:] for w in words if len(w) == 3]
+    # 이름이 여러 낱말이면(서양식 「이름 성」, 「직함 이름」) 낱말 하나하나로도 찾는다 — 장면 글은 「라옴」 「카를」처럼
+    # 뒤 낱말만 쓰기도 한다(2026-11-21, 궁정물 「대신관 라옴」 · 「세르반 카를」의 시트가 장면에 안 붙음).
+    keys += [w for w in words[1:] if len(w) >= 2]
     return [k for k in dict.fromkeys(keys) if len(k) >= 2]
 
 
