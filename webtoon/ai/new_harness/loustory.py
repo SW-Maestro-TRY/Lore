@@ -20,6 +20,11 @@ KINDS = "listing passive_hero no_reaction unknown_name old_reference repeat voic
 BODY_CHARS = 24000
 
 
+def appears(text, quote):
+    """quote 가 text 에 나오는 횟수 — 겹쳐 나오는 것도 센다(「하하하」 안의 「하하」는 두 번)."""
+    return len(re.findall(f"(?={re.escape(quote)})", text)) if quote else 0
+
+
 def _chosen(run):
     """directions.json 과 그 안에서 고른 방향의 자리. 본문은 그 방향의 body 다."""
     path = run / "directions.json"
@@ -66,7 +71,7 @@ def clean(data, body):
         fix = it.get("fix") if isinstance(it.get("fix"), dict) else {}
         quote = lou.string(it, "quote")
         kind = fix.get("type") if fix.get("type") in ("sentence", "episode") else "episode"
-        if kind == "sentence" and not (quote and body.count(quote) == 1 and lou.string(fix, "replace")):
+        if kind == "sentence" and not (quote and appears(body, quote) == 1 and lou.string(fix, "replace")):
             if not lou.string(fix, "note"):
                 continue                              # 본문에 없는 문장을 바꾸자고 하면 버린다
             kind = "episode"
@@ -116,7 +121,7 @@ def fix(run, request, output):
     spans = []
     for it in items:                      # 모든 문장을 원래 본문에서 찾는다 — 바꾼 결과를 다시 바꾸지 않는다
         lou.require(isinstance(it, dict) and lou.string(it, "quote") and isinstance(it.get("replace"), str))
-        lou.require(original.count(it["quote"]) == 1)
+        lou.require(appears(original, it["quote"]) == 1)
         start = original.index(it["quote"])
         spans.append((start, start + len(it["quote"]), it["replace"].strip()))
     spans.sort()

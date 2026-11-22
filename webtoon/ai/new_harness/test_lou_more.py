@@ -61,7 +61,7 @@ class FindTest(unittest.TestCase):
         Fake.answer = staticmethod(lambda p: dict(bad=True, where="1번째 컷", what="바뀜", note="금발로")
                                    if '"what": "디온과 주인공"' in p else dict(bad=False))
         result = self.go(dict(text="둘이 바뀌었어", who="레오", also=["디온"], runs=["ep01", "ep02"]))
-        self.assertEqual(2, result["checked"])                         # ep01 2장(대사 속 이름만 나온 3장은 빼고) + ep02 2장
+        self.assertEqual(4, result["checked"])     # 화마다 표지 + 그 사람이 있는 장(대사 속 이름만 나온 ep01 3장은 빼고)
         self.assertEqual([("ep02", 2)], [(f["run"], f["page"]) for f in result["found"]])
         self.assertTrue(result["found"][0]["note"].endswith("나머지는 그대로."))
         self.assertTrue(any('"sheets": ["레오 폴트"]' in p for p in Fake.prompts))
@@ -196,3 +196,56 @@ class GuardRailTest(unittest.TestCase):
             self.assertEqual("기본", llm.model_for("LOU_REVIEW", "openai"))
             with patch.dict("os.environ", {"CODEX_PROXY_LOU_REVIEW_MODEL": "고른 값"}):
                 self.assertEqual("고른 값", llm.model_for("LOU_REVIEW", "openai"))
+
+
+class SecondRoundTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.book = episode(self.root, "ep01", [{"what": "a"}, {"what": "b"}], body="하하하 웃었다.")
+
+    def test_overlapping_quote_is_ambiguous(self):
+        self.assertEqual(2, loustory.appears("하하하", "하하"))
+        req, out = self.root / "fix.json", self.root.parent / "story-out.json"
+        lou.write_json(req, {"items": [{"quote": "하하", "replace": "웃음"}]})
+        with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(ValueError):
+            run.main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
+        self.assertEqual("하하하 웃었다.", lou.read(self.book / "directions.json")[0]["body"])
+
+    def test_output_cannot_be_a_folder(self):
+        req = self.root / "fix.json"
+        lou.write_json(req, {"items": [{"quote": "웃었다.", "replace": "x"}]})
+        with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(SystemExit):
+            run.main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(self.root.parent)])
+
+    def test_works_are_told_apart_by_the_continuation_chain(self):
+        b = episode(self.root, "ep02", [{"what": "a"}])
+        c = episode(self.root, "zz01", [{"what": "a"}])                     # 다른 작품인데 주인공 이름이 같다
+        lou.write_json(b / "continuation.json", {"source_run": "ep01"})
+        lou.write_json(c / "continuation.json", {"source_run": "zz00"})
+        self.assertTrue(loufind.same_work([self.book, b]))
+        self.assertFalse(loufind.same_work([self.book, b, c]))
+
+    def test_a_page_check_cannot_rewrite_another_pages_item(self):
+        import loureview
+
+        def answer(prompt):
+            if "정말 그런지 확인한다" in prompt:
+                if '"id": "r2"' in prompt:                                 # 3장 확인이 2장 번호로 지시를 바꾸려 한다
+                    return dict(checks=[dict(id="r2", real=True), dict(id="r1", real=True, fixed_note="3장 지시")])
+                return dict(checks=[dict(id="r1", real=True)])
+            if "이번에 맡은 것은 「이해」" in prompt:
+                return dict(reply="", items=[])
+            n = int(prompt.split('"target": ')[1].split(",")[0])
+            if n in (2, 3):
+                return dict(items=[dict(kind="panel", sev="P1", what=f"{n}장 문제", note=f"{n}장을 고친다.")])
+            return dict(items=[])
+        Fake.answer = staticmethod(answer)
+        req, out = self.root / "req.json", self.root.parent / "review-out.json"
+        lou.write_json(req, {"lang": "ko"})
+        with patch.object(run, "RUNS_DIR", self.root), patch.object(loureview.llm, "Call", Fake), \
+                patch.object(lou, "read_text", side_effect=lambda p: ([], {"stage": "LOU"})):
+            run.main(["--run-id", "ep01", "--lou-review", str(req), "--lou-out", str(out)])
+        items = {it["page"]: it for it in lou.read(out)["items"]}
+        self.assertEqual("2장을 고친다. 나머지는 그대로.", items[2]["note"])

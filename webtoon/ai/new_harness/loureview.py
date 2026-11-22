@@ -255,9 +255,10 @@ def review(run, request, output, dry=False):
             checked = list(pool.map(lambda kv: _verify_page(run, dest, kv[0], kv[1], script, state, lang),
                                     by_page.items()))
         verdict = {}
-        for got, meta in checked:
+        for (page, its), (got, meta) in zip(by_page.items(), checked):
             record(run, meta)
-            verdict.update(got)
+            mine = {it["id"] for it in its}                 # 다른 장의 번호로 온 판정 · 지시는 받지 않는다
+            verdict.update({k: v for k, v in got.items() if k in mine})
         kept, dropped = [], []
         for it in items:
             if it["id"] not in verdict:

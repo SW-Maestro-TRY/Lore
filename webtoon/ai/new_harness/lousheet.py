@@ -398,12 +398,13 @@ def pick(run, request):
                 f"「{c['key']}」(「{c['other']}」에도 걸림)"
                 for c in clashes) + (f" — 「{hint}」 같은 이름으로 다시 골라 주세요(file_name)." if hint else " — 다른 이름을 정해 주세요(file_name)."))
     dest = hit[1] if hit else run / "sheets" / f"{stem(file_name or name)}.png"
-    lou.require(hit is not None or not dest.exists())          # 새 시트가 다른 사람의 시트 파일을 덮지 않는다
     hero = dest.resolve() == (run / "sheet.png").resolve()
     lock = run / "sheets" / ".pick.lock"
     lock.parent.mkdir(parents=True, exist_ok=True)
     with open(lock, "w") as held:
         fcntl.flock(held, fcntl.LOCK_EX)
+        # 새 시트가 다른 사람의 시트 파일을 덮지 않는다 — 잠금 안에서 본다(두 사람이 같은 새 이름을 동시에 골라도)
+        lou.require(hit is not None or not dest.exists())
         if dest.exists():
             versions = run / "sheets" / "versions"          # 첫 주인공(sheet.png)의 지난 판도 같은 곳에
             versions.mkdir(parents=True, exist_ok=True)

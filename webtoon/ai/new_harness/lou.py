@@ -439,7 +439,9 @@ def process(run, kind, request, output, dry=False):
                 before, after = join_bands(found[:len(cut[0])]), join_bands(found[len(cut[0]):])
                 changed = text_changed(before, after)
                 asked = quoted(context.get("note", ""))
-                expected = [c for c in changed if any(near(c[k], q) >= .9 for q in asked for k in ("before", "after") if c[k])]
+                note_text = context.get("note", "")
+                expected = [c for c in changed if any(near(c[k], q) >= .9 for q in asked for k in ("before", "after") if c[k])
+                            or (c["after"] and near(c["after"], note_text) >= .8)]   # 따옴표 없이 적은 바꿀 글도 요청한 변화
                 drift = confirm_changes(run, [c for c in changed if c not in expected], cut, found)
                 extra["text_changed"] = context["text_changed"] = drift
                 extra["text_expected"] = context["text_expected"] = expected

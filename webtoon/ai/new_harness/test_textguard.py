@@ -75,14 +75,19 @@ class TextGuardTest(unittest.TestCase):
         self.assertEqual(2, len(textguard.bubbles(image)))
 
     def test_text_change_without_quotes_is_left_alone(self):
+        """지시가 따옴표 없이 바꿀 글을 적었어도, 고친 글이 지시에 적혀 있으면 되돌리지 않는다."""
+        def read_many(paths):
+            return [(["내일 만나"] if p.stem.endswith("a") and not reader(p) == ["위의 말풍선 글"] else reader(p)) for p in paths]
         with tempfile.TemporaryDirectory() as tmp:
             before, after = Path(tmp) / "b.png", Path(tmp) / "a.png"
             page("가겠다고 했어").save(before)
-            page("가져다고 했어").save(after)
-            def boom(paths):
-                raise AssertionError("어느 말풍선이 바뀌어야 하는지 모르면 읽지도 않는다")
-            self.assertEqual([], textguard.restore(before, after, "아래 말풍선 글을 내일 만나로 바꿔", boom,
-                                                   lou.squash, lou.near, lou.quoted))
+            page("내일 만나").save(after)
+            for note in ("아래 말풍선 글을 내일 만나로 바꿔", "둘째 줄을 내일 만나로 바꿔"):
+                self.assertEqual([], textguard.restore(before, after, note, read_many, lou.squash, lou.near, lou.quoted))
+            # 지시가 말풍선을 말하지만 글을 바꾸라는 것이 아니면 지키기는 그대로 돈다
+            self.assertEqual([("가겠다고 했어", "내일 만나")],
+                             textguard.restore(before, after, "옷만 고치고 말풍선은 그대로", read_many, lou.squash, lou.near,
+                                               lou.quoted))
 
     def test_unchanged_page_needs_no_reading(self):
         with tempfile.TemporaryDirectory() as tmp:

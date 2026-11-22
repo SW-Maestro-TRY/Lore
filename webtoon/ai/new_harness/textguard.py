@@ -107,23 +107,12 @@ def _changed_share(before, after, mask):
     return hit / max(1, inner.histogram()[255])
 
 
-TEXT_WORDS = re.compile(r"말풍선|대사|글자|문구|내레이션|나레이션|효과음|오타|말투|존댓말|반말|글을|글로|글이|글은")
-
-
-def asks_text_without_quotes(note, quoted):
-    """글을 바꾸라는 지시인데 바꿀 글을 「」로 적지 않았는가 — 그러면 어느 말풍선이 바뀌어야 하는지 몰라 지키기를 하지 않는다.
-    「빨간 상자를 넣는다」처럼 그림만 말하는 지시는 여기에 들지 않는다."""
-    return bool(TEXT_WORDS.search(note or "")) and not quoted(note)
-
-
 def restore(before_path, after_path, note, read_many, squash, near, quoted):
     """after_path 를 고쳐 쓴다. read_many(paths) -> 그림마다 줄 목록(동시에 옮겨 적는다).
     되살린 말풍선 [(고치기 전 글, 고친 뒤 글)] 을 돌려준다.
 
     장 전체를 옮겨 적어 달라진 줄부터 찾으면, 한 글자 차이를 그 단계에서 놓쳐 아무것도 안 했다(2026-11-22).
     그래서 모양이 같은 말풍선마다 고치기 전 · 후를 크게 잘라 옮겨 적어 견준다."""
-    if asks_text_without_quotes(note, quoted):
-        return []
     with Image.open(before_path) as b, Image.open(after_path) as a:
         before, after = b.convert("RGB"), a.convert("RGB")
     if before.size != after.size:
@@ -163,8 +152,8 @@ def restore(before_path, after_path, note, read_many, squash, near, quoted):
         old, new = (" ".join(texts[2 * i + j]) for j in (0, 1))
         if not squash(old) or not squash(new) or squash(old) == squash(new):
             continue                                   # 같거나, 한쪽을 못 읽었다 — 모르면 건드리지 않는다
-        if any(near(x, q) >= .9 for q in asked for x in (old, new)) or near(old, note) >= .8:
-            continue                                   # 바꾸라고 한 말풍선
+        if any(near(x, q) >= .9 for q in asked for x in (old, new)) or near(old, note) >= .8 or near(new, note) >= .8:
+            continue                                   # 바꾸라고 한 말풍선 — 지시에 그 글이 (따옴표가 없어도) 적혀 있다
         after.paste(before, (0, 0), mask.filter(ImageFilter.MinFilter(3)))   # 테두리 한 겹은 고친 뒤 그림 그대로
         restored.append((old, new))
     if restored:

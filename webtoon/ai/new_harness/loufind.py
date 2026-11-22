@@ -24,18 +24,37 @@ SAID = re.compile(r"“[^”“]{0,200}”|「[^」「]{0,200}」|『[^』『]{0
 
 
 def present(scene, names):
-    """이 장면에 실제로 있는 사람 — 생김새 · 장소 · 행동(대사는 빼고). 생김새 칸이 없는 옛 장면은 글 전체."""
+    """이 장면에 실제로 있는 사람 — 생김새 · 장소 · 행동(대사는 빼고). 생김새 칸이 없는 옛 장면은 글 전체에서 대사만 빼고."""
     look = str(scene.get("look") or "")
-    hay = (look + " " + " ".join(SAID.sub(" ", str(scene.get(k) or "")) for k in ("where", "acting"))) if look.strip() \
-        else " ".join(str(scene.get(k) or "") for k in ("where", "what", "acting", "look"))
+    keys = ("where", "acting") if look.strip() else ("where", "what", "acting")
+    hay = look + " " + " ".join(SAID.sub(" ", str(scene.get(k) or "")) for k in keys)
     return [n for n in names if lou.name_in(n, hay)]
 
 
 def candidates(run, names):
+    """후보 장. 표지(1장)는 그 화 장면 어디에든 그 사람이 있으면 넣는다 — 표지에도 인물이 그려진다."""
     source = run / "scenes.json"
     scenes = lou.read(source).get("scenes", []) if source.exists() else []
     pages = dict(loureview.page_paths(run))
-    return [(i + 2, s) for i, s in enumerate(scenes) if i + 2 in pages and present(s, names)]
+    out = [(i + 2, s) for i, s in enumerate(scenes) if i + 2 in pages and present(s, names)]
+    if out and 1 in pages:
+        out.insert(0, (1, {"what": "표지 — 이 화의 주요 인물이 그려진다"}))
+    return out
+
+
+def same_work(dirs):
+    """같은 작품의 화들인가. 이어 쓴 화는 continuation.json 의 앞 화(source_run)로 이어진다 — 둘째 화부터 모두 앞 화가
+    이 목록 안에 있어야 한다. 이어 쓰기 기록이 없는 작품은 첫 주인공 이름이 같은지로 본다(약한 판정)."""
+    links = {}
+    for run in dirs:
+        cont = run / "continuation.json"
+        links[run.name] = str(lou.read(cont).get("source_run") or "") if cont.exists() else None
+    names = set(links)
+    if all(v is not None for v in list(links.values())[1:]):
+        heads = [r for r, prev in links.items() if not prev or prev not in names]
+        return len(heads) == 1
+    heroes = {lousheet.hero_name(run) for run in dirs}
+    return len(heroes) == 1 and "" not in heroes
 
 
 def _check(run, dest, page, scene, req, people, state, cast):
@@ -83,9 +102,7 @@ def find(runs_root, request, output, dry=False):
         run = (root / rid).resolve()
         lou.require(run.is_dir() and run.parent == root)
         dirs.append(run)
-    # 같은 작품의 화만 — 첫 주인공 이름이 모두 같아야 한다(다른 작품의 화를 섞으면 장면과 시트가 섞인다)
-    heroes = {lousheet.hero_name(run) for run in dirs}
-    lou.require(len(heroes) == 1 and "" not in heroes)
+    lou.require(same_work(dirs))
     people = [req["who"], *[a for a in req.get("also") or [] if isinstance(a, str) and a.strip()]][:3]
     jobs = []
     for run in dirs:

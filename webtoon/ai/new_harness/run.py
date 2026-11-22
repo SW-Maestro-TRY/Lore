@@ -2631,7 +2631,7 @@ def main(argv=None) -> int:
             target = Path(out)
             rel = target.resolve().relative_to(RUNS_DIR.resolve()) if target.resolve().is_relative_to(RUNS_DIR.resolve()) else None
             inside = rel is not None and len(rel.parts) >= 2          # 어느 작품 폴더 안(글 · 장 그림 · 시트 자리)
-            if not target.is_absolute() or inside or target.is_symlink() or target.parent.is_symlink():
+            if not target.is_absolute() or inside or target.is_dir() or target.is_symlink() or target.parent.is_symlink():
                 p.error("결과 파일은 작품 폴더 밖의 절대 경로여야 합니다")
     if args.lou_story or args.lou_story_fix:
         if not args.run_id or not args.lou_out:
