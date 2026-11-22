@@ -79,6 +79,18 @@ class CommandLineTest(unittest.TestCase):
                     self.assertTrue(drawer.called, extra)
                     self.assertEqual(basis, drawer.call_args.kwargs.get("keep_basis"))
                     self.assertEqual("손만", drawer.call_args.kwargs.get("note"))
+                    self.assertFalse(drawer.call_args.kwargs.get("text_guard"))     # 사람이 쓴 메모 — 글자 지키기 꺼짐
+            # 루가 만든 지시(서버가 확인을 붙인 것)로 고칠 때만 글자 지키기를 켠다
+            import lou
+            out = Path(tmp) / "verify.json"
+
+            def fake_check(run_dir, kind, request, output, dry=False):
+                lou.write_json(output, dict(ok=True, reply="", kept=[], changed=[], unexpected=[], retry_note=""))
+            with patch.object(run, "RUNS_DIR", Path(tmp)), patch.object(lou, "process", side_effect=fake_check), \
+                    patch.object(detailart, "draw_continue", return_value=[]) as drawer:
+                self.assertEqual(0, run.main(["--run-id", "episode", "--detail-pages", "--page", "2", "--keep-from",
+                                              str(source), "--note", "손만", "--lou-verify", str(out)]))
+                self.assertTrue(drawer.call_args.kwargs.get("text_guard"))
 
 
 if __name__ == "__main__":
