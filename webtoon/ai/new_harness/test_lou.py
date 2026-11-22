@@ -9,6 +9,15 @@ import lou
 import run
 
 
+
+def main(argv):
+    """run.main — 결과 파일 자리를 비우고 부른다(루 명령은 내용이 있는 결과 파일을 덮지 않는다)."""
+    if "--lou-out" in argv:
+        out = Path(argv[argv.index("--lou-out") + 1])
+        if out.is_file():
+            out.unlink()
+    return run.main(argv)
+
 class LouTest(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -39,7 +48,7 @@ class LouTest(unittest.TestCase):
                 patch.object(lou,"confirm_changes",side_effect=lambda run_dir, changed, cut, found: changed), \
                 patch.object(lou.llm,"Call") as factory:
             factory.return_value.side_effect = [(s,{"stage":"LOU","model":"fixture"}) for s in replies]
-            run.main(["--run-id","episode","--lou-"+kind,str(path),"--lou-out",str(out)])
+            main(["--run-id","episode","--lou-"+kind,str(path),"--lou-out",str(out)])
             factory.assert_called_once_with("LOU")
             self.assertEqual(len(replies),factory.return_value.call_count)
         return lou.read(out)

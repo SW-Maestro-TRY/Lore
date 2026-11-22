@@ -17,6 +17,15 @@ def png(path, colour):
     Image.new("RGB", (300, 200), colour).save(path)
 
 
+
+def main(argv):
+    """run.main — 결과 파일 자리를 비우고 부른다(루 명령은 내용이 있는 결과 파일을 덮지 않는다)."""
+    if "--lou-out" in argv:
+        out = Path(argv[argv.index("--lou-out") + 1])
+        if out.is_file():
+            out.unlink()
+    return run.main(argv)
+
 class LouSheetTest(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -78,7 +87,7 @@ class LouSheetTest(unittest.TestCase):
         request = self.root / "pick.json"
         lou.write_json(request, {"target": "마바", "from": str(candidate), "look": "검은 머리"})
         with patch.object(run, "RUNS_DIR", self.root):
-            run.main(["--run-id", "episode", "--lou-sheet-pick", str(request)])
+            main(["--run-id", "episode", "--lou-sheet-pick", str(request)])
         self.assertTrue((self.book / "sheets" / "versions" / "마바 사아.v1.png").exists())
         with Image.open(self.book / "sheets" / "마바 사아.png") as now:
             self.assertEqual((255, 0, 0), now.convert("RGB").getpixel((0, 0)))
@@ -197,7 +206,7 @@ class LouSheetTest(unittest.TestCase):
                       plans=[dict(method="sheet_keep", target="마바 사아", changes="머리", keeps="얼굴", note="머리")])
         with patch.object(run, "RUNS_DIR", self.root), patch.object(lousheet.llm, "Call") as factory:
             factory.return_value.return_value = (json.dumps(answer, ensure_ascii=False), {"stage": "LOU"})
-            run.main(["--run-id", "episode", "--lou-ask", str(request), "--lou-out", str(out)])
+            main(["--run-id", "episode", "--lou-ask", str(request), "--lou-out", str(out)])
             prompt = factory.return_value.call_args.args[0]
         result = lou.read(out)
         self.assertIn("캐릭터 시트", prompt)

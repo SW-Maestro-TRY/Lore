@@ -11,6 +11,15 @@ import loureview
 import run
 
 
+
+def main(argv):
+    """run.main — 결과 파일 자리를 비우고 부른다(루 명령은 내용이 있는 결과 파일을 덮지 않는다)."""
+    if "--lou-out" in argv:
+        out = Path(argv[argv.index("--lou-out") + 1])
+        if out.is_file():
+            out.unlink()
+    return run.main(argv)
+
 class LouReviewTest(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
@@ -52,7 +61,7 @@ class LouReviewTest(unittest.TestCase):
         with patch.object(run, "RUNS_DIR", self.root), \
                 patch.object(lou, "read_text", side_effect=lambda p: ((seen or {}).get(p.name[4:6], []), {"stage": "LOU"})), \
                 patch.object(loureview.llm, "Call", Fake):
-            run.main(["--run-id", "episode", "--lou-review", str(request), "--lou-out", str(out)])
+            main(["--run-id", "episode", "--lou-review", str(request), "--lou-out", str(out)])
         return lou.read(out), prompts
 
     @staticmethod
@@ -143,7 +152,7 @@ class LouReviewTest(unittest.TestCase):
                  dict(id="r4", page=3, method="keep", note="효과음 「쾅」을 지운다. 나머지는 그대로.")]
         lou.write_json(request, {"items": items})
         with patch.object(run, "RUNS_DIR", self.root):
-            run.main(["--run-id", "episode", "--lou-plan", str(request), "--lou-out", str(out)])
+            main(["--run-id", "episode", "--lou-plan", str(request), "--lou-out", str(out)])
         jobs = lou.read(out)["jobs"]
         self.assertEqual([(2, "keep", ["r1", "r2"], [3]), (3, "redraw", ["r3", "r4"], [])],
                          [(j["page"], j["method"], j["items"], j["basis"]) for j in jobs])
@@ -151,7 +160,7 @@ class LouReviewTest(unittest.TestCase):
         self.assertIn("꼬리를 돌린다. 3번째 컷 손가락을 다섯으로.", jobs[0]["note"])
         lou.write_json(request, {"items": [dict(page=9, method="keep", note="x")]})
         with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(ValueError):
-            run.main(["--run-id", "episode", "--lou-plan", str(request), "--lou-out", str(out)])
+            main(["--run-id", "episode", "--lou-plan", str(request), "--lou-out", str(out)])
 
 
 if __name__ == "__main__":

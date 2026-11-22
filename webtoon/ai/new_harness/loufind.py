@@ -42,17 +42,32 @@ def candidates(run, names):
     return out
 
 
+def _root_of(run, limit=500):
+    """이어 쓰기 기록(continuation.json 의 source_run)을 작품 폴더 안에서 거슬러 올라간 첫 화. 기록이 없으면 None."""
+    seen, current = set(), run
+    if not (current / "continuation.json").exists():
+        return None
+    for _ in range(limit):
+        cont = current / "continuation.json"
+        prev = str(lou.read(cont).get("source_run") or "") if cont.exists() else ""
+        if not prev or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,119}", prev) or prev in seen:
+            return current.name
+        seen.add(prev)
+        nxt = current.parent / prev
+        if not nxt.is_dir():
+            return prev                                  # 앞 화 폴더가 없으면 그 이름까지를 뿌리로 본다
+        current = nxt
+    return current.name
+
+
 def same_work(dirs):
-    """같은 작품의 화들인가. 이어 쓴 화는 continuation.json 의 앞 화(source_run)로 이어진다 — 둘째 화부터 모두 앞 화가
-    이 목록 안에 있어야 한다. 이어 쓰기 기록이 없는 작품은 첫 주인공 이름이 같은지로 본다(약한 판정)."""
-    links = {}
-    for run in dirs:
-        cont = run / "continuation.json"
-        links[run.name] = str(lou.read(cont).get("source_run") or "") if cont.exists() else None
-    names = set(links)
-    if all(v is not None for v in list(links.values())[1:]):
-        heads = [r for r, prev in links.items() if not prev or prev not in names]
-        return len(heads) == 1
+    """같은 작품의 화들인가. 이어 쓴 화는 앞 화(source_run)를 거슬러 올라간 첫 화가 같아야 한다 — 요청에서 중간 화가 빠져도
+    작품 폴더에서 따라간다. 이어 쓰기 기록이 하나도 없는 작품은 첫 주인공 이름이 같은지로 본다(약한 판정)."""
+    roots = {run.name: _root_of(run) for run in dirs}
+    known = {r for r in roots.values() if r}
+    if known:
+        # 기록이 없는 화(1화)는 그 화 자신이 뿌리다
+        return len({r or name for name, r in roots.items()}) == 1
     heroes = {lousheet.hero_name(run) for run in dirs}
     return len(heroes) == 1 and "" not in heroes
 

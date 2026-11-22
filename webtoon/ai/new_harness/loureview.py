@@ -305,8 +305,11 @@ def plan(run, request, output):
         # 나머지는 지시의 글(「몇 장과 같게」)로만 간다 — 그런 장이 있었다는 것을 남긴다.
         counts = {b: job["basis"].count(b) for b in job["basis"]}
         best = max(counts, key=lambda b: (counts[b], -job["basis"].index(b))) if counts else None
+        text_only = sorted(b for b in counts if b != best)
+        if text_only:                     # 그림으로 못 붙인 기준 장은 지시의 글로라도 남긴다
+            job["notes"].append(f"{', '.join(map(str, text_only))}장과도 이어지게 맞춘다")
         out.append(dict(page=page, method=job["method"], items=job["items"], basis=[best] if best else [],
-                        basis_text_only=sorted(b for b in counts if b != best),
+                        basis_text_only=text_only,
                         note=" ".join(n.rstrip(".") + "." for n in job["notes"]) + " " + KEEP_TAIL))
     lou.safe_output(output)
     write_json(output, {"jobs": out})

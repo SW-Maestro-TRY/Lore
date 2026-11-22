@@ -12,6 +12,15 @@ import loustory
 import run
 
 
+
+def main(argv):
+    """run.main — 결과 파일 자리를 비우고 부른다(루 명령은 내용이 있는 결과 파일을 덮지 않는다)."""
+    if "--lou-out" in argv:
+        out = Path(argv[argv.index("--lou-out") + 1])
+        if out.is_file():
+            out.unlink()
+    return run.main(argv)
+
 class Fake:
     """질문 내용으로 답하는 가짜 모델."""
     answer = staticmethod(lambda prompt: {})
@@ -54,7 +63,7 @@ class FindTest(unittest.TestCase):
         path, out = self.root / "req.json", self.root / "out.json"
         lou.write_json(path, req)
         with patch.object(run, "RUNS_DIR", self.root), patch.object(loufind.llm, "Call", Fake):
-            run.main(["--lou-find", str(path), "--lou-out", str(out)])
+            main(["--lou-find", str(path), "--lou-out", str(out)])
         return lou.read(out)
 
     def test_candidates_skip_names_only_in_speech_and_report_bad_pages(self):
@@ -91,7 +100,7 @@ class StoryTest(unittest.TestCase):
         req, out = self.root / "req.json", self.root / "out.json"
         lou.write_json(req, {"lang": "ko"})
         with patch.object(run, "RUNS_DIR", self.root), patch.object(loustory.llm, "Call", Fake):
-            run.main(["--run-id", "ep01", "--lou-story", str(req), "--lou-out", str(out)])
+            main(["--run-id", "ep01", "--lou-story", str(req), "--lou-out", str(out)])
         items = lou.read(out)["items"]
         self.assertEqual([("sentence", "그가 약속했다."), ("episode", "마지막 문장이다."), ("episode", "")],
                          [(i["fix"]["type"], i["quote"]) for i in items])
@@ -101,13 +110,13 @@ class StoryTest(unittest.TestCase):
         req, out = self.root / "fix.json", self.root / "out.json"
         lou.write_json(req, {"items": [{"quote": "그가 약속했다.", "replace": "디온이 약속했다."}]})
         with patch.object(run, "RUNS_DIR", self.root):
-            run.main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
+            main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
         self.assertEqual("첫 문장이다. 디온이 약속했다. 마지막 문장이다.", lou.read(self.book / "directions.json")[0]["body"])
         self.assertEqual(self.body, lou.read(self.book / "directions.v1.json")[0]["body"])
         self.assertTrue(lou.read(out)["scenes_stale"])
         lou.write_json(req, {"items": [{"quote": "없는 문장", "replace": "x"}]})
         with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(ValueError):
-            run.main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
+            main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
 
 
 if __name__ == "__main__":
@@ -147,23 +156,23 @@ class GuardRailTest(unittest.TestCase):
                       [{"quote": "첫 문장. 둘째", "replace": "x"}, {"quote": "둘째 문장.", "replace": "y"}]):
             lou.write_json(req, {"items": items})
             with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(ValueError):
-                run.main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
+                main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
         self.assertEqual("첫 문장. 둘째 문장. 셋째 문장.", lou.read(self.book / "directions.json")[0]["body"])
         lou.write_json(req, {"items": [{"quote": "셋째 문장.", "replace": "마지막."}, {"quote": "첫 문장.", "replace": "처음."}]})
         with patch.object(run, "RUNS_DIR", self.root):
-            run.main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
+            main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
         self.assertEqual("처음. 둘째 문장. 마지막.", lou.read(self.book / "directions.json")[0]["body"])
         lou.write_json(self.book / "pick.json", {"n": 7})                     # 고른 방향이 없어졌으면 다른 방향을 고치지 않는다
         with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(ValueError):
-            run.main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
+            main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
 
     def test_outputs_and_run_ids_are_checked_before_any_work(self):
         req = self.root / "fix.json"
         lou.write_json(req, {"items": [{"quote": "첫 문장.", "replace": "x"}]})
         bad = [(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(self.book / "directions.json")]),
                (["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", "relative.json"]),
-               (["--run-id", "../ep01", "--lou-story-fix", str(req), "--lou-out", str(self.root.parent / "o.json")]),
-               (["--run-id", str(self.book), "--lou-story-fix", str(req), "--lou-out", str(self.root.parent / "o.json")])]
+               (["--run-id", "../ep01", "--lou-story-fix", str(req), "--lou-out", str(self.root / "o.json")]),
+               (["--run-id", str(self.book), "--lou-story-fix", str(req), "--lou-out", str(self.root / "o.json")])]
         for argv in bad:
             with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(SystemExit):
                 run.main(argv)
@@ -172,16 +181,16 @@ class GuardRailTest(unittest.TestCase):
     def test_find_does_not_mix_works(self):
         other = episode(self.root, "x01", [{"what": "a"}])
         lou.write_json(other / "input.json", {"name": "다른 주인공"})
-        path, out = self.root / "req.json", self.root.parent / "find-out.json"
+        path, out = self.root / "req.json", self.root / "find-out.json"
         lou.write_json(path, dict(text="x", who="레오", runs=["ep01", "x01"]))
         with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(ValueError):
-            run.main(["--lou-find", str(path), "--lou-out", str(out)])
+            main(["--lou-find", str(path), "--lou-out", str(out)])
 
     def test_plan_picks_the_most_used_basis(self):
         import loureview
         for n in (3, 4, 5):
             Image.new("RGB", (300, 600), "white").save(self.book / "pages" / f"page{n:02}.png")
-        req, out = self.root / "plan.json", self.root.parent / "plan-out.json"
+        req, out = self.root / "plan.json", self.root / "plan-out.json"
         lou.write_json(req, {"items": [dict(id="r1", page=2, method="keep", note="옷은 3장처럼.", basis=[3]),
                                        dict(id="r2", page=2, method="keep", note="빛은 5장처럼.", basis=[5]),
                                        dict(id="r3", page=2, method="keep", note="왕관은 5장처럼.", basis=[5])]})
@@ -207,17 +216,31 @@ class SecondRoundTest(unittest.TestCase):
 
     def test_overlapping_quote_is_ambiguous(self):
         self.assertEqual(2, loustory.appears("하하하", "하하"))
-        req, out = self.root / "fix.json", self.root.parent / "story-out.json"
+        req, out = self.root / "fix.json", self.root / "story-out.json"
         lou.write_json(req, {"items": [{"quote": "하하", "replace": "웃음"}]})
         with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(ValueError):
-            run.main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
+            main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
         self.assertEqual("하하하 웃었다.", lou.read(self.book / "directions.json")[0]["body"])
+
+    def test_output_cannot_overwrite_a_file_with_content(self):
+        req, out = self.root / "fix.json", self.root / "keep.txt"
+        lou.write_json(req, {"items": [{"quote": "웃었다.", "replace": "x"}]})
+        out.write_text("지우면 안 되는 내용", encoding="utf-8")
+        with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(SystemExit):
+            run.main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
+        self.assertEqual("지우면 안 되는 내용", out.read_text(encoding="utf-8"))
+        self.assertEqual("하하하 웃었다.", lou.read(self.book / "directions.json")[0]["body"])
+        empty = self.root / "empty.json"                                    # 서버가 미리 만든 빈 임시 파일은 받는다
+        empty.write_text("", encoding="utf-8")
+        with patch.object(run, "RUNS_DIR", self.root):
+            run.main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(empty)])
+        self.assertEqual(1, lou.read(empty)["changed"])
 
     def test_output_cannot_be_a_folder(self):
         req = self.root / "fix.json"
         lou.write_json(req, {"items": [{"quote": "웃었다.", "replace": "x"}]})
         with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(SystemExit):
-            run.main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(self.root.parent)])
+            main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(self.root.parent)])
 
     def test_works_are_told_apart_by_the_continuation_chain(self):
         b = episode(self.root, "ep02", [{"what": "a"}])
@@ -226,6 +249,11 @@ class SecondRoundTest(unittest.TestCase):
         lou.write_json(c / "continuation.json", {"source_run": "zz00"})
         self.assertTrue(loufind.same_work([self.book, b]))
         self.assertFalse(loufind.same_work([self.book, b, c]))
+        d = episode(self.root, "ep03", [{"what": "a"}])                     # 중간 화(ep02)가 요청에서 빠져도 같은 작품
+        lou.write_json(d / "continuation.json", {"source_run": "ep02"})
+        self.assertTrue(loufind.same_work([self.book, d]))
+        e = episode(self.root, "yy01", [{"what": "a"}])                     # 이어 쓰기 기록이 없는 다른 작품의 1화
+        self.assertFalse(loufind.same_work([self.book, d, e]))
 
     def test_a_page_check_cannot_rewrite_another_pages_item(self):
         import loureview
@@ -242,10 +270,10 @@ class SecondRoundTest(unittest.TestCase):
                 return dict(items=[dict(kind="panel", sev="P1", what=f"{n}장 문제", note=f"{n}장을 고친다.")])
             return dict(items=[])
         Fake.answer = staticmethod(answer)
-        req, out = self.root / "req.json", self.root.parent / "review-out.json"
+        req, out = self.root / "req.json", self.root / "review-out.json"
         lou.write_json(req, {"lang": "ko"})
         with patch.object(run, "RUNS_DIR", self.root), patch.object(loureview.llm, "Call", Fake), \
                 patch.object(lou, "read_text", side_effect=lambda p: ([], {"stage": "LOU"})):
-            run.main(["--run-id", "ep01", "--lou-review", str(req), "--lou-out", str(out)])
+            main(["--run-id", "ep01", "--lou-review", str(req), "--lou-out", str(out)])
         items = {it["page"]: it for it in lou.read(out)["items"]}
         self.assertEqual("2장을 고친다. 나머지는 그대로.", items[2]["note"])
