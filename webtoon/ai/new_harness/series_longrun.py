@@ -190,8 +190,11 @@ def ask(env: dict, prompt: str, model: str, out: Path) -> dict:
     """검사 · 계획 전용 호출(제품 단계가 아니라서 llm.Call 을 안 거친다). 보낸 것 · 받은 것을 그대로 남긴다."""
     out.parent.mkdir(parents=True, exist_ok=True)
     out.with_suffix(".prompt.txt").write_text(prompt, encoding="utf-8")
-    body = json.dumps({"model": model, "input": prompt}).encode()
-    req = urllib.request.Request(env["CODEX_PROXY_BASE_URL"].rstrip("/") + "/responses", data=body,
+    # 키에 responses 권한이 없으면(LONGRUN_ASK_CHAT=1) 같은 모델을 chat/completions 로 부른다 — 보내는 글 · 받는 글은 같다.
+    chat = env.get("LONGRUN_ASK_CHAT") == "1"
+    body = json.dumps({"model": model, "messages": [{"role": "user", "content": prompt}]} if chat
+                      else {"model": model, "input": prompt}).encode()
+    req = urllib.request.Request(env["CODEX_PROXY_BASE_URL"].rstrip("/") + ("/chat/completions" if chat else "/responses"), data=body,
                                  headers={"Authorization": "Bearer " + env["CODEX_PROXY_API_KEY"],
                                           "Content-Type": "application/json"})
     for attempt in range(8):
@@ -210,8 +213,9 @@ def ask(env: dict, prompt: str, model: str, out: Path) -> dict:
             wait = min(300, max(after, 20 * (attempt + 1)))
             log(f"  재시도 {attempt + 1}: {exc} — {wait}초 기다림")
             time.sleep(wait)
-    text = "".join(c.get("text", "") for o in data.get("output", []) if o.get("type") == "message"
-                   for c in o.get("content", []))
+    text = (str(((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "") if chat else
+            "".join(c.get("text", "") for o in data.get("output", []) if o.get("type") == "message"
+                    for c in o.get("content", [])))
     out.with_suffix(".txt").write_text(text, encoding="utf-8")
     return json.loads(text[text.find("{"):text.rfind("}") + 1])
 
