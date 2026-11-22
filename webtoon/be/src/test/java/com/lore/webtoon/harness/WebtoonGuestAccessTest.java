@@ -78,6 +78,7 @@ class WebtoonGuestAccessTest {
     @MockitoBean CreditGate creditGate;
     @MockitoBean Admins admins;
     @MockitoBean RunService runService;
+    @MockitoBean com.lore.webtoon.lou.EditorRegen editorRegen;
     @MockitoBean PageStore pageStore;
     @MockitoBean EpisodeExport episodeExport;
     @MockitoBean OverlayStore overlayStore;

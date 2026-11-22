@@ -158,7 +158,7 @@ public class LouService {
         }
     }
 
-    @Transactional
+    /* 계획(그림 되살리기 · 하네스)은 트랜잭션 밖에서 — DB 연결을 쥔 채 폴더를 기다리지 않는다. */
     public Map<String,Object> fixes(String run, Long owner, Map<String,Object> body) {
         JsonNode input = json.valueToTree(body);
         String reviewId = text(input, "review_id", 36);
@@ -188,6 +188,10 @@ public class LouService {
         String quality = input.path("quality").asText(null);
         JsonNode plan = plan(run, request);
         require(plan.isArray() && plan.size() == selectedPages.size());
+        return editor.together(() -> enqueue(run, owner, quality, plan, selectedPages));
+    }
+
+    private Map<String,Object> enqueue(String run, Long owner, String quality, JsonNode plan, Set<Integer> selectedPages) {
         List<Map<String,Object>> queued = new ArrayList<>();
         for (JsonNode job : plan) {
             int page = job.path("page").asInt();
@@ -204,7 +208,7 @@ public class LouService {
 
     private JsonNode plan(String run, ObjectNode input) {
         Path dir = null;
-        try {
+        try (var reading = files.reading(run)) {
             restoreReviewPages(run);
             dir = Files.createTempDirectory("lou-plan-");
             Path request = dir.resolve("input.json"), result = dir.resolve("result.json");
@@ -238,7 +242,7 @@ public class LouService {
 
     void perform(String id,String run,String kind,ObjectNode input,Path before) {
         Path dir=null, snap=null;
-        try {
+        try(var reading=files.reading(run)) {
             db.update("update webtoon_lou_turn set status='running',updated_at=now() where id=?",id);
             dir=Files.createTempDirectory("lou-");
             int no=input.path("page").asInt(input.path("active_page").asInt());
@@ -249,15 +253,12 @@ public class LouService {
                 files.restore(run, no);
             }
             if(before!=null) {
-                /* 지금 장을 먼저 떠 두고, 그다음에 아직 그 다시 그리기가 그린 그대로인지 본다. 되돌리기 · 다시 그리기는
-                   장을 바꾸기 전에 지금 그림을 판으로 남겨 판 번호부터 키우므로, 떠 두는 사이에 바뀌었으면 여기서 걸린다.
+                /* 장을 쥔 채 「아직 그 다시 그리기의 그림인가」를 보고 사본을 뜬다 — 그 사이에는 되돌리기도 다시 그리기도 못 낀다.
                    하네스는 작품 폴더 밖의 그림을 견주지 않아 작품 폴더 안에 뜬다(이름이 pageNN 이 아니라 장으로 안 잡힌다). */
                 snap=runDir(run).resolve("pages/.lou-after-%s.png".formatted(id));
-                Files.copy(runDir(run).resolve("pages/page%02d.png".formatted(no)),snap,
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                if(regen.beforeIfCurrent(run,no,input.path("regen_id").asText()).isEmpty())
-                    throw new IOException("확인하기 전에 장이 바뀌었습니다");
-                input.put("before",before.toString());
+                Path paired=regen.snapshotIfCurrent(run,no,input.path("regen_id").asText(),snap)
+                        .orElseThrow(()->new IOException("확인하기 전에 장이 바뀌었습니다"));
+                input.put("before",paired.toString());
                 input.put("after",snap.toString());
             }
             Path request=dir.resolve("input.json"), result=dir.resolve("result.json");

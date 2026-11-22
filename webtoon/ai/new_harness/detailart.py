@@ -800,8 +800,9 @@ TEXTLESS = "## 글자 없이 그리기\n앞의 대사·나레이션·제목 지�
 
 
 def guard_text(run_dir: Path, before: Path, after: Path, note: str) -> list[tuple[str, str]]:
-    """구도 유지로 고친 장에서, 고치라고 하지 않은 말풍선의 글자가 바뀌었으면 그 말풍선 안쪽을 고치기 전 그림에서 되살린다
-    (textguard). 루가 만든 지시로 고칠 때만 부른다(draw_continue 의 text_guard). 그때도 끄려면 NH_TEXT_GUARD=0.
+    """구도 유지로 고친 장에서, 고치라고 하지 않은 말풍선의 안쪽(글자)을 고치기 전 그림에서 되살린다(textguard).
+    note 는 처음 지시다 — 재시도 지시는 「그대로 두라」며 다른 말풍선의 글까지 적어서, 그걸로 보면 지킬 글이 고칠 글이 된다.
+    루가 만든 지시로 고칠 때만 부른다(draw_continue 의 text_guard). 그때도 끄려면 NH_TEXT_GUARD=0.
     글자 옮겨 적기가 실패하면 아무것도 바꾸지 않는다."""
     if os.environ.get("NH_TEXT_GUARD", "1").strip().lower() in ("0", "off", "false", "no"):
         return []
@@ -853,7 +854,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                   allow_no_sheet: bool = False, on_page=None,
                   review: bool | None = None, note: str = "",
                   lang: str = "ko", cover_first: bool = False, keep_from: Path | None = None, textless: bool = False,
-                  keep_basis: tuple[int, ...] = (), text_guard: bool = False) -> list[dict]:
+                  keep_basis: tuple[int, ...] = (), text_guard: str = "") -> list[dict]:
     """이어그리기 — **지금의 최종 방식.** 구체화(detail.json)·콘티(board.json)·
     컷 대본을 전부 건너뛰고, story 단계(방향 후보) 산출물만으로 그린다.
 
@@ -1097,7 +1098,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                                 result.resize(original.size, Image.Resampling.LANCZOS).save(painted)
                         # 글자 지키기는 루가 만든 지시(바꿀 글을 늘 「」로 적는다)로 고칠 때만 — 사람이 쓴 메모는 바꿀 글을
                         # 정확히 안 적기도 해서, 시킨 변화를 시키지 않은 것으로 보고 되돌릴 수 있다(2026-11-22 하은 결정).
-                        for old, new in (guard_text(run_dir, keep_from, painted, note) if text_guard else []):
+                        for old, new in (guard_text(run_dir, keep_from, painted, text_guard) if text_guard else []):
                             log(f"  [글자 지키기] 「{new}」 → 「{old}」 로 되살림")
                         painted.replace(out)
                         meta["output_path"] = str(out)

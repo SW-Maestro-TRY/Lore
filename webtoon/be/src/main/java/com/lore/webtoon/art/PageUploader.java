@@ -55,6 +55,18 @@ public class PageUploader {
      * @return 새로 적은 줄 수
      */
     public int uploadPrepared(String runId, String prepared, Consumer<String> onLine) {
+        return upload(runId, prepared, onLine, false);
+    }
+
+    /**
+     * 한 장을 다시 올릴 때 — <b>모든 폭이 다 올라갔을 때만</b> 주소를 한꺼번에 바꾼다. 하나라도 못 올리면 아무 주소도
+     * 안 바꾼다. 폭마다 따로 바꾸면 환급된 실패인데 화면 일부는 새 그림이거나, 성공인데 일부는 옛 그림이 된다.
+     */
+    public int uploadWhole(String runId, String prepared, Consumer<String> onLine) {
+        return upload(runId, prepared, onLine, true);
+    }
+
+    private int upload(String runId, String prepared, Consumer<String> onLine, boolean whole) {
         List<PageStore.Upload> done = new ArrayList<>();
         JsonNode files;
         try {
@@ -93,6 +105,15 @@ public class PageUploader {
             }
         }
 
+        if (whole && !done.isEmpty() && done.size() != files.size()) {
+            /* 올리다 만 새 파일은 지운다 — 아무도 안 가리키는데 열리는 자리에 남는다(비공개 작품이면 안 된다). */
+            try {
+                storage.delete(done.stream().map(PageStore.Upload::key).toList());
+            } catch (RuntimeException fail) {
+                log.error("올리다 만 그림을 못 지웠습니다 (run={})", runId, fail);
+            }
+            return 0;
+        }
         if (done.isEmpty()) {
             return 0;
         }

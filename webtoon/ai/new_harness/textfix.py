@@ -5,6 +5,7 @@
 말풍선 테두리가 닫혀 있지 않거나(그림 위에 바로 얹힌 글자) 안쪽이 어두우면 못 한다 — 그때는 NoBubble 로 알린다.
 """
 import json
+import os
 from itertools import combinations
 from pathlib import Path
 from statistics import median
@@ -23,11 +24,19 @@ class NoBubble(ValueError):
     """고칠 말풍선을 못 찾았다."""
 
 
-def font_file():
-    for path in FONTS:
-        if Path(path).exists():
+def font_file(text=""):
+    """text 의 글자가 다 있는 첫 글꼴. 배포 서버에는 한글 글꼴이 없어서 서버가 jar 에 실린 것을 NH_TEXT_FONTS 로 준다."""
+    given = [p for p in os.environ.get("NH_TEXT_FONTS", "").split(os.pathsep) if p]
+    for path in (*given, *FONTS):
+        if Path(path).exists() and _has_all(path, text):
             return path
-    raise NoBubble("한글 글꼴을 찾지 못했습니다")
+    raise NoBubble("이 글을 찍을 한글 글꼴을 찾지 못했습니다")
+
+
+def _has_all(path, text):
+    font = ImageFont.truetype(path, 32)
+    none = bytes(font.getmask("\U0010fffd"))             # 어느 글꼴에도 없는 글자 = 빈 네모
+    return all(bytes(font.getmask(c)) != none for c in set(text) if "가" <= c <= "힣")
 
 
 def _seed(light, x, y, reach):
@@ -109,7 +118,7 @@ def _amount(mask):
 
 def patch(page, x, y, text, path=None):
     """page 의 (x, y) 픽셀이 가리키는 글자 덩어리를 text 로 바꾼 새 그림."""
-    path = path or font_file()
+    path = path or font_file(text)
     words = text.split()
     if not words:
         raise NoBubble("넣을 글이 없습니다")
@@ -205,11 +214,12 @@ def patch(page, x, y, text, path=None):
 def apply(run_dir, page_no, request):
     """request(JSON 파일)의 items 대로 한 장의 글자를 고친다. 지난 판을 떠 두고 그 장을 바꿔 쓴다.
 
-    {"items": [{"x": 27, "y": 47, "text": "맞는 글 전체"}]}  — x, y 는 그 글자 덩어리를 가리키는 자리(장 전체에 대한 %).
+    {"items": [{"x": 27, "y": 47, "text": "맞는 글 전체"}], "archived": 부른 쪽이 이미 지난 판을 떴는가}  — x, y 는 그 글자 덩어리를 가리키는 자리(장 전체에 대한 %).
     """
     import detailart
 
-    items = json.loads(Path(request).read_text(encoding="utf-8")).get("items")
+    asked = json.loads(Path(request).read_text(encoding="utf-8"))
+    items = asked.get("items")
     if not isinstance(items, list) or not 0 < len(items) <= MAX_ITEMS:
         raise NoBubble("고칠 글자가 없습니다")
     target = detailart.page_path(run_dir, page_no)
@@ -223,7 +233,8 @@ def apply(run_dir, page_no, request):
                 and 0 < len(text.strip()) <= 200):
             raise NoBubble("고칠 글자의 형식이 올바르지 않습니다")
         page = patch(page, round(page.width * x / 100), round(page.height * y / 100), text)
-    detailart.archive_page(run_dir, page_no)
+    if asked.get("archived") is not True:
+        detailart.archive_page(run_dir, page_no)
     scratch = target.with_suffix(".textfix.png")
     page.save(scratch)
     scratch.replace(target)

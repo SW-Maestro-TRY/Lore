@@ -38,11 +38,59 @@ class RunFilesTest {
 
     private PageStore pages;
     private S3Storage storage;
+    private final PageLocks locks = new PageLocks();
 
     @BeforeEach
     void setUp() {
         pages = mock(PageStore.class);
         storage = mock(S3Storage.class);
+    }
+
+    /** 다른 실이 쥔 채로 body 를 돌린다. */
+    private void 남이_쥔_동안(java.util.function.Supplier<PageLocks.Held> take, Runnable body) throws Exception {
+        var held = new java.util.concurrent.CountDownLatch(1);
+        var done = new java.util.concurrent.CountDownLatch(1);
+        Thread other = Thread.ofPlatform().start(() -> {
+            try (var ignored = take.get()) {
+                held.countDown();
+                done.await();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        held.await();
+        try {
+            body.run();
+        } finally {
+            done.countDown();
+            other.join();
+        }
+    }
+
+    @Test
+    void 그리는_중인_장은_옛_그림으로_되살리지_않는다() throws Exception {
+        when(pages.originalKeys("r1")).thenReturn(Map.of(2, "k2"));
+        RunFiles files = files("bucket", "false");
+        남이_쥔_동안(() -> locks.page("r1", 2), () -> files.restore("r1", 2));
+        org.mockito.Mockito.verifyNoInteractions(storage);
+        files.restore("r1", 2);                                      // 다 그린 뒤에는 되살린다
+        org.mockito.Mockito.verify(storage).download(org.mockito.ArgumentMatchers.eq("k2"), any());
+    }
+
+    @Test
+    void 다른_장을_그리거나_루가_읽는_중이면_치우지_않는다() throws Exception {
+        Path dir = 작품("r1", 2);
+        올라가_있다("r1", 2);
+        RunFiles files = files("bucket", "false");
+        Path page = dir.resolve("pages/page01.png");
+        남이_쥔_동안(() -> locks.page("r1", 2), () -> files.sweepUploaded("r1"));
+        assertThat(page).exists();
+        남이_쥔_동안(() -> locks.reading("r1"), () -> files.sweepUploaded("r1"));
+        assertThat(page).exists();
+        try (var mine = locks.page("r1", 1)) {                       // 제가 쥔 장은 막지 않는다
+            files.sweepUploaded("r1");
+        }
+        assertThat(page).doesNotExist();
     }
 
     private RunFiles files(String bucket) {
@@ -59,7 +107,7 @@ class RunFilesTest {
         // 사람이 답할 차례인 작품은 안 치운다(#548) — 여기 검사에서는 그런 작업이 없다.
         WebtoonJobRepository jobs = mock(WebtoonJobRepository.class);
         when(jobs.findByStatusInOrderByCreatedAtAsc(any())).thenReturn(java.util.List.of());
-        return new RunFiles(harness, pages, storage, jobs, bucket, endpoint, keepFiles);
+        return new RunFiles(harness, pages, storage, jobs, locks, bucket, endpoint, keepFiles);
     }
 
     /** 다 그려진 작품 하나를 디스크에 만든다. */

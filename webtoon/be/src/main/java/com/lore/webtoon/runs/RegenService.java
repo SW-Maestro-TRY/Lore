@@ -4,6 +4,7 @@ import com.lore.webtoon.lou.LouRecords;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.art.PageUploader;
 import com.lore.webtoon.job.HarnessProcess;
+import com.lore.webtoon.job.PageLocks;
 import com.lore.webtoon.job.RunFiles;
 import com.lore.webtoon.job.JobRunner;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -76,6 +77,17 @@ public class RegenService {
     private final PageUploader uploader;
     private final JobRunner runner;
     private final RunFiles files;
+    private final PageLocks locks;
+    /** 되돌리기 · 확인이 그 장을 기다리는 시간. 그리는 중이면 1~2분이라 기다리지 않고 알린다. */
+    private static final java.time.Duration PAGE_WAIT = java.time.Duration.ofSeconds(2);
+
+    /** 그 장을 그리는 중이라 지금은 못 바꾼다(409). */
+    public static class PageBusy extends RuntimeException {
+        PageBusy() {
+            super("이 장을 그리는 중이라 지금은 되돌릴 수 없어요. 다 그린 뒤에 다시 눌러 주세요.");
+        }
+    }
+
     /** 다시 그리기도 그림 값이 나간다 — 원가 장부에 적는다(#444). */
     private final com.lore.webtoon.job.AfterRun after;
     private final com.lore.webtoon.story.StoryStore stories;
@@ -84,7 +96,9 @@ public class RegenService {
                         HarnessProcess harness, PageUploader uploader, JobRunner runner,
                         RunFiles files, com.lore.webtoon.job.AfterRun after,
                         com.lore.webtoon.credit.CreditGate credits,
-                        com.lore.webtoon.story.StoryStore stories, LouRecords records) {
+                        com.lore.webtoon.story.StoryStore stories, LouRecords records,
+                        PageLocks locks) {
+        this.locks = locks;
         this.records = records;
         this.stories = stories;
         this.credits = credits;
@@ -140,7 +154,7 @@ public class RegenService {
         String id = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         String clean = note == null ? "" : note.strip();
         PageRegen one = PageRegen.queued(id, runId, pageNo,
-                verify || "redraw".equals(mode) ? clean : clean.substring(0, Math.min(500, clean.length())),
+                verify || "redraw".equals(mode) || "text".equals(mode) ? clean : clean.substring(0, Math.min(500, clean.length())),
                 quality, Instant.now());
         one.setVerification(basis, verify);
         one.setMode(mode);
@@ -210,7 +224,7 @@ public class RegenService {
         out.put("scene", one.getPageNo());
         out.put("status", one.getStatus());
         out.put("error", one.getError());
-        out.put("note", one.getNote() == null ? "" : one.getNote());
+        out.put("note", noteOf(one));
         out.put("versions", versionsOf(one.getRunId(), one.getPageNo()));
         return out;
     }
@@ -242,43 +256,62 @@ public class RegenService {
         return out;
     }
 
-    /* ---- 다시 그리기 한 번의 전 · 후 (루 확인이 견준다) ------------------- */
+    /* ---- 지금 장을 그린 다시 그리기 (루 확인이 견준다) ------------------- */
+
+    private Path drawnMark(String runId, int pageNo) {
+        return versionsDir(runId).resolve("page%02d.drawn.json".formatted(pageNo));
+    }
 
     /**
-     * 다시 그리기 하나가 끝난 자리를 적는다 — 고치기 전 판과, 그때 이 장의 가장 큰 판 번호.
-     * 그 뒤에 되돌리거나 또 그리면 지금 그림이 판으로 남아 가장 큰 번호가 커진다. 그러면 이 다시 그리기의
-     * 지시로 지금 그림을 견주면 안 된다(루 확인). 그림 바이트로 견주지 않는 것은, 배포 서버는 창고에서
-     * 되받은 그림이 다시 인코딩되어 바이트가 달라서다.
+     * 지금 장을 어느 다시 그리기가 무엇에서 그렸는지 적는다. 장을 바꾸는 쪽(되돌리기 · 다시 그리기)은
+     * 장을 쥔 채 이것부터 지운다. 판 번호나 그림 바이트로 짐작하지 않는다 — 판은 같은 그림이면 안 늘고(#993),
+     * 창고에서 되받은 그림은 바이트가 다르다.
      */
-    private void writePair(String runId, int pageNo, String regenId, Path before) {
+    private void markDrawn(String runId, int pageNo, String regenId, Path before) {
         try {
-            int latest = versionsOf(runId, pageNo).stream().mapToInt(r -> (int) r.get("version")).max().orElse(0);
-            Files.writeString(versionsDir(runId).resolve("regen-" + regenId + ".json"),
-                    json.writeValueAsString(Map.of("before", before.getFileName().toString(), "latest", latest)));
+            Files.writeString(drawnMark(runId, pageNo),
+                    json.writeValueAsString(Map.of("regen", regenId, "before", before.getFileName().toString())));
         } catch (IOException | RuntimeException e) {
             log.warn("다시 그리기 전후 기록을 못 남겼습니다 (run={}, 장={})", runId, pageNo, e);   // 그림은 이미 됐다
         }
     }
 
-    /**
-     * 이 다시 그리기의 고치기 전 판 — 지금 장이 아직 그 다시 그리기가 그린 그대로일 때만.
-     * 기록이 없거나, 그 뒤에 되돌리거나 또 그렸으면 비어 있다.
-     */
+    /** 이 다시 그리기의 고치기 전 판 — 지금 장이 그 다시 그리기가 그린 그대로일 때만. */
     public java.util.Optional<Path> beforeIfCurrent(String runId, int pageNo, String regenId) {
-        if (regenId == null || !regenId.matches("[A-Za-z0-9-]{1,64}")) {
+        Path mark = drawnMark(runId, pageNo);
+        if (regenId == null || !Files.isRegularFile(mark)) {
             return java.util.Optional.empty();
         }
         try {
-            var pair = json.readTree(versionsDir(runId).resolve("regen-" + regenId + ".json").toFile());
-            Matcher m = VERSION_FILE.matcher(pair.path("before").asText(""));
-            int latest = versionsOf(runId, pageNo).stream().mapToInt(r -> (int) r.get("version")).max().orElse(0);
-            if (!m.matches() || Integer.parseInt(m.group(1)) != pageNo || latest != pair.path("latest").asInt(-1)) {
+            var drawn = json.readTree(mark.toFile());
+            Matcher m = VERSION_FILE.matcher(drawn.path("before").asText(""));
+            if (!regenId.equals(drawn.path("regen").asText()) || !m.matches() || Integer.parseInt(m.group(1)) != pageNo) {
                 return java.util.Optional.empty();
             }
             Path before = versionsDir(runId).resolve(m.group());
             return Files.isRegularFile(before) ? java.util.Optional.of(before) : java.util.Optional.empty();
         } catch (IOException | RuntimeException e) {
             return java.util.Optional.empty();
+        }
+    }
+
+    /**
+     * 장을 쥔 채, 아직 그 다시 그리기의 그림이면 {@code copy} 로 뜬다. -> 고치기 전 판.
+     * 그사이 바뀌었거나 바뀌는 중이면 비어 있고 아무것도 안 뜬다.
+     */
+    public java.util.Optional<Path> snapshotIfCurrent(String runId, int pageNo, String regenId, Path copy)
+            throws IOException {
+        var held = locks.tryPage(runId, pageNo, PAGE_WAIT);
+        if (held.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        try (var page = held.get()) {
+            var before = beforeIfCurrent(runId, pageNo, regenId);
+            if (before.isPresent()) {
+                files.restore(runId, pageNo);
+                Files.copy(pageFile(runId, pageNo), copy, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            return before;
         }
     }
 
@@ -311,7 +344,7 @@ public class RegenService {
      * 바로 처리했다(regen 만 줄을 탄다). 화면이 결과를 그 자리에서 받아야
      * "지금 판본" 미리보기를 바로 바꿀 수 있다.
      */
-    @Transactional
+    /* 트랜잭션을 열지 않는다 — DB 연결을 쥔 채 폴더를 기다리면, 폴더를 쥔 올리기가 그 연결을 기다린다. */
     public List<Map<String, Object>> revert(String runId, int pageNo, int version) {
         if (!pages.pageNumbersOf(runId).contains(pageNo)) {
             throw new NoSuchElementException("그 페이지가 없습니다");
@@ -320,16 +353,26 @@ public class RegenService {
         if (!Files.isRegularFile(from)) {
             throw new NoSuchElementException("그 판본이 없습니다");
         }
-        try {
+        if (drawingPages(runId).contains(pageNo)) {
+            throw new PageBusy();              // 줄에 서 있는 것도 — 그 지시는 지금 그림을 보고 적은 것이다
+        }
+        try (var page = locks.tryPage(runId, pageNo, PAGE_WAIT).orElseThrow(PageBusy::new)) {
             Path dest = pageFile(runId, pageNo);
             /* 올린 뒤 서버 사본을 치웠으면 지금 그림이 디스크에 없어서, 아래
                archive 가 아무것도 안 남긴다 — 되돌리기 전 판이 사라진다. */
             files.restore(runId, pageNo);
-            archive(runId, pageNo);      // 되돌리기 전 그림도 판본으로
+            Files.deleteIfExists(drawnMark(runId, pageNo));     // 이제 어느 다시 그리기의 그림도 아니다
+            Path current = archive(runId, pageNo);      // 되돌리기 전 그림도 판본으로
             Files.createDirectories(dest.getParent());
             Files.copy(from, dest, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            reupload(runId);
-            bakery.invalidate(runId, pageNo);
+            try {
+                publish(runId, pageNo);
+            } catch (IOException | InterruptedException | RuntimeException e) {
+                if (current != null) {                  // 못 올렸으면 안 되돌린 것이다 — 창고와 같게
+                    Files.copy(current, dest, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+                throw e;
+            }
             /* 여기서는 서버 사본을 안 치운다. 되돌리기는 다시 그리기 줄 밖에서 돌아서,
                같은 작품의 다른 장을 그리는 중이면 그쪽이 참조하는 그림을 지우게 된다.
                남은 사본은 다음 다시 그리기가 끝날 때 같이 치워진다. */
@@ -349,6 +392,22 @@ public class RegenService {
         if (one == null) {
             return;
         }
+        /* 그리는 내내 그 장을 쥔다 — 되돌리기 · 같은 장의 다음 다시 그리기 · 확인용 사본이 끼어들지 않게. */
+        var held = locks.tryPage(one.getRunId(), one.getPageNo(), java.time.Duration.ZERO);
+        if (held.isEmpty()) {
+            /* 작업 자리를 쥔 채 기다리면 다른 작품까지 밀린다 — 밖에서 기다렸다가 다시 줄을 선다. */
+            Thread.ofVirtual().start(() -> {
+                locks.page(one.getRunId(), one.getPageNo()).close();
+                runner.enqueue(() -> run(id));
+            });
+            return;
+        }
+        try (var page = held.get()) {
+            draw(id, one);
+        }
+    }
+
+    private void draw(String id, PageRegen one) {
         move(id, RegenStatus.RUNNING);
         String runId = one.getRunId();
         int no = one.getPageNo();
@@ -359,6 +418,9 @@ public class RegenService {
         boolean wasUnsafe = runner.isUnsafePage(runId, no);
         /* 아직 안 그린 장을 이어 그리는 것인가 — 크레딧이 모자라 남겨 둔 장(startPending). */
         Path verification = null;
+        Path textWork = null;
+        Path previous = null;
+        boolean succeeded = false;
         boolean wasDrawn = pages.pageNumbersOf(runId).contains(no);
 
         try {
@@ -371,20 +433,31 @@ public class RegenService {
                약속과 다른 결과가 되므로 그리지 않고 실패로 돌려준다(값은 환급된다). */
             boolean detail = !wasDrawn || !Files.isRegularFile(runner.runDir(runId).resolve("pages.json"));
             boolean keep = "keep".equals(one.getMode());
+            boolean text = "text".equals(one.getMode());      // 말풍선 글자만 — 모델을 안 부른다
             if (keep && !detail) {
                 throw new IOException("이 작품은 구도를 유지한 다시 그리기를 할 수 없습니다");
             }
-            Path previous = archive(runId, no);
+            Files.deleteIfExists(drawnMark(runId, no));
+            previous = archive(runId, no);
             if (keep && previous == null) {
                 throw new IOException("구도를 유지할 원본 장이 없습니다");
             }
-            if (!keep) {
+            if (text && previous == null) {
+                throw new IOException("글자를 고칠 원본 장이 없습니다");
+            }
+            if (!keep && !text) {
                 Files.deleteIfExists(dest);           // run.py 는 파일이 있으면 안 그린다
             }
 
             List<String> args = new ArrayList<>(List.of("--run-id", runId, "--page",
                     String.valueOf(no)));
-            if (detail) {
+            if (text) {
+                textWork = Files.createTempDirectory("lou-text-");
+                Path request = textWork.resolve("fix.json");
+                json.writeValue(request.toFile(),
+                        Map.of("items", json.readTree(one.getNote()).path("items"), "archived", true));
+                args.addAll(List.of("--fix-text", request.toString()));
+            } else if (detail) {
                 args.add("--detail-pages");
             }
             if (keep) {
@@ -404,11 +477,14 @@ public class RegenService {
             } else if (detail && "textless".equals(one.getMode())) {
                 args.add("--textless");
             }
-            if (one.getNote() != null && !one.getNote().isBlank()) {
+            if (!text && one.getNote() != null && !one.getNote().isBlank()) {
                 args.add("--note");
                 args.add(one.getNote());
             }
             Map<String, String> env = new HashMap<>();
+            if (text) {
+                env.put("NH_TEXT_FONTS", textFonts(textWork));
+            }
             String style = styleOf(runId);
             if (!style.isBlank()) {
                 env.put("NH_STYLE", style);
@@ -441,7 +517,8 @@ public class RegenService {
                 /* 이어 그리던 장이 걸렸다 — 원래 그림이 없으니 다른 장처럼 빈 장으로 두고(#626) 편집실에서
                    장면을 고쳐 무료로 다시 그리게 한다. 값은 돌려준다. */
                 runner.writeBlankPage(runId, no);
-                reupload(runId);
+                publish(runId, no);
+                succeeded = true;                     // 빈 장이 이 장의 그림이다
                 fail(id, "이 장면이 이미지 안전 기준에 걸려 빈 장으로 두었어요. 편집실에서 장면 설명을 고쳐 다시 그려 주세요.");
                 return;
             }
@@ -456,15 +533,16 @@ public class RegenService {
                 return;
             }
             if (code != 0 || !Files.isRegularFile(dest)) {
-                fail(id, wasDrawn ? "다시 그리지 못했습니다 — 원래 그림은 그대로입니다"
+                fail(id, text ? "그 자리의 글자를 못 고쳤어요 — 원래 그림은 그대로입니다. 구도 유지로 고쳐 보세요."
+                        : wasDrawn ? "다시 그리지 못했습니다 — 원래 그림은 그대로입니다"
                         : "이 장을 그리지 못했습니다 — 크레딧은 돌려드렸어요");
                 return;
             }
+            publish(runId, no);
+            succeeded = true;
             if (previous != null) {
-                writePair(runId, no, id, previous);
+                markDrawn(runId, no, id, previous);
             }
-            reupload(runId);
-            bakery.invalidate(runId, no);
             /* 올렸으면 되살린 참조 그림과 새 그림을 서버에서 다시 치운다. 안 치우면
                다시 그릴 때마다 원본이 서버에 쌓인다(로컬은 RunFiles 가 안 지운다). */
             files.sweepUploaded(runId);
@@ -480,6 +558,23 @@ public class RegenService {
             log.error("다시 그리지 못했습니다 (run={}, 장={})", runId, no, e);
             fail(id, "다시 그리지 못했습니다 — 원래 그림은 그대로입니다");
         } finally {
+            /* 실패하면 「원래 그림은 그대로」라고 알린다. 지우고 그리다 실패했거나 구도 유지가 첫 시도를
+               걸어 둔 채 실패했으면 그 말이 틀리므로 고치기 전 판을 도로 건다. */
+            if (!succeeded && previous != null) {
+                try {
+                    Files.copy(previous, dest, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException e) {
+                    log.error("고치기 전 그림을 도로 걸지 못했습니다 (run={}, 장={})", runId, no, e);
+                }
+            }
+            if (textWork != null) try (var left = Files.list(textWork)) {
+                for (Path file : left.toList()) {
+                    Files.deleteIfExists(file);
+                }
+                Files.deleteIfExists(textWork);
+            } catch (IOException e) {
+                log.warn("글자 고치기 임시 파일 정리 실패 (regen={})", id, e);
+            }
             if (verification != null) try {
                 Files.deleteIfExists(verification);
             } catch (IOException e) {
@@ -488,13 +583,70 @@ public class RegenService {
         }
     }
 
-    /** 새로 그려진(또는 되돌려진) 장을 S3 와 다시 맞춘다. */
-    private void reupload(String runId) throws IOException, InterruptedException {
+    /** 올리기는 작품마다 한 번에 하나 — 올릴 사본(cache)을 같은 이름으로 만든다. */
+    private void publish(String runId, int pageNo) throws IOException, InterruptedException {
+        try (var folder = locks.folder(runId)) {
+            reupload(runId, pageNo);
+            bakery.invalidate(runId, pageNo);
+        }
+    }
+
+    /**
+     * 새로 그려진(또는 되돌려진) 장을 S3 와 다시 맞춘다. <b>그 장만</b> 올린다 — 다른 장은 그리는 중간 그림일 수 있다.
+     * 원본이 새 자리로 안 바뀌었으면 실패다. 올리기는 한 장이 실패해도 조용히 넘어가므로 여기서 본다 — 그대로 성공으로
+     * 두면 치우기가 새 그림을 지우고 옛 그림이 되살아난다.
+     */
+    private void reupload(String runId, int pageNo) throws IOException, InterruptedException {
         if (!uploader.ready()) {
             return;               // 로컬에서는 S3 없이도 화면을 봐야 한다
         }
-        String prepared = harness.prepareUpload(runId, line -> { });
-        uploader.uploadPrepared(runId, prepared, line -> { });
+        String old = pages.originalKeys(runId).get(pageNo);
+        var all = json.readTree(harness.prepareUpload(runId, line -> { }));
+        var listed = all.path(runId).isArray() ? all.path(runId)
+                : all.elements().hasNext() ? all.elements().next() : all.path(runId);
+        var only = json.createArrayNode();
+        for (var file : listed) {
+            if (file.path("page_no").asInt(-1) == pageNo) {
+                only.add(file);
+            }
+        }
+        uploader.uploadWhole(runId, json.createObjectNode().set(runId, only).toString(), line -> { });
+        String now = pages.originalKeys(runId).get(pageNo);
+        if (now == null || now.equals(old)) {
+            throw new IOException("새 그림을 올리지 못했습니다");
+        }
+    }
+
+    /** 글자만 고칠 때 쓸 글꼴 — jar 에 실린 것을 꺼낸다(배포 서버에는 한글 글꼴이 없다). 앞의 것에 없는 글자면 뒤의 것. */
+    private static String textFonts(Path dir) throws IOException {
+        List<String> out = new ArrayList<>();
+        for (String name : List.of("SUIT-Bold.ttf", "LINESeedKR-Bold.ttf")) {
+            try (var in = RegenService.class.getResourceAsStream("/webtoon/fonts/" + name)) {
+                if (in != null) {
+                    Path file = dir.resolve(name);
+                    Files.copy(in, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    out.add(file.toString());
+                }
+            }
+        }
+        return String.join(java.io.File.pathSeparator, out);
+    }
+
+    /** 사람과 루 확인이 읽는 메모. 글자만 고치기는 자리까지 담은 JSON 이라 글만 보여 준다. */
+    private String noteOf(PageRegen one) {
+        String note = one.getNote() == null ? "" : one.getNote();
+        if (!"text".equals(one.getMode())) {
+            return note;
+        }
+        try {
+            List<String> texts = new ArrayList<>();
+            for (var item : json.readTree(note).path("items")) {
+                texts.add("「" + item.path("text").asText() + "」");
+            }
+            return "글자만 " + String.join(", ", texts) + "로 고친다.";
+        } catch (IOException e) {
+            return note;
+        }
     }
 
     /** 지금 걸려 있는 그림을 판본으로 떠 둔다. 없으면 아무 일도 안 한다. */

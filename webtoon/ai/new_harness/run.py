@@ -2446,7 +2446,7 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
                        review: bool | None = None,
                        note: str = "", lang: str = "ko",
                        cover_first: bool = False, keep_from: Path | None = None, textless: bool = False,
-                       keep_basis: tuple[int, ...] = (), text_guard: bool = False) -> None:
+                       keep_basis: tuple[int, ...] = (), text_guard: str = "") -> None:
     """이어그리기(최종 방식) — **구체화·콘티·컷 대본을 전부 건너뛰고**
     scene_prompt 산출물(scenes.json)만으로 표지+전체 씬을 그린다.
 
@@ -2867,7 +2867,7 @@ def main(argv=None) -> int:
                 stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
                                    cover_first=args.cover_first, keep_from=source or args.keep_from, textless=args.textless,
                                    keep_basis=tuple(args.keep_basis), allow_no_sheet=args.no_sheet,
-                                   text_guard=bool(args.lou_verify),      # 루가 만든 지시로 고칠 때(서버가 확인을 붙인다)만
+                                   text_guard=args.note if args.lou_verify else "",   # 루가 만든 지시로 고칠 때만. 재시도 지시가 아니라 처음 지시
                                    review=False if args.no_page_review else None,
                                    note=note, lang=args.lang)
             if args.lou_verify and not args.dry_run:

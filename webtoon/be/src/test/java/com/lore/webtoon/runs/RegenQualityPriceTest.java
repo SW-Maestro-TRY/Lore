@@ -38,9 +38,11 @@ class RegenQualityPriceTest {
 
     @BeforeEach
     void 세운다() {
-        controller = new RunController(mock(RunService.class), mock(PageStore.class), mock(EpisodeExport.class),
+        PageStore pageStore = mock(PageStore.class);
+        when(pageStore.pageNumbersOf("r1")).thenReturn(List.of(1, 2, 3));
+        controller = new RunController(mock(RunService.class), pageStore, mock(EpisodeExport.class),
                 mock(OverlayStore.class), mock(BakeService.class), mock(StoryStore.class), regen, mock(AfterRun.class),
-                ledger, credits, mock(Admins.class), mock(com.lore.webtoon.safety.SafetyGuard.class), new EditorRegen(regen, credits));
+                ledger, credits, mock(Admins.class), mock(com.lore.webtoon.safety.SafetyGuard.class), new EditorRegen(regen, credits, mock(com.lore.webtoon.lou.LouRecords.class)));
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(7L, null, List.of()));
         when(ledger.mayChange("r1", 7L)).thenReturn(true);
@@ -67,6 +69,27 @@ class RegenQualityPriceTest {
         verify(regen).queue("r1", 2, "소매", null, 7L, "keep", null, false);
         controller.regen("r1", 2, Map.of("textless", true));
         verify(regen).queue("r1", 2, "", null, 7L, "textless", null, false);
+    }
+
+    @Test
+    void 글자만_고치기는_무료이고_형식이_틀리면_안_받는다() {
+        var item = Map.<String, Object>of("x", 51, "y", 82, "text", " 맞는 글 ");
+        controller.regen("r1", 2, Map.of("mode", "text", "items", List.of(item)));
+        var note = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(regen).queue(eq("r1"), eq(2), note.capture(), isNull(), isNull(), eq("text"), isNull(), eq(false));
+        org.assertj.core.api.Assertions.assertThat(note.getValue()).contains("\"text\":\"맞는 글\"", "\"x\":51");
+        org.mockito.Mockito.verifyNoInteractions(credits);
+
+        for (Object items : List.of(List.of(), "글", List.of(Map.of("x", 101, "y", 2, "text", "글")),
+                List.of(Map.of("x", 1, "y", 2, "text", " ")))) {
+            org.junit.jupiter.api.Assertions.assertEquals(400,
+                    controller.regen("r1", 2, Map.of("mode", "text", "items", items)).getStatusCode().value());
+        }
+        org.junit.jupiter.api.Assertions.assertEquals(404,
+                controller.regen("r1", 9, Map.of("mode", "text", "items", List.of(item))).getStatusCode().value());
+        when(regen.drawingPages("r1")).thenReturn(List.of(2));
+        org.junit.jupiter.api.Assertions.assertEquals(409,
+                controller.regen("r1", 2, Map.of("mode", "text", "items", List.of(item))).getStatusCode().value());
     }
 
     @AfterEach

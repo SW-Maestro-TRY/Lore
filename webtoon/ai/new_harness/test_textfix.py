@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 import unittest.mock
@@ -91,6 +92,18 @@ class TextFixTest(unittest.TestCase):
                 with self.assertRaises(SystemExit):
                     run.main(["--run-id", "episode", "--page", "2", "--fix-text", str(request)])
                 self.assertFalse((book / "versions" / "page02.v2.png").exists())
+                request.write_text(json.dumps({"items": [{"x": 42, "y": 40, "text": "새벽엔 종소리도 났고."}],
+                                               "archived": True}), encoding="utf-8")
+                self.assertEqual(0, run.main(["--run-id", "episode", "--page", "2", "--fix-text", str(request)]))
+                self.assertFalse((book / "versions" / "page02.v2.png").exists())     # 서버가 이미 떴으면 또 안 뜬다
+
+    def test_server_font_is_used_only_if_it_has_every_letter(self):
+        fonts = Path(__file__).resolve().parents[2] / "be/src/main/resources/webtoon/fonts"
+        suit, line = fonts / "SUIT-Bold.ttf", fonts / "LINESeedKR-Bold.ttf"
+        given = {"NH_TEXT_FONTS": os.pathsep.join(map(str, (suit, line)))}
+        with unittest.mock.patch.dict(os.environ, given), unittest.mock.patch.object(textfix, "FONTS", ()):
+            self.assertEqual(str(suit), textfix.font_file("그 일을 맡고 싶다."))
+            self.assertEqual(str(line), textfix.font_file("갂"))
 
 
 if __name__ == "__main__":

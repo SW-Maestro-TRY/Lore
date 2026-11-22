@@ -7,7 +7,10 @@
 2. 고친 뒤에도 같은 자리에 같은 모양으로 있는 말풍선만 본다. 꼬리를 돌리거나 지운 말풍선은 모양이 달라 건너뛴다.
 3. 그 말풍선마다 고치기 전 · 후를 크게 잘라, 대사를 모르는 눈으로 동시에 옮겨 적어 견준다.
    지시가 「」로 바꾸라고 한 글, 지시에 적힌 글과 맞는 말풍선은 건너뛴다. 한쪽이라도 못 읽으면 건드리지 않는다.
-4. 달라진 말풍선의 안쪽(글자 포함)을 고치기 전 그림으로 덮는다. 테두리와 꼬리는 고친 뒤 그림 그대로 둔다.
+4. 남은 말풍선은 읽은 글이 같아도 안쪽(글자 포함)을 고치기 전 그림으로 덮는다. 테두리와 꼬리는 고친 뒤 그림 그대로 둔다.
+   읽기는 어느 말풍선인지 알아보는 데만 쓴다. 바뀌었는지는 읽기로 정하지 않는다 — 받침 ㄹ · ㅌ 처럼 한 획 다른 글자는
+   한 자씩 크게 잘라 줘도 똑같이 읽는다(2026-11-22 실측). 글을 어떻게 바꾸라는지 「」 없이 적힌 지시면 어느 말풍선인지
+   몰라서, 다르게 읽힌 것만 되살린다.
 모델 호출은 글자 옮겨 적기뿐이다. 효과음처럼 말풍선 밖에 쓴 글자는 지키지 못한다.
 """
 import re
@@ -107,6 +110,47 @@ def _changed_share(before, after, mask):
     return hit / max(1, inner.histogram()[255])
 
 
+# 글을 건드리라는 말
+TEXT_WORDS = re.compile(r"말풍선|대사|문구|글자|글을|글씨|오타|말투|존댓말|반말|상자|내레이션|나레이션|자막|맞춤법|받침|낱말|단어|철자")
+# 글을 바꾸는 것이 아니라는 게 분명한 말 — 새로 넣기 · 지우기 · 꼬리
+NOT_REWRITE = re.compile(r"넣|추가|적어|써\s|쓴다|써서|꼬리|지우|지운|지워|없앤|없애")
+# 「」 뒤에 「~로 · ~라고」가 붙으면 그 글로 바꾸라는 것이다
+INTO = re.compile(r"」\s*(으로|로|(이)?라고)")
+
+
+def unclear(note):
+    """글을 건드리라면서 「」로 어느 글인지 안 적은 문장이 있는가. 그대로 두라는 문장은 아니다."""
+    return any(TEXT_WORDS.search(s) and "「" not in s and not re.search(r"그대로|유지", s)
+               for s in re.split(r"(?<=[.!?])\s+|\n", note or ""))
+
+
+def unlocated(note, reads, quoted, squash, near):
+    """글을 바꾸라면서 「」로 적은 것만으로는 어느 말풍선인지 못 짚는가. 짧은 낱말(「맡」)은 옆 말풍선에도 있고,
+    읽는 눈이 옛 글자로 읽으면 고친 말풍선에서도 안 보인다. 효과음은 말풍선 밖이라 상관없다.
+    바꾸라는 말(교체 · 정정 · …)을 세지 않는다 — 빠진 낱말 하나가 정확히 고친 글자를 되돌린다. 바꾸는 게 아닌 것이 분명할 때만 뺀다."""
+    for sentence in re.split(r"(?<=[.!?])\s+|\n", note or ""):
+        quotes = quoted(sentence)
+        said = re.sub(r"「[^」]*」", "「」", sentence)           # 따옴표 안의 글(「넣」)은 시키는 말이 아니다
+        if not quotes or (not INTO.search(said) and NOT_REWRITE.search(said)):
+            continue
+        if "효과음" in said and not re.search(r"말풍선|대사|상자", said):
+            continue
+        whole = [q for q in quotes if len(squash(q)) >= 4]
+        if not any(near(r, q) >= .9 or near(q, r) >= .8 for q in whole for r in reads if squash(r)):
+            return True
+    return False
+
+
+def _asked(read, quotes, squash, near):
+    """지시가 「」로 가리킨 글이 이 말풍선의 글인가. 낱말만 적기도 한다(「말고」를 「맡고」로)."""
+    for q in quotes:
+        if near(read, q) >= .9 or (len(squash(q)) >= 4 and near(q, read) >= .8):
+            return True
+        if len(squash(q)) < 4 and squash(q) in squash(read):
+            return True
+    return False
+
+
 def restore(before_path, after_path, note, read_many, squash, near, quoted):
     """after_path 를 고쳐 쓴다. read_many(paths) -> 그림마다 줄 목록(동시에 옮겨 적는다).
     되살린 말풍선 [(고치기 전 글, 고친 뒤 글)] 을 돌려준다.
@@ -118,6 +162,7 @@ def restore(before_path, after_path, note, read_many, squash, near, quoted):
     if before.size != after.size:
         return []
     asked = quoted(note)
+    by_reading = unclear(note)
     after_light = _light(after)
     found = []
     for box, mask, seed in bubbles(before):
@@ -147,12 +192,15 @@ def restore(before_path, after_path, note, read_many, squash, near, quoted):
         for f in tmp.glob("*"):
             f.unlink()
         tmp.rmdir()
+    by_reading = by_reading or unlocated(note, [" ".join(lines) for lines in texts], quoted, squash, near)
     restored = []
     for i, (_box, mask) in enumerate(found):
         old, new = (" ".join(texts[2 * i + j]) for j in (0, 1))
-        if not squash(old) or not squash(new) or squash(old) == squash(new):
-            continue                                   # 같거나, 한쪽을 못 읽었다 — 모르면 건드리지 않는다
-        if any(near(x, q) >= .9 for q in asked for x in (old, new)) or near(old, note) >= .8 or near(new, note) >= .8:
+        if not squash(old) or not squash(new):
+            continue                                   # 한쪽을 못 읽었다 — 모르면 건드리지 않는다
+        if by_reading and squash(old) == squash(new):
+            continue                                   # 어느 말풍선을 고치라는지 모른다 — 같게 읽혔으면 그대로 둔다
+        if any(_asked(x, asked, squash, near) for x in (old, new)) or near(old, note) >= .8 or near(new, note) >= .8:
             continue                                   # 바꾸라고 한 말풍선 — 지시에 그 글이 (따옴표가 없어도) 적혀 있다
         after.paste(before, (0, 0), mask.filter(ImageFilter.MinFilter(3)))   # 테두리 한 겹은 고친 뒤 그림 그대로
         restored.append((old, new))

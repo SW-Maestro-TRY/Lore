@@ -90,7 +90,7 @@ class CommandLineTest(unittest.TestCase):
                     patch.object(detailart, "draw_continue", return_value=[]) as drawer:
                 self.assertEqual(0, run.main(["--run-id", "episode", "--detail-pages", "--page", "2", "--keep-from",
                                               str(source), "--note", "손만", "--lou-verify", str(out)]))
-                self.assertTrue(drawer.call_args.kwargs.get("text_guard"))
+                self.assertEqual("손만", drawer.call_args.kwargs.get("text_guard"))     # 처음 지시로 지킨다
 
 
 if __name__ == "__main__":

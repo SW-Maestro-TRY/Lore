@@ -520,13 +520,16 @@ public class RunController {
      * 곧바로 그리지 않는다 — 이미지 호출이라 줄을 선다({@link RegenService}).
      * 화면은 돌려받은 번호로 {@link #regenStatus} 를 2초 간격으로 물어야 한다.
      */
-    @Operation(summary = "장 다시 그리기", description = "feedback과 tags를 메모로 합친다. mode가 keep이면 메모가 필요하며 현재 구도를 유지한다. textless=true는 글자 없이 그린다. 두 방식은 함께 쓸 수 없다. id로 진행을 조회한다.")
+    @Operation(summary = "장 다시 그리기", description = "feedback과 tags를 메모로 합친다. mode가 text면 items([{x,y,text}])로 말풍선 글자만 무료로 고친다. mode가 keep이면 메모가 필요하며 현재 구도를 유지한다. textless=true는 글자 없이 그린다. 두 방식은 함께 쓸 수 없다. id로 진행을 조회한다.")
     @PostMapping("/{runId}/scenes/{no}/regen")
     public ResponseEntity<Map<String, Object>> regen(@PathVariable String runId,
                                                       @PathVariable int no,
                                                       @RequestBody(required = false)
                                                       Map<String, Object> body) {
         Long userId = mustOwn(runId);
+        if (body != null && "text".equals(body.get("mode"))) {
+            return fixText(runId, no, userId, body.get("items"));
+        }
         /* 화면이 단추에 값을 적어 놓고 실제로는 안 받고 있었다. 만들기·캐릭터와
            같은 규칙으로 여기서도 받는다 — **시작하기 전에** 낼 수 있는지 보고,
            기록을 만든 뒤에 빼고, 뺀 뒤에 줄에 넣는다(#864). 기록보다 먼저 빼면 기록이
@@ -562,6 +565,47 @@ public class RunController {
             /* 낸 사람은 기록에 적는다 — 실패하면, 서버가 다시 떠도, 그걸로 돌려준다(#626, #864). */
             String id = editorRegen.enqueue(runId, no, userId, price, note,
                     keep ? "keep" : textless ? "textless" : null, null, false);
+            return ResponseEntity.ok(regen.statusOf(id));
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * 말풍선 글자만 고친다 — 그림을 다시 그리지 않고 모델도 안 불러서 <b>무료</b>다(#1037).
+     * {@code items: [{x, y, text}]} — x, y 는 그 글 덩어리 자리(장에 대한 %), text 는 그 말풍선의 맞는 글 전체.
+     */
+    private ResponseEntity<Map<String, Object>> fixText(String runId, int no, Long userId, Object given) {
+        List<Map<String, Object>> items = new java.util.ArrayList<>();
+        List<String> texts = new java.util.ArrayList<>();
+        boolean valid = given instanceof List<?> list && !list.isEmpty() && list.size() <= 8;
+        if (valid) {
+            for (Object one : (List<?>) given) {
+                if (!(one instanceof Map<?, ?> m && m.get("x") instanceof Number x && m.get("y") instanceof Number y
+                        && m.get("text") instanceof String text && !text.isBlank() && text.strip().length() <= 200
+                        && x.doubleValue() >= 0 && x.doubleValue() <= 100
+                        && y.doubleValue() >= 0 && y.doubleValue() <= 100)) {
+                    valid = false;
+                    break;
+                }
+                items.add(Map.of("x", x, "y", y, "text", text.strip()));
+                texts.add(text.strip());
+            }
+        }
+        if (!valid) {
+            return ResponseEntity.badRequest().body(Map.of("error", "고칠 글자와 자리가 필요합니다"));
+        }
+        if (!pages.pageNumbersOf(runId).contains(no)) {       // 없는 장으로 안전 검사를 부르지 못하게
+            return ResponseEntity.status(404).body(Map.of("error", "그 페이지가 없습니다"));
+        }
+        if (regen.drawingPages(runId).contains(no)) {         // 무료라 같은 장을 줄에 쌓지 못하게
+            return ResponseEntity.status(409).body(Map.of("error", "이 장을 고치는 중이에요. 끝난 뒤에 다시 눌러 주세요."));
+        }
+        safety.checkText("editor-regen", texts.toArray(String[]::new));
+        try {
+            String note = new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(Map.of("items", items)).toString();
+            String id = editorRegen.enqueue(runId, no, userId, new com.lore.webtoon.lou.EditorRegen.Price(null, 0),
+                    note, "text", null, false);
             return ResponseEntity.ok(regen.statusOf(id));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
@@ -606,6 +650,8 @@ public class RunController {
             int version = Integer.parseInt(String.valueOf(body.get("version")));
             List<Map<String, Object>> versions = regen.revert(runId, no, version);
             return ResponseEntity.ok(Map.of("ok", true, "versions", versions));
+        } catch (RegenService.PageBusy e) {
+            return ResponseEntity.status(409).body(Map.of("error", e.getMessage()));
         } catch (NumberFormatException e) {
             return ResponseEntity.status(400).body(Map.of("error", "version 이 필요합니다"));
         } catch (java.util.NoSuchElementException e) {

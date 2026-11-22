@@ -76,9 +76,10 @@ public class RunFiles {
     private final boolean keep;
 
     private final WebtoonJobRepository jobs;
+    private final PageLocks locks;
 
     public RunFiles(HarnessProcess harness, PageStore pages, S3Storage storage,
-                    WebtoonJobRepository jobs,
+                    WebtoonJobRepository jobs, PageLocks locks,
                     @Value("${app.s3.content-bucket:}") String bucket,
                     @Value("${app.s3.endpoint:}") String endpoint,
                     @Value("${lore.webtoon.runs.keep-files:}") String keepFiles) {
@@ -86,6 +87,7 @@ public class RunFiles {
         this.pages = pages;
         this.storage = storage;
         this.jobs = jobs;
+        this.locks = locks;
         this.bucket = bucket == null ? "" : bucket.trim();
         this.keep = keepFiles == null || keepFiles.isBlank()
                 ? this.bucket.isEmpty() || onThisMachine(endpoint)
@@ -145,9 +147,15 @@ public class RunFiles {
         }
 
         long freed = 0;
-        freed += deleteAll(d.resolve("pages"), "*.png");
-        freed += deleteAll(d.resolve("cache"), "*");
-        freed += deleteOne(d.resolve("episode.png"));
+        try (var folder = locks.folder(runId)) {
+            /* 다른 장을 그리거나 루가 읽는 중이면 안 치운다 — 그쪽 그림을 지운다. 마지막에 끝난 쪽이 치운다. */
+            if (locks.busy(runId)) {
+                return 0;
+            }
+            freed += deleteAll(d.resolve("pages"), "*.png");
+            freed += deleteAll(d.resolve("cache"), "*");
+            freed += deleteOne(d.resolve("episode.png"));
+        }
         if (freed > 0) {
             log.info("작품 그림을 서버에서 치웠습니다 (run={}, {}MB) — S3 에 있습니다",
                     runId, String.format("%.1f", freed / 1024.0 / 1024.0));
@@ -167,6 +175,17 @@ public class RunFiles {
         if (!uploaded()) {
             return;
         }
+        try (var folder = locks.folder(runId)) {
+            download(runId, upTo);
+        }
+    }
+
+    /** 루가 이 작품의 장들을 읽는 동안 치우지 않게 한다. */
+    public PageLocks.Held reading(String runId) {
+        return locks.reading(runId);
+    }
+
+    private void download(String runId, int upTo) {
         Path dst = dir(runId).resolve("pages");
         Map<Integer, String> keys = pages.originalKeys(runId);
         for (Map.Entry<Integer, String> one : keys.entrySet()) {
@@ -175,7 +194,8 @@ public class RunFiles {
                 continue;
             }
             Path file = dst.resolve(String.format("page%02d.png", no));
-            if (Files.isRegularFile(file)) {
+            /* 다시 그리려고 비운 자리에 옛 그림을 되살리면 하네스가 안 그리고 성공으로 끝난다. */
+            if (Files.isRegularFile(file) || locks.changedByOther(runId, no)) {
                 continue;
             }
             try {

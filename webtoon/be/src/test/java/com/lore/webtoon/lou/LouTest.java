@@ -88,6 +88,10 @@ class LouTest {
         assertEquals(ErrorCode.INVALID_INPUT,assertThrows(BusinessException.class,
                 ()->controller.check("run",Map.of("page",2,"regen_id","regen","method","keep"))).getErrorCode());
         when(regen.beforeIfCurrent("run",2,"regen")).thenReturn(Optional.of(before));
+        when(regen.snapshotIfCurrent(eq("run"),eq(2),eq("regen"),any())).thenAnswer(i->{
+            Files.copy(pagesDir.resolve("page02.png"),i.<Path>getArgument(3));
+            return Optional.of(before);
+        });
         doAnswer(i->{Files.writeString(pagesDir.resolve("page02.png"),"after");return null;})
                 .when(files).restore("run",2);
         var captured=new CompletableFuture<List<String>>();
@@ -124,7 +128,8 @@ class LouTest {
         Files.writeString(pagesDir.resolve("page02.png"),"reverted");
         when(regen.versionsOf("run",2)).thenReturn(List.of(Map.of("version",12)));
         when(regen.statusOf("regen")).thenReturn(Map.of("run_id","run","page",2,"status","done","note","손"));
-        when(regen.beforeIfCurrent("run",2,"regen")).thenReturn(Optional.of(before),Optional.empty());
+        when(regen.beforeIfCurrent("run",2,"regen")).thenReturn(Optional.of(before));
+        when(regen.snapshotIfCurrent(eq("run"),eq(2),eq("regen"),any())).thenReturn(Optional.empty());
         when(db.update(anyString(),any(Object[].class))).thenReturn(1);
         var finished=new CountDownLatch(1);
         doAnswer(i->{finished.countDown();return 1;}).when(usage).ingestMetaFile(eq("run"),any());
@@ -137,6 +142,28 @@ class LouTest {
             verify(db).update(contains("status='error'"),any(Object[].class));
             try(var left=Files.list(pagesDir)) { assertTrue(left.noneMatch(f->f.getFileName().toString().startsWith(".lou-after-"))); }
         } finally { TransactionSynchronizationManager.clearSynchronization(); }
+    }
+
+    @Test void onlyLousOwnNoteTurnsOnTextGuardAndCheck() {
+        var records=new LouRecords(db,ledger);
+        when(db.queryForList(anyString(),eq(String.class),any(Object[].class))).thenReturn(List.of(
+                "못 읽는 옛 답",
+                "{\"plans\":[{\"method\":\"keep\",\"pages\":[2],\"note\":\"상의를 흰 셔츠로 바꾼다. 나머지는 그대로.\"},"
+                        +"{\"method\":\"redraw\",\"pages\":[2],\"note\":\"새로 그린다.\"}]}"));
+        assertTrue(records.madeByLou("run",2,"상의를 흰 셔츠로 바꾼다. 나머지는 그대로."));
+        assertFalse(records.madeByLou("run",1,"상의를 흰 셔츠로 바꾼다. 나머지는 그대로."));   // 다른 장
+        assertFalse(records.madeByLou("run",2,"상의를 파란 셔츠로 바꾼다. 나머지는 그대로."));  // 사람이 고쳐 쓴 메모
+        assertFalse(records.madeByLou("run",2,"새로 그린다."));                               // 구도 유지가 아니다
+
+        var regenJobs=mock(RegenService.class);
+        var made=mock(LouRecords.class);
+        when(made.madeByLou("run",2,"루 지시")).thenReturn(true);
+        var queue=new EditorRegen(regenJobs,mock(com.lore.webtoon.credit.CreditGate.class),made);
+        var free=new EditorRegen.Price(null,0);
+        queue.enqueue("run",2,7L,free,"루 지시","keep",null,false);
+        verify(regenJobs).queue("run",2,"루 지시",null,null,"keep",null,true);
+        queue.enqueue("run",2,7L,free,"내 메모","keep",null,false);
+        verify(regenJobs).queue("run",2,"내 메모",null,null,"keep",null,false);
     }
 
     @Test void automaticCheckWritesCompletedTurnWithoutQuota() throws Exception {
@@ -201,6 +228,7 @@ class LouTest {
                     """);
             return 0;
         });
+        when(editor.together(any())).thenAnswer(i -> i.<java.util.function.Supplier<?>>getArgument(0).get());
         var price = new EditorRegen.Price("surf",3);
         when(editor.price(eq("run"),anyInt(),eq(7L),eq("surf"))).thenReturn(price);
         when(editor.enqueue("run",1,7L,price,"손","keep",2,true)).thenReturn("j1");

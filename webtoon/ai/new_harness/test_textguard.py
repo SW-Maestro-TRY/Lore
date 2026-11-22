@@ -89,6 +89,41 @@ class TextGuardTest(unittest.TestCase):
                              textguard.restore(before, after, "옷만 고치고 말풍선은 그대로", read_many, lou.squash, lou.near,
                                                lou.quoted))
 
+    def test_one_stroke_change_is_restored_even_if_read_the_same(self):
+        """읽는 눈은 한 획 차이를 못 본다 — 똑같이 읽혀도, 고치라고 하지 않은 말풍선이면 원본 픽셀로 되돌린다."""
+        def same(paths):
+            return [["위의 말풍선 글"] if reader(p) == ["위의 말풍선 글"] else ["일을 맡고 싶어"] for p in paths]
+        cases = (("왼쪽 남자의 옷을 흰 셔츠로 바꾼다. 나머지는 그대로.", True),
+                 ("지도의 목적지 옆에 「수도」를 적어 주세요. 나머지는 그대로.", True),
+                 ("효과음 「의자 소리..」를 「드르륵」으로 바꾼다.", True),
+                 ("「세라.」 말풍선의 꼬리를 오른쪽 여자 쪽으로 돌린다.", True),
+                 ("옷만 바꾸고 말풍선은 그대로 둔다.", True),
+                 ("말풍선의 「일을 맡고 싶어」로 글을 고친다.", False),      # 고치라고 한 말풍선
+                 ("「맡고」로 낱말을 고친다.", False),                      # 낱말만 적어도
+                 ("아래 말풍선 글을 존댓말로 바꾼다.", False))              # 어느 글인지 안 적었다
+        for note, restored in cases:
+            with tempfile.TemporaryDirectory() as tmp:
+                before, after = Path(tmp) / "b.png", Path(tmp) / "a.png"
+                page("일을 맡고 싶어").save(before)
+                page("일을 말고 싶어").save(after)
+                done = textguard.restore(before, after, note, same, lou.squash, lou.near, lou.quoted)
+                self.assertEqual(restored, bool(done), note)
+
+    def test_asked_one_stroke_fix_survives_being_read_as_the_old_letter(self):
+        """정확히 고쳤는데 읽는 눈이 둘 다 옛 글자로 읽어도 고친 것을 되돌리지 않는다."""
+        def old_letter(paths):
+            return [["위의 말풍선 글"] if reader(p) == ["위의 말풍선 글"] else ["일을 말고 싶어"] for p in paths]
+        for note in ("아래 말풍선에서 한 글자를 「맡」으로 고친다. 나머지는 그대로.", "「말」을 「맡」으로 바꿔 주세요.",
+                     "아래 말풍선에서 한 글자를 「맡」으로 교체한다.", "「말」 대신 「맡」.", "첫 음절이 「넣」이 되게 바로잡는다.",
+                     "「효과음」이라는 낱말이 되게 바로잡는다.", "「맡」이라고 적어 주세요.",
+                     "받침을 ㅌ으로 교체한다.",
+                     "아래 말풍선을 「일을 맡고 싶어」로 바꾼다."):
+            with tempfile.TemporaryDirectory() as tmp:
+                before, after = Path(tmp) / "b.png", Path(tmp) / "a.png"
+                page("일을 말고 싶어").save(before)
+                page("일을 맡고 싶어").save(after)
+                self.assertEqual([], textguard.restore(before, after, note, old_letter, lou.squash, lou.near, lou.quoted), note)
+
     def test_unchanged_page_needs_no_reading(self):
         with tempfile.TemporaryDirectory() as tmp:
             before, after = Path(tmp) / "b.png", Path(tmp) / "a.png"

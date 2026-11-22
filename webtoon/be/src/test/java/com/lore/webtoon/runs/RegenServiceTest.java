@@ -85,7 +85,7 @@ class RegenServiceTest {
         stories = mock(com.lore.webtoon.story.StoryStore.class);
         when(stories.chosenOf("run-1")).thenReturn(java.util.Optional.empty());
         service = new RegenService(regens, pages, bakery, harness, uploader, runner,
-                files, after, credits, stories, records);
+                files, after, credits, stories, records, new com.lore.webtoon.job.PageLocks());
     }
 
     private void 페이지파일(int no, byte[] content) throws IOException {
@@ -143,6 +143,167 @@ class RegenServiceTest {
         steps.getAllValues().forEach(Runnable::run);
         assertThat(service.beforeIfCurrent("run-1", 1, first)).isEmpty();
         assertThat(service.beforeIfCurrent("run-1", 1, second)).hasValueSatisfying(p -> assertThat(p).hasContent("고친 것 1"));
+    }
+
+    /** 그리는 실과 다른 실에서 부른다 — 잠금은 실마다 쥔다. */
+    private static Throwable 다른_실에서(org.assertj.core.api.ThrowableAssert.ThrowingCallable work) throws InterruptedException {
+        var thrown = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        Thread thread = Thread.ofPlatform().start(() -> {
+            try {
+                work.call();
+            } catch (Throwable e) {
+                thrown.set(e);
+            }
+        });
+        thread.join();
+        return thrown.get();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"keep", "redraw", "textless"})
+    void 그리는_중에는_되돌리기도_확인_사본도_끼어들지_못한다(String mode) throws Exception {
+        페이지파일(1, "B".getBytes());
+        Path versions = Files.createDirectories(runsDir.resolve("run-1/pages/versions"));
+        Files.writeString(versions.resolve("page01.v1.png"), "A");
+        var id = new java.util.concurrent.atomic.AtomicReference<String>();
+        var reverted = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        var copy = runsDir.resolve("copy.png");
+        when(harness.run(any(), any(), anyMap(), any())).thenAnswer(call -> {
+            reverted.set(다른_실에서(() -> service.revert("run-1", 1, 1)));
+            다른_실에서(() -> assertThat(service.snapshotIfCurrent("run-1", 1, id.get(), copy)).isEmpty());
+            페이지파일(1, "C".getBytes());
+            return 0;
+        });
+        id.set(service.queue("run-1", 1, "손", null, null, mode, null, false));
+        service.go(id.get());
+        큐를_바로_돌린다();
+        assertThat(reverted.get()).isInstanceOf(RegenService.PageBusy.class);
+        assertThat(copy).doesNotExist();
+        assertThat(runsDir.resolve("run-1/pages/page01.png")).hasContent("C");
+        assertThat(service.snapshotIfCurrent("run-1", 1, id.get(), copy))
+                .hasValueSatisfying(p -> assertThat(p).hasContent("B"));
+        assertThat(copy).hasContent("C");
+    }
+
+    @Test
+    void 올리는_중에도_되돌리기가_끼어들지_못한다() throws Exception {
+        // 그림이 나온 뒤 · 기록을 남기기 전 — 여기에 끼어들면 되돌린 그림이 그 다시 그리기의 것으로 적혔다
+        페이지파일(1, "A".getBytes());
+        Files.createDirectories(runsDir.resolve("run-1/pages/versions"));
+        when(uploader.ready()).thenReturn(true);
+        var reverted = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        when(harness.run(any(), any(), anyMap(), any())).thenAnswer(call -> {
+            페이지파일(1, "B".getBytes());
+            return 0;
+        });
+        when(pages.originalKeys("run-1")).thenReturn(Map.of(1, "옛"), Map.of(1, "새"));
+        when(harness.prepareUpload(eq("run-1"), any())).thenAnswer(call -> {
+            reverted.set(다른_실에서(() -> service.revert("run-1", 1, 1)));
+            return "{}";
+        });
+        String id = service.queue("run-1", 1, "손", null, null, "keep", null, false);
+        service.go(id);
+        큐를_바로_돌린다();
+        assertThat(reverted.get()).isInstanceOf(RegenService.PageBusy.class);
+        assertThat(service.beforeIfCurrent("run-1", 1, id)).isPresent();
+    }
+
+    @Test
+    void 못_올렸으면_성공으로_적지_않고_원래_그림을_건다() throws Exception {
+        페이지파일(1, "A".getBytes());
+        when(uploader.ready()).thenReturn(true);
+        when(pages.originalKeys("run-1")).thenReturn(Map.of(1, "옛"));              // 올린 뒤에도 그대로
+        when(harness.prepareUpload(eq("run-1"), any())).thenReturn("{}");
+        when(harness.run(any(), any(), anyMap(), any())).thenAnswer(call -> {
+            페이지파일(1, "B".getBytes());
+            return 0;
+        });
+        String id = service.queue("run-1", 1, "손", null, null, "keep", null, false);
+        service.go(id);
+        큐를_바로_돌린다();
+        assertThat(service.statusOf(id).get("status")).isEqualTo("error");
+        assertThat(service.beforeIfCurrent("run-1", 1, id)).isEmpty();
+        assertThat(runsDir.resolve("run-1/pages/page01.png")).hasContent("A");
+    }
+
+    @Test
+    void 다시_그린_장만_올린다() throws Exception {
+        페이지파일(1, "A".getBytes());
+        when(uploader.ready()).thenReturn(true);
+        when(pages.originalKeys("run-1")).thenReturn(Map.of(1, "옛"), Map.of(1, "새"));
+        when(harness.prepareUpload(eq("run-1"), any())).thenReturn(
+                "{\"run-1\":[{\"page_no\":1,\"width\":0},{\"page_no\":2,\"width\":0}]}");
+        String id = service.queue("run-1", 1, "손", null, null, "keep", null, false);
+        service.go(id);
+        큐를_바로_돌린다();
+        verify(uploader).uploadWhole(eq("run-1"), eq("{\"run-1\":[{\"page_no\":1,\"width\":0}]}"), any());
+    }
+
+    @Test
+    void 글자만_고치기는_그림을_지우지_않고_실린_글꼴을_넘긴다() throws Exception {
+        페이지파일(1, "A".getBytes());
+        when(harness.run(any(), any(), anyMap(), any())).thenAnswer(call -> {
+            List<String> args = call.getArgument(1);
+            Map<String, String> env = call.getArgument(2);
+            assertThat(args).contains("--fix-text").doesNotContain("--detail-pages", "--note", "--keep-from");
+            assertThat(runsDir.resolve("run-1/pages/page01.png")).hasContent("A");
+            assertThat(Files.readString(Path.of(args.get(args.indexOf("--fix-text") + 1))))
+                    .contains("맞는 글", "\"archived\":true");
+            assertThat(env.get("NH_TEXT_FONTS")).contains("SUIT-Bold.ttf", "LINESeedKR-Bold.ttf");
+            페이지파일(1, "B".getBytes());
+            return 0;
+        });
+        String id = service.queue("run-1", 1, "{\"items\":[{\"x\":5,\"y\":5,\"text\":\"맞는 글\"}]}", null, null, "text", null, false);
+        service.go(id);
+        큐를_바로_돌린다();
+        assertThat(service.statusOf(id)).containsEntry("status", "done").containsEntry("note", "글자만 「맞는 글」로 고친다.");
+        assertThat(service.beforeIfCurrent("run-1", 1, id)).isPresent();
+    }
+
+    @Test
+    void 줄에_선_장은_되돌리지_못한다() throws Exception {
+        페이지파일(1, "B".getBytes());
+        Path versions = Files.createDirectories(runsDir.resolve("run-1/pages/versions"));
+        Files.writeString(versions.resolve("page01.v1.png"), "A");
+        String id = service.queue("run-1", 1, "손", null, null, "keep", null, false);
+        PageRegen queued = regens.findById(id).orElseThrow();
+        when(regens.findByRunIdAndStatusInAndCreatedAtAfter(eq("run-1"), any(), any())).thenReturn(List.of(queued));
+        assertThatThrownBy(() -> service.revert("run-1", 1, 1)).isInstanceOf(RegenService.PageBusy.class);
+        assertThat(runsDir.resolve("run-1/pages/page01.png")).hasContent("B");
+    }
+
+    @Test
+    void 보관된_판과_같은_그림이_나와도_되돌린_뒤에는_확인하지_않는다() throws Exception {
+        // 판이 안 느는 경로(#993) — 판 번호로 짐작하면 통과하던 반례
+        페이지파일(1, "C".getBytes());
+        Path versions = Files.createDirectories(runsDir.resolve("run-1/pages/versions"));
+        Files.writeString(versions.resolve("page01.v1.png"), "A");
+        Files.writeString(versions.resolve("page01.v2.png"), "B");
+        when(harness.run(any(), any(), anyMap(), any())).thenAnswer(call -> {
+            페이지파일(1, "B".getBytes());
+            return 0;
+        });
+        String id = service.queue("run-1", 1, "손", null, null, "keep", null, false);
+        service.go(id);
+        큐를_바로_돌린다();
+        assertThat(service.beforeIfCurrent("run-1", 1, id)).isPresent();
+        assertThat(service.revert("run-1", 1, 1)).hasSize(3);                 // 판은 안 늘었다
+        assertThat(service.beforeIfCurrent("run-1", 1, id)).isEmpty();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"keep", "redraw", "textless"})
+    void 실패하면_말한_대로_원래_그림이_걸려_있다(String mode) throws Exception {
+        페이지파일(1, "원본".getBytes());
+        when(harness.run(any(), any(), anyMap(), any())).thenAnswer(call -> {
+            if ("keep".equals(mode)) 페이지파일(1, "첫 시도".getBytes());
+            return 1;
+        });
+        String id = service.queue("run-1", 1, "손", null, null, mode, null, false);
+        service.go(id);
+        큐를_바로_돌린다();
+        assertThat(runsDir.resolve("run-1/pages/page01.png")).hasContent("원본");
+        assertThat(service.beforeIfCurrent("run-1", 1, id)).isEmpty();
     }
 
     @org.junit.jupiter.params.ParameterizedTest
