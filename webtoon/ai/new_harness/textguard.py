@@ -10,14 +10,18 @@
 4. 달라진 말풍선의 안쪽(글자 포함)을 고치기 전 그림으로 덮는다. 테두리와 꼬리는 고친 뒤 그림 그대로 둔다.
 모델 호출은 글자 옮겨 적기뿐이다. 효과음처럼 말풍선 밖에 쓴 글자는 지키지 못한다.
 """
+import re
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps, ImageStat
 
 LIGHT = 215
 SCALE = 2                     # 말풍선 찾기는 절반 크기로(파이썬 채우기가 느리다)
 MIN_AREA, MAX_AREA = .002, .15
 SAME_SHAPE = .85
+# 말풍선 안쪽(글자 빼고)의 밝기 평균 · 흩어짐. 실제 장 6개에서 말풍선은 평균 252 · 흩어짐 7 이하, 그 밖의 밝은 곳(옷 · 소품 · 하늘)은
+# 평균 238 이하였다(2026-11-22).
+FLAT_MEAN, FLAT_SPREAD = 245, 9
 
 
 def _light(image):
@@ -39,6 +43,7 @@ def _filled(mask):
 def bubbles(image):
     """말풍선 후보 [(전체 크기 상자, 전체 크기 안쪽 마스크(L), 씨앗 점)] — 밝고 닫힌 곳 가운데 글자가 든 것."""
     light = _light(image)
+    gray = image.convert("L").resize(light.size)
     w, h = light.size
     seen = Image.new("L", light.size, 0)
     px, sp = light.load(), seen.load()
@@ -60,6 +65,10 @@ def bubbles(image):
             filled = _filled(region)
             ink = ImageChops.subtract(filled, region)        # 안쪽에 갇힌 어두운 점 = 글자
             if ink.histogram()[255] < area * .01:
+                continue
+            # 말풍선 안쪽은 거의 고르게 하얗다 — 흰 옷 · 하늘처럼 밝지만 명암이 진 곳은 말풍선이 아니다
+            tone = ImageStat.Stat(gray.crop(box), mask=region)
+            if tone.mean[0] < FLAT_MEAN or tone.stddev[0] > FLAT_SPREAD:
                 continue
             full = Image.new("L", light.size, 0)
             full.paste(filled, box[:2])
@@ -98,12 +107,23 @@ def _changed_share(before, after, mask):
     return hit / max(1, inner.histogram()[255])
 
 
+TEXT_WORDS = re.compile(r"말풍선|대사|글자|문구|내레이션|나레이션|효과음|오타|말투|존댓말|반말|글을|글로|글이|글은")
+
+
+def asks_text_without_quotes(note, quoted):
+    """글을 바꾸라는 지시인데 바꿀 글을 「」로 적지 않았는가 — 그러면 어느 말풍선이 바뀌어야 하는지 몰라 지키기를 하지 않는다.
+    「빨간 상자를 넣는다」처럼 그림만 말하는 지시는 여기에 들지 않는다."""
+    return bool(TEXT_WORDS.search(note or "")) and not quoted(note)
+
+
 def restore(before_path, after_path, note, read_many, squash, near, quoted):
     """after_path 를 고쳐 쓴다. read_many(paths) -> 그림마다 줄 목록(동시에 옮겨 적는다).
     되살린 말풍선 [(고치기 전 글, 고친 뒤 글)] 을 돌려준다.
 
     장 전체를 옮겨 적어 달라진 줄부터 찾으면, 한 글자 차이를 그 단계에서 놓쳐 아무것도 안 했다(2026-11-22).
     그래서 모양이 같은 말풍선마다 고치기 전 · 후를 크게 잘라 옮겨 적어 견준다."""
+    if asks_text_without_quotes(note, quoted):
+        return []
     with Image.open(before_path) as b, Image.open(after_path) as a:
         before, after = b.convert("RGB"), a.convert("RGB")
     if before.size != after.size:

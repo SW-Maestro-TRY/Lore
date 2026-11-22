@@ -83,6 +83,9 @@ def find(runs_root, request, output, dry=False):
         run = (root / rid).resolve()
         lou.require(run.is_dir() and run.parent == root)
         dirs.append(run)
+    # 같은 작품의 화만 — 첫 주인공 이름이 모두 같아야 한다(다른 작품의 화를 섞으면 장면과 시트가 섞인다)
+    heroes = {lousheet.hero_name(run) for run in dirs}
+    lou.require(len(heroes) == 1 and "" not in heroes)
     people = [req["who"], *[a for a in req.get("also") or [] if isinstance(a, str) and a.strip()]][:3]
     jobs = []
     for run in dirs:

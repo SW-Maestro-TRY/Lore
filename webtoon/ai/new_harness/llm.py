@@ -286,8 +286,9 @@ def model_for(stage: str, provider: str) -> str:
     """이 단계가 쓸 모델 이름."""
     # 구독 경로의 글 단계는 gpt-6-sol 하나다. OpenRouter 에 남긴 단계(장면 · 검수 넷)는 원래 모델 그대로.
     if CODEX_PROXY_ENABLED and stage.upper() not in IMAGE_STAGES and provider == "openai":
-        # 단계마다 따로 고를 수 있게(<단계>_MODEL) — 설정이 없으면 예전처럼 하나로 간다.
-        return env(f"{stage.upper()}_MODEL") or env("CODEX_PROXY_TEXT_MODEL", "gpt-6-sol")
+        # 단계마다 따로 고를 수 있게(CODEX_PROXY_<단계>_MODEL) — 설정이 없으면 예전처럼 하나로 간다. 다른 길에서 쓰는
+        # <단계>_MODEL 과 이름을 나눴다(그 값이 구독 연결로 새어 들어오지 않게).
+        return env(f"CODEX_PROXY_{stage.upper()}_MODEL") or env("CODEX_PROXY_TEXT_MODEL", "gpt-6-sol")
     if stage.upper() in IMAGE_STAGES:
         model, _ = _pick(stage, "MODEL", ("NH_IMAGE_MODEL",))
         return model or STAGE_DEFAULT_MODELS.get((stage.upper(), provider)) or image_default(provider)

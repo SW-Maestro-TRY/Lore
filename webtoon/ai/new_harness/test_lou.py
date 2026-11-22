@@ -222,8 +222,11 @@ class LouTest(unittest.TestCase):
         Image.new("RGB",(600,1800),"blue").save(source)
         drawn, seen_before = [], []
 
-        def draw(note):
+        sources = []
+
+        def draw(note, source=None):
             drawn.append(note)
+            sources.append(Path(source).name)
             Image.new("RGB",(600,1800),"green").save(self.page)
 
         def run_check(outcomes):
@@ -242,6 +245,7 @@ class LouTest(unittest.TestCase):
         result = lou.read(out)
         self.assertEqual(["손만","손만. 옆 사람은 그대로."],drawn)
         self.assertEqual([(0,0,255),(0,0,255)],seen_before)                    # 두 번 다 처음 원본과 견준다
+        self.assertEqual([".lou-source-02.png"]*2,sources)                     # 두 번 다 떠 둔 원본에서 그린다
         self.assertTrue(result["ok"])
         self.assertEqual([False,True],[a["ok"] for a in result["attempts"]])
         self.assertEqual("",result["advice"])

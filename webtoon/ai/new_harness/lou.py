@@ -493,7 +493,7 @@ def verified_keep(run, page, source, note, lang, draw, output):
     tries, current, last = [], note, None
     try:
         for attempt in range(1, ATTEMPTS + 1):
-            draw(current)
+            draw(current, keep_copy)                     # 매번 처음 원본에서 — 실패한 그림 위에 다시 그리지 않는다
             request = run / "lou" / f"verify-{page:02}-{attempt}.json"
             request.parent.mkdir(parents=True, exist_ok=True)
             write_json(request, dict(page=page, before=str(keep_copy.resolve()), after=str(page_png.resolve()),

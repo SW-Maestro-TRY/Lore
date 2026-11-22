@@ -10,13 +10,13 @@ import textguard
 
 
 def page(second):
-    """말풍선 둘 — 위는 하얀 안쪽, 아래는 살짝 회색 안쪽. 아래 말풍선의 글만 다르게 그린다."""
+    """말풍선 둘 — 위는 하얀 안쪽, 아래는 아주 살짝 회색 안쪽. 아래 말풍선의 글만 다르게 그린다."""
     image = Image.new("RGB", (600, 900), (90, 110, 150))
     draw = ImageDraw.Draw(image)
     font = ImageFont.truetype(textfix.font_file(), 26)
     draw.ellipse((60, 60, 420, 260), fill=(255, 255, 255), outline="black", width=3)
     draw.text((240, 160), "위의 말풍선 글", font=font, fill=(20, 20, 20), anchor="mm")
-    draw.ellipse((120, 420, 540, 640), fill=(232, 232, 232), outline="black", width=3)
+    draw.ellipse((120, 420, 540, 640), fill=(248, 248, 248), outline="black", width=3)
     draw.text((330, 530), second, font=font, fill=(20, 20, 20), anchor="mm")
     return image
 
@@ -29,7 +29,7 @@ def reader(path):
     """가짜 글자 옮겨 적기 — 안쪽 색으로 어느 말풍선인지, 파일 이름 끝(b/a)으로 고치기 전 · 후를 안다."""
     with Image.open(path) as im:
         corner = im.convert("RGB").getpixel((im.width // 2, im.height // 6))
-    top = corner[0] > 245
+    top = corner[0] > 251
     after = path.stem.endswith("a")
     if top:
         return ["위의 말풍선 글"]
@@ -64,6 +64,25 @@ class TextGuardTest(unittest.TestCase):
             done = textguard.restore(before, after, "아래 말풍선 글을 「가져다고 했어」로 바꾼다.", reader_many, lou.squash,
                                      lou.near, lou.quoted)
             self.assertEqual([], done)
+
+    def test_light_clothes_are_not_bubbles(self):
+        image = page("가겠다고 했어")
+        draw = ImageDraw.Draw(image)
+        for y in range(700, 860):                                     # 명암이 진 흰 셔츠 + 가슴 무늬
+            draw.line((80, y, 260, y), fill=(225 + (y % 25), 225 + (y % 25), 225 + (y % 25)))
+        draw.rectangle((80, 700, 260, 860), outline="black", width=3)
+        draw.text((170, 780), "무늬", fill=(20, 20, 20), anchor="mm")
+        self.assertEqual(2, len(textguard.bubbles(image)))
+
+    def test_text_change_without_quotes_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            before, after = Path(tmp) / "b.png", Path(tmp) / "a.png"
+            page("가겠다고 했어").save(before)
+            page("가져다고 했어").save(after)
+            def boom(paths):
+                raise AssertionError("어느 말풍선이 바뀌어야 하는지 모르면 읽지도 않는다")
+            self.assertEqual([], textguard.restore(before, after, "아래 말풍선 글을 내일 만나로 바꿔", boom,
+                                                   lou.squash, lou.near, lou.quoted))
 
     def test_unchanged_page_needs_no_reading(self):
         with tempfile.TemporaryDirectory() as tmp:

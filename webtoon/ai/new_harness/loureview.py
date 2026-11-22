@@ -148,8 +148,8 @@ def _verify_page(run, dest, page, items, script, state, lang):
                     "cost": {}, "error": type(exc).__name__}
     try:
         checks = lou.unwrap(raw)["checks"]
-        got = {c["id"]: (c.get("real") is not False, lou.string(c, "why"), lou.string(c, "fixed_note"))
-               for c in checks if isinstance(c, dict) and isinstance(c.get("id"), str)}
+        got = {c["id"]: (c["real"], lou.string(c, "why"), lou.string(c, "fixed_note"))
+               for c in checks if isinstance(c, dict) and isinstance(c.get("id"), str) and isinstance(c.get("real"), bool)}
     except (ValueError, KeyError, TypeError, AttributeError):
         print(f"[루] 확인 답을 못 읽음 {page}장: {raw[:300]!r}", file=sys.stderr)
         got = {}
@@ -191,8 +191,9 @@ def _page_review(run, dest, n, numbers, paths_by_page, sheets, script, state, ca
                    script={m: script["pages"].get(m) for m in [n, *neighbors]} | {"title": script["title"]},
                    state=state, cast=cast, read=read.get(n, []), text_diff=[d for d in diffs if d["page"] == n])
     data, metas = _ask((lou.PROMPTS / "review_page_prompt").read_text(encoding="utf-8"), paths, context)
-    items = clean_items(dict(items=[dict(it, page=n) for it in (data or {}).get("items", []) if isinstance(it, dict)]),
-                        [n], numbers)
+    # 맡은 장 말고 이웃 장 번호를 대면 그 장의 지시가 이 장으로 오므로 버린다(번호를 안 댄 것은 맡은 장으로 본다)
+    raw = [it for it in (data or {}).get("items", []) if isinstance(it, dict) and it.get("page") in (None, n)]
+    items = clean_items(dict(items=[dict(it, page=n) for it in raw]), [n], numbers)
     return items, metas, data is None
 
 
@@ -259,7 +260,13 @@ def review(run, request, output, dry=False):
             verdict.update(got)
         kept, dropped = [], []
         for it in items:
-            real, why, fixed = verdict.get(it["id"], (True, "", ""))
+            if it["id"] not in verdict:
+                # 다시 확인을 못 했다 — 목록에는 남기되 권하지 않고 표시한다(확인 없이 한꺼번에 고치지 않게)
+                kept.append(dict(it, recommend=False, unverified=True))
+                if it["page"] not in failed:
+                    failed.append(it["page"])
+                continue
+            real, why, fixed = verdict[it["id"]]
             if fixed:
                 it["note"] = fixed if fixed.endswith(KEEP_TAIL) else f"{fixed} {KEEP_TAIL}"
             (kept if real else dropped).append(it if real else dict(it, why=why))
@@ -288,12 +295,17 @@ def plan(run, request, output):
         note = re.sub(r"\s*나머지는 그대로\.?\s*$", "", it["note"].strip())
         if note not in job["notes"]:
             job["notes"].append(note)
-        job["basis"] += [b for b in it.get("basis") or [] if type(b) is int and b in pages and b not in job["basis"]]
+        job["basis"] += [b for b in it.get("basis") or [] if type(b) is int and b in pages and b != it["page"]]
         job["items"].append(it.get("id", ""))
     out = []
     for page in sorted(jobs):
         job = jobs[page]
-        out.append(dict(page=page, method=job["method"], items=job["items"], basis=job["basis"][:1],
+        # 기준 장은 하나만 붙인다(참조 한도). 여러 항목이 서로 다른 장을 기준으로 삼으면 가장 많이 쓴 장을 붙이고,
+        # 나머지는 지시의 글(「몇 장과 같게」)로만 간다 — 그런 장이 있었다는 것을 남긴다.
+        counts = {b: job["basis"].count(b) for b in job["basis"]}
+        best = max(counts, key=lambda b: (counts[b], -job["basis"].index(b))) if counts else None
+        out.append(dict(page=page, method=job["method"], items=job["items"], basis=[best] if best else [],
+                        basis_text_only=sorted(b for b in counts if b != best),
                         note=" ".join(n.rstrip(".") + "." for n in job["notes"]) + " " + KEEP_TAIL))
     lou.safe_output(output)
     write_json(output, {"jobs": out})

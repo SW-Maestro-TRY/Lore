@@ -112,3 +112,87 @@ class StoryTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GuardRailTest(unittest.TestCase):
+    """2026-11-22 검토에서 나온 길 — 다른 사람 시트 · 작품 글 · 장 그림을 덮지 않는다."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.book = episode(self.root, "ep01", [{"what": "a"}], body="첫 문장. 둘째 문장. 셋째 문장.")
+
+    def test_new_sheet_cannot_take_another_persons_file(self):
+        import lousheet
+        lou.write_json(self.book / "cast.json", [{"name": "하루"}, {"name": "나래"}, {"name": "백작", "role": ""},
+                                                {"name": "시종", "role": "백작의 시종"}])
+        Image.new("RGB", (100, 80), "blue").save(self.book / "sheets" / "나래.png")
+        self.assertTrue(any(c["why"] == "taken" for c in lousheet.name_clashes(self.book, "나래", "하루")))
+        self.assertEqual([], lousheet.name_clashes(self.book, "백작"))          # 「백작의 시종」은 백작이 아니다
+        draft = self.book / "sheets" / "drafts" / "c.png"
+        draft.parent.mkdir()
+        Image.new("RGB", (100, 80), "red").save(draft)
+        lou.write_json(draft.with_suffix(".json"), {"target": "하루"})
+        req = self.root / "pick.json"
+        lou.write_json(req, {"target": "하루", "from": str(draft), "file_name": "나래"})
+        with self.assertRaises((ValueError, SystemExit)):
+            lousheet.pick(self.book, req)
+        with Image.open(self.book / "sheets" / "나래.png") as kept:
+            self.assertEqual((0, 0, 255), kept.convert("RGB").getpixel((0, 0)))
+
+    def test_story_fix_uses_the_original_body_only(self):
+        req, out = self.root / "fix.json", self.root / "out.json"
+        for items in ([{"quote": "첫 문장.", "replace": "새 문장."}, {"quote": "새 문장.", "replace": "끝."}],
+                      [{"quote": "첫 문장. 둘째", "replace": "x"}, {"quote": "둘째 문장.", "replace": "y"}]):
+            lou.write_json(req, {"items": items})
+            with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(ValueError):
+                run.main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
+        self.assertEqual("첫 문장. 둘째 문장. 셋째 문장.", lou.read(self.book / "directions.json")[0]["body"])
+        lou.write_json(req, {"items": [{"quote": "셋째 문장.", "replace": "마지막."}, {"quote": "첫 문장.", "replace": "처음."}]})
+        with patch.object(run, "RUNS_DIR", self.root):
+            run.main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
+        self.assertEqual("처음. 둘째 문장. 마지막.", lou.read(self.book / "directions.json")[0]["body"])
+        lou.write_json(self.book / "pick.json", {"n": 7})                     # 고른 방향이 없어졌으면 다른 방향을 고치지 않는다
+        with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(ValueError):
+            run.main(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(out)])
+
+    def test_outputs_and_run_ids_are_checked_before_any_work(self):
+        req = self.root / "fix.json"
+        lou.write_json(req, {"items": [{"quote": "첫 문장.", "replace": "x"}]})
+        bad = [(["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", str(self.book / "directions.json")]),
+               (["--run-id", "ep01", "--lou-story-fix", str(req), "--lou-out", "relative.json"]),
+               (["--run-id", "../ep01", "--lou-story-fix", str(req), "--lou-out", str(self.root.parent / "o.json")]),
+               (["--run-id", str(self.book), "--lou-story-fix", str(req), "--lou-out", str(self.root.parent / "o.json")])]
+        for argv in bad:
+            with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(SystemExit):
+                run.main(argv)
+        self.assertEqual("첫 문장. 둘째 문장. 셋째 문장.", lou.read(self.book / "directions.json")[0]["body"])
+
+    def test_find_does_not_mix_works(self):
+        other = episode(self.root, "x01", [{"what": "a"}])
+        lou.write_json(other / "input.json", {"name": "다른 주인공"})
+        path, out = self.root / "req.json", self.root.parent / "find-out.json"
+        lou.write_json(path, dict(text="x", who="레오", runs=["ep01", "x01"]))
+        with patch.object(run, "RUNS_DIR", self.root), self.assertRaises(ValueError):
+            run.main(["--lou-find", str(path), "--lou-out", str(out)])
+
+    def test_plan_picks_the_most_used_basis(self):
+        import loureview
+        for n in (3, 4, 5):
+            Image.new("RGB", (300, 600), "white").save(self.book / "pages" / f"page{n:02}.png")
+        req, out = self.root / "plan.json", self.root.parent / "plan-out.json"
+        lou.write_json(req, {"items": [dict(id="r1", page=2, method="keep", note="옷은 3장처럼.", basis=[3]),
+                                       dict(id="r2", page=2, method="keep", note="빛은 5장처럼.", basis=[5]),
+                                       dict(id="r3", page=2, method="keep", note="왕관은 5장처럼.", basis=[5])]})
+        loureview.plan(self.book, req, out)
+        job = lou.read(out)["jobs"][0]
+        self.assertEqual(([5], [3]), (job["basis"], job["basis_text_only"]))
+
+    def test_proxy_stage_model_has_its_own_name(self):
+        import llm
+        with patch.object(llm, "CODEX_PROXY_ENABLED", True), \
+                patch.dict("os.environ", {"LOU_REVIEW_MODEL": "새어 들어온 값", "CODEX_PROXY_TEXT_MODEL": "기본"}, clear=False):
+            self.assertEqual("기본", llm.model_for("LOU_REVIEW", "openai"))
+            with patch.dict("os.environ", {"CODEX_PROXY_LOU_REVIEW_MODEL": "고른 값"}):
+                self.assertEqual("고른 값", llm.model_for("LOU_REVIEW", "openai"))

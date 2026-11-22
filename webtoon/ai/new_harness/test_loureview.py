@@ -56,6 +56,14 @@ class LouReviewTest(unittest.TestCase):
         return lou.read(out), prompts
 
     @staticmethod
+    def all_real(prompt, unless=()):
+        """다시 확인 — 질문에 든 항목을 모두 진짜로(unless 에 든 번호만 아니라고)."""
+        import re as _re
+        ids = sorted(set(_re.findall(r'"id": "(r\d+)"', prompt)))
+        return dict(checks=[dict(id=i, real=i not in unless, why="" if i not in unless else "지금 상태가 푸른 눈이에요.")
+                            for i in ids])
+
+    @staticmethod
     def kind(prompt):
         if "정말 그런지 확인한다" in prompt:
             return "verify"
@@ -67,8 +75,9 @@ class LouReviewTest(unittest.TestCase):
         def answer(prompt):
             what = self.kind(prompt)
             if what == 2:
-                return dict(items=[dict(page=9, kind="bubble", sev="P1", where="1번째 컷", what="꼬리가 반대", method="keep",
-                                        note="1번째 컷 말풍선 「간다.」의 꼬리를 오른쪽 은발 남자 쪽으로 돌린다.")])
+                return dict(items=[dict(page=2, kind="bubble", sev="P1", where="1번째 컷", what="꼬리가 반대", method="keep",
+                                        note="1번째 컷 말풍선 「간다.」의 꼬리를 오른쪽 은발 남자 쪽으로 돌린다."),
+                                   dict(page=3, kind="panel", sev="P1", what="이웃 장 이야기", note="3장을 고친다")])
             if what == 3:
                 return dict(items=[dict(kind="person", sev="P2", recommend=False, where="2번째 컷", what="눈이 푸름",
                                         cause="picture", note="눈을 붉게", basis=[2, 9]),
@@ -77,13 +86,12 @@ class LouReviewTest(unittest.TestCase):
                 return dict(reply="두 장에서 찾았어요.", items=[dict(page=4, kind="understanding", sev="P2", what="소개 없음",
                                                                     note="1번째 컷 위에 상자 「성 안.」을 넣는다.")])
             if what == "verify":
-                if '"id": "r2"' in prompt:
-                    return dict(checks=[dict(id="r2", real=False, why="지금 상태가 푸른 눈이에요.")])
-                return dict(checks=[])
+                return self.all_real(prompt, unless=("r2",))
             return dict(items=[])
         result, prompts = self.call(answer)
         self.assertEqual("두 장에서 찾았어요.", result["reply"])
-        self.assertEqual([(2, "P1"), (4, "P2")], [(it["page"], it["sev"]) for it in result["items"]])   # 맡은 장 번호로
+        # 2장 검토가 3장 번호를 댄 항목은 버린다
+        self.assertEqual([(2, "P1"), (4, "P2")], [(it["page"], it["sev"]) for it in result["items"]])
         self.assertTrue(result["items"][0]["note"].endswith("나머지는 그대로."))
         self.assertEqual("r2", result["dropped"][0]["id"])
         self.assertEqual([2], result["dropped"][0]["basis"])           # 없는 장은 기준에서 뺀다
@@ -109,10 +117,22 @@ class LouReviewTest(unittest.TestCase):
                 return "망가진 답"
             if what == 2:
                 return dict(items=[dict(kind="panel", sev="P1", what="손가락 여섯", note="손가락을 다섯으로.")])
-            return dict(checks=[]) if what == "verify" else dict(reply="", items=[])
+            return self.all_real(prompt) if what == "verify" else dict(reply="", items=[])
         result, _prompts = self.call(answer)
         self.assertEqual([2], [it["page"] for it in result["items"]])
         self.assertEqual([3], result["failed_pages"])
+
+    def test_unverified_items_are_not_recommended(self):
+        def answer(prompt):
+            what = self.kind(prompt)
+            if what == 2:
+                return dict(items=[dict(kind="panel", sev="P1", what="손가락 여섯", note="손가락을 다섯으로.")])
+            if what == "verify":
+                return dict(checks=[dict(id="r1", why="real 칸이 없다")])
+            return dict(reply="", items=[])
+        result, _prompts = self.call(answer)
+        self.assertEqual([(2, False, True)], [(it["page"], it["recommend"], it.get("unverified")) for it in result["items"]])
+        self.assertEqual([2], result["failed_pages"])
 
     def test_plan_groups_by_page(self):
         request = self.root / "plan.json"

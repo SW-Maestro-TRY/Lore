@@ -2617,6 +2617,22 @@ def main(argv=None) -> int:
                    help="말풍선 안의 글자만 고친다(그림은 다시 그리지 않는다). --run-id 와 --page 한 장이 필요하다")
     p.add_argument("--lou-out", type=Path)
     args = p.parse_args(argv)
+    lou_cmd = any(getattr(args, k, None) for k in ("lou_ask", "lou_check", "lou_sheet", "lou_sheet_pick", "lou_review",
+                                                  "lou_plan", "lou_find", "lou_story", "lou_story_fix", "fix_text", "lou_verify"))
+    if lou_cmd:
+        # 루 명령은 서버가 부른다 — 작품 번호는 작품 폴더 바로 아래 이름이어야 하고, 결과 파일은 작품 폴더 밖에 새로 쓴다.
+        # 결과 파일을 작품의 글이나 장 그림 자리로 주면 그것을 덮어썼다(2026-11-22 검토). 일을 시작하기 전에 막는다.
+        if args.run_id and (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,119}", args.run_id)
+                            or (RUNS_DIR / args.run_id).resolve().parent != RUNS_DIR.resolve()):
+            p.error("작품 번호가 올바르지 않습니다")
+        for out in (args.lou_out, args.lou_verify):
+            if out is None:
+                continue
+            target = Path(out)
+            rel = target.resolve().relative_to(RUNS_DIR.resolve()) if target.resolve().is_relative_to(RUNS_DIR.resolve()) else None
+            inside = rel is not None and len(rel.parts) >= 2          # 어느 작품 폴더 안(글 · 장 그림 · 시트 자리)
+            if not target.is_absolute() or inside or target.is_symlink() or target.parent.is_symlink():
+                p.error("결과 파일은 작품 폴더 밖의 절대 경로여야 합니다")
     if args.lou_story or args.lou_story_fix:
         if not args.run_id or not args.lou_out:
             p.error("글 검토에는 --run-id 와 --lou-out 이 필요합니다")
@@ -2845,9 +2861,9 @@ def main(argv=None) -> int:
             done = read_json(run_dir / "scenes.json") if (run_dir / "scenes.json").exists() else {}
             stage_branch(run_dir, char, direction, args.dry_run, scenes=(done or {}).get("scenes") or [])
         if args.detail_pages:
-            def draw(note):
+            def draw(note, source=None):
                 stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
-                                   cover_first=args.cover_first, keep_from=args.keep_from, textless=args.textless,
+                                   cover_first=args.cover_first, keep_from=source or args.keep_from, textless=args.textless,
                                    keep_basis=tuple(args.keep_basis), allow_no_sheet=args.no_sheet,
                                    review=False if args.no_page_review else None,
                                    note=note, lang=args.lang)

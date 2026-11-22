@@ -282,12 +282,17 @@ def name_clashes(run, name, owner=""):
     for who in [inp, *[o for o in inp.get("co") or [] if isinstance(o, dict)]]:
         people.setdefault(str(who.get("name") or "").strip(), str(who.get("role") or ""))
     owner = " ".join((owner or name or "").split())        # 같은 사람의 온전한 이름은 겹침이 아니다(「백작」은 「로제로 백작」 자신)
-    people = {n: r for n, r in people.items() if n and n not in (own, owner)}
+    people = {n: r for n, r in people.items() if n and n != owner}
     out = []
+    if own != owner and own in people:
+        out.append(dict(key=own, other=own, why="taken"))   # 다른 사람의 이름 그대로 — 그 사람의 시트 자리다
+    words = lambda text: set(re.split(r"[\s·,]+", text or ""))
     for key in detailart._name_keys(own):
         for other, role in sorted(people.items()):
+            if other == own:
+                continue
             if key in TITLES:
-                if key in other or key in role:
+                if key in words(other) or key in words(role):
                     out.append(dict(key=key, other=other, why="title"))
             elif key in other and other not in own and not (other in sheeted and len(other) > len(key)):
                 out.append(dict(key=key, other=other, why="name"))
@@ -393,6 +398,7 @@ def pick(run, request):
                 f"「{c['key']}」(「{c['other']}」에도 걸림)"
                 for c in clashes) + (f" — 「{hint}」 같은 이름으로 다시 골라 주세요(file_name)." if hint else " — 다른 이름을 정해 주세요(file_name)."))
     dest = hit[1] if hit else run / "sheets" / f"{stem(file_name or name)}.png"
+    lou.require(hit is not None or not dest.exists())          # 새 시트가 다른 사람의 시트 파일을 덮지 않는다
     hero = dest.resolve() == (run / "sheet.png").resolve()
     lock = run / "sheets" / ".pick.lock"
     lock.parent.mkdir(parents=True, exist_ok=True)

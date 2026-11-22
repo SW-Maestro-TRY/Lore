@@ -25,8 +25,13 @@ def _chosen(run):
     path = run / "directions.json"
     lou.require(path.exists())
     directions = lou.read(path)
-    pick = lou.read(run / "pick.json") if (run / "pick.json").exists() else {}
-    at = next((i for i, d in enumerate(directions) if d.get("n") == pick.get("n")), 0)
+    pick = lou.read(run / "pick.json") if (run / "pick.json").exists() else None
+    if pick is None:
+        at = 0
+    else:                                   # 고른 방향이 있으면 그 방향만 — 없어진 번호를 첫 방향으로 바꿔 읽지 않는다
+        found = [i for i, d in enumerate(directions) if d.get("n") == pick.get("n")]
+        lou.require(len(found) == 1)
+        at = found[0]
     lou.require(directions and isinstance(directions[at].get("body"), str) and directions[at]["body"].strip())
     return path, directions, at
 
@@ -107,11 +112,18 @@ def fix(run, request, output):
     items = req.get("items")
     lou.require(isinstance(items, list) and 0 < len(items) <= 30)
     path, directions, at = _chosen(run)
-    body = directions[at]["body"]
-    for it in items:
+    original = directions[at]["body"]
+    spans = []
+    for it in items:                      # 모든 문장을 원래 본문에서 찾는다 — 바꾼 결과를 다시 바꾸지 않는다
         lou.require(isinstance(it, dict) and lou.string(it, "quote") and isinstance(it.get("replace"), str))
-        lou.require(body.count(it["quote"]) == 1)
-        body = body.replace(it["quote"], it["replace"].strip())
+        lou.require(original.count(it["quote"]) == 1)
+        start = original.index(it["quote"])
+        spans.append((start, start + len(it["quote"]), it["replace"].strip()))
+    spans.sort()
+    lou.require(all(a[1] <= b[0] for a, b in zip(spans, spans[1:])))        # 겹치는 문장은 받지 않는다
+    body = original
+    for start, end, new in reversed(spans):
+        body = body[:start] + new + body[end:]
     have = [int(m.group(1)) for m in (re.fullmatch(r"directions\.v(\d+)\.json", f.name) for f in run.iterdir()) if m]
     shutil.copy2(path, run / f"directions.v{max(have, default=0) + 1}.json")
     directions[at]["body"] = body
