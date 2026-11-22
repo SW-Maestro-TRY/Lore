@@ -1,5 +1,6 @@
 package com.lore.webtoon.runs;
 
+import com.lore.webtoon.lou.EditorRegen;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lore.webtoon.Admins;
@@ -65,6 +66,7 @@ public class RunController {
     private final OverlayStore overlays;
     private final BakeService bakery;
     private final StoryStore stories;
+    private final EditorRegen editorRegen;
     private final RegenService regen;
     private final AfterRun after;
     private final WorkLedger ledger;
@@ -105,7 +107,8 @@ public class RunController {
     public RunController(RunService runs, PageStore pages, EpisodeExport export,
                          OverlayStore overlays, BakeService bakery, StoryStore stories,
                          RegenService regen, AfterRun after, WorkLedger ledger,
-                         CreditGate credits, Admins admins, com.lore.webtoon.safety.SafetyGuard safety) {
+                         CreditGate credits, Admins admins, com.lore.webtoon.safety.SafetyGuard safety, EditorRegen editorRegen) {
+        this.editorRegen = editorRegen;
         this.safety = safety;
         this.runs = runs;
         this.pages = pages;
@@ -135,16 +138,7 @@ public class RunController {
      * <b>관리자 계정은 예외다</b> — 남의 작품도 편집실에서 열고 고친다(운영 확인용).
      */
     private Long mustOwn(String runId) {
-        Long userId = CreditGate.currentUser();
-        if (userId == null) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED,
-                    "편집실은 로그인해야 쓸 수 있어요. 로그인하면 이 브라우저로 만든 작품도 같이 따라옵니다.");
-        }
-        /* 관리자 계정은 모든 작품의 편집실을 쓴다(운영 확인용). 다시 그리기 값은 관리자 계정의 크레딧에서 나간다. */
-        if (!admins.isAdmin(userId) && !ledger.mayChange(runId, userId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "내가 만든 작품만 고칠 수 있습니다");
-        }
-        return userId;
+        return com.lore.webtoon.lou.EditorAccess.mustOwn(runId, admins, ledger);
     }
 
     /**
@@ -526,13 +520,16 @@ public class RunController {
      * 곧바로 그리지 않는다 — 이미지 호출이라 줄을 선다({@link RegenService}).
      * 화면은 돌려받은 번호로 {@link #regenStatus} 를 2초 간격으로 물어야 한다.
      */
-    @Operation(summary = "장 다시 그리기", description = "곧바로 안 그린다 — id 로 진행을 물어야 한다.")
+    @Operation(summary = "장 다시 그리기", description = "feedback과 tags를 메모로 합친다. mode가 text면 items([{x,y,text}])로 말풍선 글자만 무료로 고친다. mode가 keep이면 메모가 필요하며 현재 구도를 유지한다. textless=true는 글자 없이 그린다. 두 방식은 함께 쓸 수 없다. id로 진행을 조회한다.")
     @PostMapping("/{runId}/scenes/{no}/regen")
     public ResponseEntity<Map<String, Object>> regen(@PathVariable String runId,
                                                       @PathVariable int no,
                                                       @RequestBody(required = false)
                                                       Map<String, Object> body) {
         Long userId = mustOwn(runId);
+        if (body != null && "text".equals(body.get("mode"))) {
+            return fixText(runId, no, userId, body.get("items"));
+        }
         /* 화면이 단추에 값을 적어 놓고 실제로는 안 받고 있었다. 만들기·캐릭터와
            같은 규칙으로 여기서도 받는다 — **시작하기 전에** 낼 수 있는지 보고,
            기록을 만든 뒤에 빼고, 뺀 뒤에 줄에 넣는다(#864). 기록보다 먼저 빼면 기록이
@@ -541,21 +538,19 @@ public class RunController {
         /* 안전 검사에 걸려 빈 장으로 완성된 장은 다시 그리기가 무료다(#626) — 크레딧은 처음에 그대로 받았다. */
         /* 값은 작품을 만든 화질을 따른다 — 너울은 한 장 원가가 커서 6이다(#787).
            편집실에서 화질을 골라 보냈으면 그 화질 값이다 — 너울 작품도 이 장만 파도로 그리면 파도 값. */
-        String asked = body == null || body.get("quality") == null ? null : String.valueOf(body.get("quality"));
-        String quality = com.lore.webtoon.job.WebtoonQuality.isKnown(asked)
-                ? com.lore.webtoon.job.WebtoonQuality.normalize(asked) : null;
-        int cost = regen.isUnsafe(runId, no) ? 0
-                : quality == null ? regenCost(runId) : com.lore.webtoon.job.WebtoonQuality.regenCreditsOf(quality);
-        String blocked = cost > 0 ? credits.whyBlocked(userId, cost) : null;
-        if (blocked != null) {
-            throw new BusinessException(CreditGate.notEnough(), blocked);
+        /* 고른 항목(tags)과 적은 글(feedback)을 같이 넘긴다 — 전에는 글만 넘겨서, 항목만 고른
+           사람의 다시 그리기는 아무 지시 없이 그려졌다(#548). */
+        String typed = body == null || body.get("feedback") == null ? "" : String.valueOf(body.get("feedback")).trim();
+        String picked = body == null || !(body.get("tags") instanceof List<?> ids) ? "" : FeedbackTags.sceneNote(ids);
+        String note = picked.isEmpty() ? typed : typed.isEmpty() ? picked : picked + "\n" + typed;
+        boolean keep = body != null && "keep".equals(body.get("mode"));
+        boolean textless = body != null && Boolean.TRUE.equals(body.get("textless"));
+        if (keep && (note.isBlank() || textless)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "구도 유지에는 고칠 메모가 필요하며 글자 없이 그리기와 함께 쓸 수 없습니다"));
         }
+        String asked = body == null || body.get("quality") == null ? null : String.valueOf(body.get("quality"));
+        var price = editorRegen.price(runId, no, userId, asked);
         try {
-            /* 고른 항목(tags)과 적은 글(feedback)을 같이 넘긴다 — 전에는 글만 넘겨서, 항목만 고른
-               사람의 다시 그리기는 아무 지시 없이 그려졌다(#548). */
-            String typed = body == null ? "" : String.valueOf(body.getOrDefault("feedback", "")).trim();
-            String picked = body == null || !(body.get("tags") instanceof List<?> ids) ? "" : FeedbackTags.sceneNote(ids);
-            String note = picked.isEmpty() ? typed : typed.isEmpty() ? picked : picked + "\n" + typed;
             /* 장면 설명을 고쳐 보냈으면 먼저 적는다(#626) — 걸린 장면은 같은 글로 또 그리면 또 걸린다.
                사람이 적은 글이므로 메모와 함께 입력 검사를 거친다. */
             Map<?, ?> scene = body != null && body.get("scene") instanceof Map<?, ?> m ? m : null;
@@ -568,11 +563,49 @@ public class RunController {
                 throw new BusinessException(com.lore.common.exception.ErrorCode.INTERNAL_ERROR, "장면 설명을 저장하지 못했습니다");
             }
             /* 낸 사람은 기록에 적는다 — 실패하면, 서버가 다시 떠도, 그걸로 돌려준다(#626, #864). */
-            String id = regen.queue(runId, no, note, quality, cost > 0 ? userId : null);
-            if (cost > 0) {
-                credits.charge(userId, cost, RegenService.regenRef(runId, no, id), "장 다시 그리기");
+            String id = editorRegen.enqueue(runId, no, userId, price, note,
+                    keep ? "keep" : textless ? "textless" : null, null, false);
+            return ResponseEntity.ok(regen.statusOf(id));
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * 말풍선 글자만 고친다 — 그림을 다시 그리지 않고 모델도 안 불러서 <b>무료</b>다(#1037).
+     * {@code items: [{x, y, text}]} — x, y 는 그 글 덩어리 자리(장에 대한 %), text 는 그 말풍선의 맞는 글 전체.
+     */
+    private ResponseEntity<Map<String, Object>> fixText(String runId, int no, Long userId, Object given) {
+        List<Map<String, Object>> items = new java.util.ArrayList<>();
+        List<String> texts = new java.util.ArrayList<>();
+        boolean valid = given instanceof List<?> list && !list.isEmpty() && list.size() <= 8;
+        if (valid) {
+            for (Object one : (List<?>) given) {
+                if (!(one instanceof Map<?, ?> m && m.get("x") instanceof Number x && m.get("y") instanceof Number y
+                        && m.get("text") instanceof String text && !text.isBlank() && text.strip().length() <= 200
+                        && x.doubleValue() >= 0 && x.doubleValue() <= 100
+                        && y.doubleValue() >= 0 && y.doubleValue() <= 100)) {
+                    valid = false;
+                    break;
+                }
+                items.add(Map.of("x", x, "y", y, "text", text.strip()));
+                texts.add(text.strip());
             }
-            regen.go(id);
+        }
+        if (!valid) {
+            return ResponseEntity.badRequest().body(Map.of("error", "고칠 글자와 자리가 필요합니다"));
+        }
+        if (!pages.pageNumbersOf(runId).contains(no)) {       // 없는 장으로 안전 검사를 부르지 못하게
+            return ResponseEntity.status(404).body(Map.of("error", "그 페이지가 없습니다"));
+        }
+        if (regen.drawingPages(runId).contains(no)) {         // 무료라 같은 장을 줄에 쌓지 못하게
+            return ResponseEntity.status(409).body(Map.of("error", "이 장을 고치는 중이에요. 끝난 뒤에 다시 눌러 주세요."));
+        }
+        safety.checkText("editor-regen", texts.toArray(String[]::new));
+        try {
+            String note = new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(Map.of("items", items)).toString();
+            String id = editorRegen.enqueue(runId, no, userId, new com.lore.webtoon.lou.EditorRegen.Price(null, 0),
+                    note, "text", null, false);
             return ResponseEntity.ok(regen.statusOf(id));
         } catch (java.util.NoSuchElementException e) {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
@@ -617,6 +650,8 @@ public class RunController {
             int version = Integer.parseInt(String.valueOf(body.get("version")));
             List<Map<String, Object>> versions = regen.revert(runId, no, version);
             return ResponseEntity.ok(Map.of("ok", true, "versions", versions));
+        } catch (RegenService.PageBusy e) {
+            return ResponseEntity.status(409).body(Map.of("error", e.getMessage()));
         } catch (NumberFormatException e) {
             return ResponseEntity.status(400).body(Map.of("error", "version 이 필요합니다"));
         } catch (java.util.NoSuchElementException e) {

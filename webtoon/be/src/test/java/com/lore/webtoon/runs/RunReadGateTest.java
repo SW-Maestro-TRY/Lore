@@ -1,5 +1,6 @@
 package com.lore.webtoon.runs;
 
+import com.lore.webtoon.lou.EditorRegen;
 import com.lore.webtoon.Admins;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.credit.CreditGate;
@@ -38,7 +39,7 @@ class RunReadGateTest {
     void 세운다() {
         controller = new RunController(runs, pages, mock(EpisodeExport.class), mock(OverlayStore.class),
                 mock(BakeService.class), mock(StoryStore.class), mock(RegenService.class), mock(AfterRun.class), ledger,
-                mock(CreditGate.class), admins, mock(com.lore.webtoon.safety.SafetyGuard.class));
+                mock(CreditGate.class), admins, mock(com.lore.webtoon.safety.SafetyGuard.class), mock(EditorRegen.class));
         when(runs.result(anyString())).thenReturn(new HashMap<>());
         when(pages.urlOf(anyString(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn("/images/webtoon/x.jpg");

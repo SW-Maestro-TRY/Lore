@@ -585,7 +585,7 @@ def redraw_block(review: dict) -> str:
 
 def review_page(run_dir: Path, page_no: int, *, scene_no: int, direction: dict,
                 char: dict | None = None, cast=(), prev_is_cover: bool = False,
-                next_from: str = "", dry_run: bool = False,
+                next_from: str = "", dry_run: bool = False, textless: bool = False,
                 suffix: str = "", scenes=()) -> tuple[dict | None, dict | None]:
     """한 장을 검수한다. -> (판정, 호출기록). dry-run 이면 (None, None).
 
@@ -610,6 +610,8 @@ def review_page(run_dir: Path, page_no: int, *, scene_no: int, direction: dict,
                           has_prev=has_prev, prev_is_cover=prev_is_cover,
                           next_from=next_from, scenes=scenes, sheeted=sheeted,
                           series_ep=series_ep, known=known, cast_specs=cast_specs)
+    if textless:
+        prompt += "\n글자 없이 그린 장이다. 말풍선·대사·나레이션·효과음·제목이 없는 것은 의도한 연출이므로 누락으로 판정하지 않는다."
     write_text(dest / f"page{page_no:02d}.review{suffix}_prompt.txt", prompt)
     if dry_run:
         return None, None
@@ -648,7 +650,7 @@ def review_page(run_dir: Path, page_no: int, *, scene_no: int, direction: dict,
         one = scenes[scene_no - 1] if 0 < scene_no <= len(scenes) else {}
         review = parse(text, has_prev=has_prev,
                        fixed_narration=isinstance(one, dict) and one.get("narration") is not None,
-                       scene_page=scene_no > 0)
+                       scene_page=scene_no > 0 and not textless)
     except Exception as exc:                                          # noqa: BLE001
         meta["error"] = f"{type(exc).__name__}: {exc}"
         log(f"  [검수] 응답을 읽지 못했습니다 — {meta['error']} (원문은 남았습니다)")

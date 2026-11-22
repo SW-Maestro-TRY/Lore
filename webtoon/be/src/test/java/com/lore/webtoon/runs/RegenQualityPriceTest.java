@@ -1,5 +1,6 @@
 package com.lore.webtoon.runs;
 
+import com.lore.webtoon.lou.EditorRegen;
 import com.lore.webtoon.Admins;
 import com.lore.webtoon.art.PageStore;
 import com.lore.webtoon.credit.CreditGate;
@@ -37,17 +38,58 @@ class RegenQualityPriceTest {
 
     @BeforeEach
     void 세운다() {
-        controller = new RunController(mock(RunService.class), mock(PageStore.class), mock(EpisodeExport.class),
+        PageStore pageStore = mock(PageStore.class);
+        when(pageStore.pageNumbersOf("r1")).thenReturn(List.of(1, 2, 3));
+        controller = new RunController(mock(RunService.class), pageStore, mock(EpisodeExport.class),
                 mock(OverlayStore.class), mock(BakeService.class), mock(StoryStore.class), regen, mock(AfterRun.class),
-                ledger, credits, mock(Admins.class), mock(com.lore.webtoon.safety.SafetyGuard.class));
+                ledger, credits, mock(Admins.class), mock(com.lore.webtoon.safety.SafetyGuard.class), new EditorRegen(regen, credits, mock(com.lore.webtoon.lou.LouRecords.class)));
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(7L, null, List.of()));
         when(ledger.mayChange("r1", 7L)).thenReturn(true);
         when(regen.qualityOf("r1")).thenReturn("swell");
         when(regen.queue(anyString(), org.mockito.ArgumentMatchers.anyInt(), anyString(), org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.any()))
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), isNull(), eq(false)))
                 .thenReturn("g1");
         when(regen.statusOf("g1")).thenReturn(new HashMap<>());
+    }
+
+    @Test
+    void keepRequiresNoteAndCannotBeTextless() {
+        for (Map<String, Object> body : List.<Map<String, Object>>of(
+                Map.of("mode", "keep", "feedback", "  "),
+                Map.of("mode", "keep", "feedback", "소매", "textless", true))) {
+            org.junit.jupiter.api.Assertions.assertEquals(400, controller.regen("r1", 2, body).getStatusCode().value());
+        }
+        org.mockito.Mockito.verifyNoInteractions(credits);
+    }
+
+    @Test
+    void forwardsRegenMode() {
+        controller.regen("r1", 2, Map.of("mode", "keep", "feedback", "소매"));
+        verify(regen).queue("r1", 2, "소매", null, 7L, "keep", null, false);
+        controller.regen("r1", 2, Map.of("textless", true));
+        verify(regen).queue("r1", 2, "", null, 7L, "textless", null, false);
+    }
+
+    @Test
+    void 글자만_고치기는_무료이고_형식이_틀리면_안_받는다() {
+        var item = Map.<String, Object>of("x", 51, "y", 82, "text", " 맞는 글 ");
+        controller.regen("r1", 2, Map.of("mode", "text", "items", List.of(item)));
+        var note = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(regen).queue(eq("r1"), eq(2), note.capture(), isNull(), isNull(), eq("text"), isNull(), eq(false));
+        org.assertj.core.api.Assertions.assertThat(note.getValue()).contains("\"text\":\"맞는 글\"", "\"x\":51");
+        org.mockito.Mockito.verifyNoInteractions(credits);
+
+        for (Object items : List.of(List.of(), "글", List.of(Map.of("x", 101, "y", 2, "text", "글")),
+                List.of(Map.of("x", 1, "y", 2, "text", " ")))) {
+            org.junit.jupiter.api.Assertions.assertEquals(400,
+                    controller.regen("r1", 2, Map.of("mode", "text", "items", items)).getStatusCode().value());
+        }
+        org.junit.jupiter.api.Assertions.assertEquals(404,
+                controller.regen("r1", 9, Map.of("mode", "text", "items", List.of(item))).getStatusCode().value());
+        when(regen.drawingPages("r1")).thenReturn(List.of(2));
+        org.junit.jupiter.api.Assertions.assertEquals(409,
+                controller.regen("r1", 2, Map.of("mode", "text", "items", List.of(item))).getStatusCode().value());
     }
 
     @AfterEach
@@ -60,7 +102,7 @@ class RegenQualityPriceTest {
     void 낮추면_싸다() {
         controller.regen("r1", 2, Map.of("feedback", "", "quality", "surf"));
 
-        verify(regen).queue("r1", 2, "", "surf", 7L);
+        verify(regen).queue("r1", 2, "", "surf", 7L, null, null, false);
         verify(credits).charge(eq(7L), eq(3), anyString(), anyString());
     }
 
@@ -70,7 +112,7 @@ class RegenQualityPriceTest {
         controller.regen("r1", 2, Map.of("feedback", ""));
 
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(regen, credits);
-        order.verify(regen).queue(eq("r1"), eq(2), anyString(), isNull(), eq(7L));
+        order.verify(regen).queue(eq("r1"), eq(2), anyString(), isNull(), eq(7L), isNull(), isNull(), eq(false));
         order.verify(credits).charge(eq(7L), eq(6), eq("regen:r1:2:g1"), anyString());
         order.verify(regen).go("g1");
     }
@@ -82,7 +124,7 @@ class RegenQualityPriceTest {
         verify(credits).charge(eq(7L), eq(6), anyString(), anyString());
 
         controller.regen("r1", 3, Map.of("feedback", "", "quality", "high"));
-        verify(regen).queue(eq("r1"), eq(3), anyString(), isNull(), eq(7L));
+        verify(regen).queue(eq("r1"), eq(3), anyString(), isNull(), eq(7L), isNull(), isNull(), eq(false));
         verify(credits, org.mockito.Mockito.times(2)).charge(eq(7L), eq(6), anyString(), anyString());
     }
 }

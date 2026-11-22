@@ -2445,7 +2445,8 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
                        allow_no_sheet: bool = False,
                        review: bool | None = None,
                        note: str = "", lang: str = "ko",
-                       cover_first: bool = False) -> None:
+                       cover_first: bool = False, keep_from: Path | None = None, textless: bool = False,
+                       keep_basis: tuple[int, ...] = (), text_guard: str = "") -> None:
     """이어그리기(최종 방식) — **구체화·콘티·컷 대본을 전부 건너뛰고**
     scene_prompt 산출물(scenes.json)만으로 표지+전체 씬을 그린다.
 
@@ -2476,6 +2477,7 @@ def stage_detail_pages(run_dir: Path, dry_run: bool, only=None,
     made = detailart.draw_continue(run_dir, dry_run=dry_run, only=only,
                                    allow_no_sheet=allow_no_sheet, review=review,
                                    note=note, lang=lang, cover_first=cover_first,
+                                   keep_from=keep_from, textless=textless, keep_basis=keep_basis, text_guard=text_guard,
                                    on_page=lambda meta: record(run_dir, meta))
     if made:
         log(f"[이어그리기] {len(made)}장 그렸습니다 -> {run_dir / detailart.PAGE_DIR}")
@@ -2564,6 +2566,11 @@ def main(argv=None) -> int:
                         "화면에서 '다시 만들기' — --note 와 같이 쓸 수 있다)")
     p.add_argument("--cover-first", action="store_true",
                    help="장면을 나누기 전에 표지만 먼저 그린다. --detail-pages --page 1 과 함께 쓴다")
+    modes = p.add_mutually_exclusive_group()
+    modes.add_argument("--keep-from", type=Path, help="구도를 유지할 원본 장 그림")
+    p.add_argument("--keep-basis", type=int, action="append", default=[],
+                   help="구도 유지에서 이어짐을 맞출 기준 장 번호(같은 화의 다른 장, 하나만 쓴다)")
+    modes.add_argument("--textless", action="store_true", help="글자 없이 그리기")
     p.add_argument("--page", type=int, action="append", default=[],
                    help="그 번호 페이지만 다시 (여러 번 가능)")
     p.add_argument("--no-sheet", action="store_true",
@@ -2593,7 +2600,101 @@ def main(argv=None) -> int:
     p.add_argument("--chat-sheets", action="store_true", help="시트 보관함에서 1화 시트를 깐다")
     p.add_argument("--chat-save-sheets", action="store_true", help="1화 시트를 보관함에 넣는다")
     p.add_argument("--chat-share-sheets", action="store_true", help="1화 시트를 나머지 화에 복사한다")
+    lou_modes = p.add_mutually_exclusive_group()
+    lou_modes.add_argument("--lou-ask", type=Path)
+    lou_modes.add_argument("--lou-check", type=Path)
+    p.add_argument("--lou-verify", type=Path, metavar="JSON",
+                   help="구도 유지로 고친 뒤 루가 확인하고, 다른 것까지 바뀌었으면 같은 원본에서 한 번 더 고친다(최대 2번). 마지막 확인을 이 파일에")
+    lou_modes.add_argument("--lou-find", type=Path,
+                           help="여러 화에서 한 가지 문제(「이 인물 나오는 장면 다 고쳐」)를 찾는다. 요청에 화 목록. --lou-out 에 결과")
+    lou_modes.add_argument("--lou-story", type=Path, help="그림 그리기 전에 이번 화 본문을 루가 읽고 고칠 곳을 낸다(--lou-out 에)")
+    lou_modes.add_argument("--lou-story-fix", type=Path, help="글 검토에서 고른 문장을 본문에서 바꾼다(바꾸기 전 판을 남긴다)")
+    lou_modes.add_argument("--lou-review", type=Path, help="루가 이 화를 먼저 검토해 고칠 것 목록을 낸다(--lou-out 에)")
+    lou_modes.add_argument("--lou-plan", type=Path, help="체크한 검토 항목을 장마다 고치기 하나로 묶는다(모델 호출 없음)")
+    lou_modes.add_argument("--lou-sheet", type=Path, help="루가 낸 시트 고치기 방법 하나로 후보 시트를 그린다(--lou-out 에)")
+    lou_modes.add_argument("--lou-sheet-pick", type=Path, help="고른 후보를 그 인물의 시트로 건다")
+    p.add_argument("--fix-text", type=Path, metavar="JSON",
+                   help="말풍선 안의 글자만 고친다(그림은 다시 그리지 않는다). --run-id 와 --page 한 장이 필요하다")
+    p.add_argument("--lou-out", type=Path)
     args = p.parse_args(argv)
+    lou_cmd = any(getattr(args, k, None) for k in ("lou_ask", "lou_check", "lou_sheet", "lou_sheet_pick", "lou_review",
+                                                  "lou_plan", "lou_find", "lou_story", "lou_story_fix", "fix_text", "lou_verify"))
+    if lou_cmd:
+        # 루 명령은 서버가 부른다 — 작품 번호는 작품 폴더 바로 아래 이름이어야 하고, 결과 파일은 작품 폴더 밖에 새로 쓴다.
+        # 결과 파일을 작품의 글이나 장 그림 자리로 주면 그것을 덮어썼다(2026-11-22 검토). 일을 시작하기 전에 막는다.
+        if args.run_id and (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,119}", args.run_id)
+                            or (RUNS_DIR / args.run_id).resolve().parent != RUNS_DIR.resolve()):
+            p.error("작품 번호가 올바르지 않습니다")
+        for out in (args.lou_out, args.lou_verify):
+            if out is None:
+                continue
+            target = Path(out)
+            rel = target.resolve().relative_to(RUNS_DIR.resolve()) if target.resolve().is_relative_to(RUNS_DIR.resolve()) else None
+            inside = rel is not None and len(rel.parts) >= 2          # 어느 작품 폴더 안(글 · 장 그림 · 시트 자리)
+            # 이미 내용이 있는 파일은 덮지 않는다(서버는 새 임시 경로나 빈 임시 파일을 준다)
+            used = target.is_file() and target.stat().st_size > 0
+            if not target.is_absolute() or inside or target.is_dir() or used or target.is_symlink() or target.parent.is_symlink():
+                p.error("결과 파일은 작품 폴더 밖의 절대 경로여야 합니다")
+    if args.lou_story or args.lou_story_fix:
+        if not args.run_id or not args.lou_out:
+            p.error("글 검토에는 --run-id 와 --lou-out 이 필요합니다")
+        import loustory
+        if args.lou_story:
+            loustory.review(RUNS_DIR / args.run_id, args.lou_story, args.lou_out, args.dry_run)
+        else:
+            loustory.fix(RUNS_DIR / args.run_id, args.lou_story_fix, args.lou_out)
+        return 0
+    if args.lou_find:
+        if not args.lou_out:
+            p.error("찾기에는 --lou-out 이 필요합니다")
+        import loufind
+        loufind.find(RUNS_DIR, args.lou_find, args.lou_out, args.dry_run)
+        return 0
+    if args.lou_review or args.lou_plan:
+        if not args.run_id or not args.lou_out:
+            p.error("검토와 묶기에는 --run-id 와 --lou-out 이 필요합니다")
+        import loureview
+        if args.lou_review:
+            loureview.review(RUNS_DIR / args.run_id, args.lou_review, args.lou_out, args.dry_run)
+        else:
+            loureview.plan(RUNS_DIR / args.run_id, args.lou_plan, args.lou_out)
+        return 0
+    if args.lou_sheet or args.lou_sheet_pick:
+        if not args.run_id or (args.lou_sheet and not args.lou_out):
+            p.error("시트 후보에는 --run-id 와 --lou-out 이, 고르기에는 --run-id 가 필요합니다")
+        import lousheet
+        if args.lou_sheet:
+            lousheet.draft(RUNS_DIR / args.run_id, args.lou_sheet, args.lou_out, args.dry_run)
+        else:
+            print(lousheet.pick(RUNS_DIR / args.run_id, args.lou_sheet_pick))
+        return 0
+    if args.lou_ask or args.lou_check:
+        if not args.run_id or not args.lou_out:
+            p.error("루 대화에는 --run-id 와 --lou-out 이 필요합니다")
+        import lou
+        lou.process(RUNS_DIR / args.run_id, "ask" if args.lou_ask else "check",
+                    args.lou_ask or args.lou_check, args.lou_out, args.dry_run)
+        return 0
+    if args.fix_text:
+        if not args.run_id or len(args.page) != 1 or args.page[0] < 1:
+            p.error("--fix-text 에는 --run-id 와 --page 한 장이 필요합니다")
+        import textfix
+        try:
+            textfix.apply(RUNS_DIR / args.run_id, args.page[0], args.fix_text)
+        except textfix.NoBubble as exc:
+            raise SystemExit(f"글자를 고치지 못했습니다: {exc}")
+        return 0
+    if (args.keep_from or args.textless) and not args.detail_pages:
+        p.error("--keep-from 과 --textless 는 --detail-pages 에서만 씁니다")
+    if args.keep_from:
+        if len(args.page) != 1 or args.page[0] < 1 or not args.note.strip():
+            p.error("--keep-from 에는 --page 한 장과 --note 가 필요합니다")
+        if not args.keep_from.is_file():
+            p.error("--keep-from 그림이 없습니다")
+    if args.keep_basis and not args.keep_from:
+        p.error("--keep-basis 는 --keep-from 과 같이 씁니다")
+    if args.lou_verify and not args.keep_from:
+        p.error("--lou-verify 는 --keep-from 과 같이 씁니다")
     if args.chat_extract or args.chat_prepare or args.chat_sheets or args.chat_save_sheets or args.chat_share_sheets:
         if not args.run_id or not re.fullmatch(r"test-[0-9a-f]{32}", args.run_id):
             raise SystemExit("비공개 테스트 run 번호가 필요합니다")
@@ -2762,11 +2863,18 @@ def main(argv=None) -> int:
             done = read_json(run_dir / "scenes.json") if (run_dir / "scenes.json").exists() else {}
             stage_branch(run_dir, char, direction, args.dry_run, scenes=(done or {}).get("scenes") or [])
         if args.detail_pages:
-            stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
-                               cover_first=args.cover_first,
-                               allow_no_sheet=args.no_sheet,
-                               review=False if args.no_page_review else None,
-                               note=args.note, lang=args.lang)
+            def draw(note, source=None):
+                stage_detail_pages(run_dir, args.dry_run, only=args.page or None,
+                                   cover_first=args.cover_first, keep_from=source or args.keep_from, textless=args.textless,
+                                   keep_basis=tuple(args.keep_basis), allow_no_sheet=args.no_sheet,
+                                   text_guard=args.note if args.lou_verify else "",   # 루가 만든 지시로 고칠 때만. 재시도 지시가 아니라 처음 지시
+                                   review=False if args.no_page_review else None,
+                                   note=note, lang=args.lang)
+            if args.lou_verify and not args.dry_run:
+                import lou
+                lou.verified_keep(run_dir, args.page[0], args.keep_from, args.note, args.lang, draw, args.lou_verify)
+            else:
+                draw(args.note)
         return 0
 
     if new_run:

@@ -796,10 +796,65 @@ def note_block(note: str) -> str:
             "- 적힌 말이 이야기와 부딪히면 이야기를 따른다.\n")
 
 
+TEXTLESS = "## 글자 없이 그리기\n앞의 대사·나레이션·제목 지시와 관계없이 말풍선, 나레이션 상자, 효과음, 글자를 전혀 그리지 않는다. 빈 말풍선이나 상자도 그리지 않고 행동과 표정으로 보여 준다."
+
+
+def guard_text(run_dir: Path, before: Path, after: Path, note: str) -> list[tuple[str, str]]:
+    """구도 유지로 고친 장에서, 고치라고 하지 않은 말풍선의 안쪽(글자)을 고치기 전 그림에서 되살린다(textguard).
+    note 는 처음 지시다 — 재시도 지시는 「그대로 두라」며 다른 말풍선의 글까지 적어서, 그걸로 보면 지킬 글이 고칠 글이 된다.
+    루가 만든 지시로 고칠 때만 부른다(draw_continue 의 text_guard). 그때도 끄려면 NH_TEXT_GUARD=0.
+    글자 옮겨 적기가 실패하면 아무것도 바꾸지 않는다."""
+    if os.environ.get("NH_TEXT_GUARD", "1").strip().lower() in ("0", "off", "false", "no"):
+        return []
+    import lou
+    import textguard
+    try:
+        return textguard.restore(before, after, note, lambda paths: lou.read_all(run_dir, paths),
+                                 lou.squash, lou.near, lou.quoted)
+    except Exception as exc:                                  # noqa: BLE001 — 지키기가 실패해도 고친 그림은 남긴다
+        log(f"  [글자 지키기] 건너뜀: {type(exc).__name__}: {exc}")
+        return []
+
+
+def keep_prompt(template: str, note: str, sheet_names=(), basis_pages=()) -> str:
+    """구도 유지 프롬프트. 시트를 붙였으면 누구 시트인지 붙인 순서대로 적는다. 기준 장을 붙였으면 맨 뒤 그림이 몇 장인지 적는다.
+    메모는 적힌 그대로 넣는다."""
+    sheets = (f"둘째 그림부터는 캐릭터 시트다({', '.join(sheet_names)}). 바꾸는 인물은 그 사람의 시트대로 그린다.\n"
+              if sheet_names else "")
+    if basis_pages:
+        sheets += (f"마지막 그림은 같은 화의 {', '.join(map(str, basis_pages))}장이다. 「고칠 것」이 그 장과 같게 하라고 한 것"
+                   "(옷, 장식, 상처와 붕대의 자리, 소품의 모양, 때와 빛)은 이 그림을 기준으로 맞춘다. 이 그림의 구도와 말풍선은 가져오지 않는다.\n")
+    return template.rstrip().replace("{sheets}", sheets).replace("{note}", note)
+
+
+def keep_refs(source: Path, note: str, char: dict | None,
+              hero_sheets: dict[int, Path], cast_sheets: dict[str, Path],
+              basis: tuple[Path, ...] = ()) -> tuple[list[Path], list[str]]:
+    """구도 유지에 붙일 그림과 그 시트 주인 이름 — 지금 장, 「고칠 것」에 이름이 나온 사람의 시트, 기준 장.
+
+    장면 글에 이름이 나온다고 붙이지 않는다. 바꾸지 않을 사람의 시트까지 붙이면 그 사람도 시트 쪽으로
+    다시 그려질 수 있다. 직전 장은 붙이지 않는다. 이름이 하나도 없으면 지금 장만 붙는다.
+    basis — 같은 화의 다른 장(「몇 장과 같은 금관」처럼 이어짐을 맞출 기준). 글로만 「5장과 같게」라고 쓰는 것보다
+    그 장을 보여 주는 편이 확실하다. 한도 안에서 시트를 하나 덜 붙이더라도 기준 장은 붙인다(기준 장 하나 + 시트 둘까지)."""
+    # 「」 · “” 안은 말풍선에 들어갈 대사다 — 대사에 나온 이름으로 시트를 붙이지 않는다(그 사람이 그 장에 없을 수 있다).
+    note = re.sub(r"「[^」]*」|“[^”]*”|『[^』]*』", " ", note)
+    named: list[tuple[str, Path]] = []
+    for i, name in enumerate(protagonist_names(char)):
+        if i in hero_sheets and any(k in note for k in _name_keys(name)):
+            named.append((name, hero_sheets[i]))
+    for name, png in cast_sheets.items():
+        if png not in [p for _n, p in named] and any(k in note for k in _name_keys(name)):
+            named.append((name, png))
+    basis = tuple(basis)[:1]
+    named = named[:REF_LIMIT - 1 - len(basis)]
+    return [source, *(p for _n, p in named), *basis], [n for n, _p in named]
+
+
 def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                   allow_no_sheet: bool = False, on_page=None,
                   review: bool | None = None, note: str = "",
-                  lang: str = "ko", cover_first: bool = False) -> list[dict]:
+                  lang: str = "ko", cover_first: bool = False, keep_from: Path | None = None, textless: bool = False,
+                  keep_basis: tuple[int, ...] = (), text_guard: str = "") -> list[dict]:
     """이어그리기 — **지금의 최종 방식.** 구체화(detail.json)·콘티(board.json)·
     컷 대본을 전부 건너뛰고, story 단계(방향 후보) 산출물만으로 그린다.
 
@@ -900,6 +955,8 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
     dest = run_dir / PAGE_DIR
     dest.mkdir(parents=True, exist_ok=True)
     do_review = pagecheck.enabled() if review is None else bool(review)
+    if keep_from:
+        do_review = False
     tries = pagecheck.max_redraw() if do_review else 0
     log(f"[이어그리기] 표지 1장 + 장면 {len(scenes)}개 · 그림체 {style} · {provider}"
         + (f":{model}" if model else "")
@@ -920,6 +977,8 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
     # 세계관 체험(input.json play=true)은 표지를 안 그린다(하은 2026-11-03) — 제목이 사건 그 자체라 표지가
     # 할 일이 없고 그림 값만 든다. 번호는 그대로(1 = 표지 자리)이고 1장을 건너뛴다. 체험이 아니면 예전과 같다.
     skip_cover = bool((char or {}).get("play"))
+    if keep_from and (only[0] > len(scenes) + 1 or (skip_cover and only[0] == 1)):
+        raise SystemExit("구도를 유지할 장 번호가 없습니다")
     if skip_cover and cover_first:
         log("[이어그리기] 세계관 체험 — 표지는 그리지 않습니다")
         return made
@@ -927,96 +986,124 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         page_no = n_ + 1
         if n_ == 0 and skip_cover:
             continue
-        if n_ == 0:
-            prompt = build_cover_prompt(title=title, genre=genre, intro=intro,
-                                        char=char, spec=spec, cast=cast, style=style,
-                                        fixed_names=fixed_names, lang=lang, co=co_people,
-                                        attached=sheet_plan(char, None)[0],
-                                        cast_sheet_names=cover_cast_sheets(
-                                            cast_sheets, scenes, min(CAST_SHEET_LIMIT, REF_LIMIT - len(sheet_plan(char, None)[0]))))
+        if only and page_no not in only:
+            continue
+        if keep_from:
+            basis = [(b, page_path(run_dir, b)) for b in keep_basis if b != page_no and page_path(run_dir, b).exists()][:1]
+            refs, sheet_names = keep_refs(keep_from, note, char,
+                                          {i: path for i, path in enumerate(hero_sheets) if path.exists()}, cast_sheets,
+                                          tuple(p for _b, p in basis))
+            prompt = keep_prompt((HERE / "prompt/keep_page_prompt").read_text(encoding="utf-8"), note, sheet_names,
+                                 [b for b, _p in basis])
+            log("[구도 유지] 참조 순서: " + " → ".join(map(str, refs)))
         else:
-            # 직전 그림이 **실제로 있는지**를 본다. 차례로 그릴 때는 늘 있지만,
-            # 장면을 동시에 그리면 옆 장이 아직 안 끝나 없을 수 있다 — 그때
-            # "첨부한 직전 그림" 이라고 적으면 없는 그림을 가리키게 된다.
-            has_prev = page_path(run_dir, page_no - 1).exists()
-            one = scenes[n_ - 1]
-            lore = lorebook.page_block(lorebook.page_entries(
-                lore_world, " ".join(str(one.get(k) or "") for k in ("where", "what", "acting", "prev", "ends"))
-            )) if lore_world else ""
-            who, room = sheet_plan(char, one)
-            page_cast = cast_sheets_in_scene(cast_sheets, one, room)
-            prompt = imageprompt.apply_style_sections(
-                build_continue_prompt(direction, scenes, char, spec, cast,
-                                      scene_no=n_, has_prev=has_prev, fixed_names=fixed_names,
-                                      lang=lang, lore=lore, cast_sheet_names=page_cast, narration_none=bool(scene_data.get("narration_stage")), co=co_people, attached=who),
-                style).replace("{style}", imageprompt.load_style(style))
-        # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
-        # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
-        # 그 사람 말대로 다시 그리는 것이다.
-        import userbook
-        # 설정집 항목은 이 장의 장면 글로 고른다 — 그림체 설명까지 든 프롬프트 전체로 고르면 거의 모든 항목이 걸려
-        # 그림 모델 한도(32,000자)를 넘겼다(2026-10-26, 마법학교 2화 2쪽 실패). 표지는 소개 글로.
-        scene_text = intro if n_ == 0 else " ".join(str(one.get(k) or "") for k in ("where", "what", "acting", "look", "prev", "ends"))
-        cont = (run_dir / "continuation.json").is_file()
-        memory = ""
-        if cont:
-            import continuation
-            memory = continuation.memory_block(run_dir)
-        note_text = note_block(note) if note.strip() else ""
-        # 키워드 항목은 한도 안에 남는 자리만큼만 고른다(돈 안 듦). 항상 참고 · 진행 상태는 늘 넣는다.
-        room0 = IMAGE_PROMPT_MAX - len(prompt) - len(note_text) - len(memory) - 8
-        # 시트가 있는 사람(주인공 · 함께 주인공 · 조연 시트)은 설정집의 머리 · 얼굴 · 체형 글을 빼고 넣는다 — 시트와 싸워 이겼다(2026-11-20).
-        hero = str((char or {}).get("name") or "").strip() if (run_dir / "sheet.png").exists() else ""
-        co_sheeted = [str(o.get("name") or "").strip() for o in (char or {}).get("co") or []
-                      if isinstance(o, dict) and (run_dir / "sheets" / f"{str(o.get('name') or '').strip()}.png").exists()]
-        sheet_people = tuple(x for x in [hero] + co_sheeted + list(cast_sheets or {}) if x)
-        fixed = userbook.block(char, scene_text, "image", cont, budget=0, sheeted=sheet_people)          # 항상 참고 · 진행 상태만
-        book = userbook.block(char, scene_text, "image", cont, budget=max(0, room0 - len(fixed)), sheeted=sheet_people)
-        extra = "\n\n".join(x for x in (book, memory) if x)
-        base_prompt = prompt
+            if n_ == 0:
+                prompt = build_cover_prompt(title=title, genre=genre, intro=intro,
+                                            char=char, spec=spec, cast=cast, style=style,
+                                            fixed_names=fixed_names, lang=lang, co=co_people,
+                                            attached=sheet_plan(char, None)[0],
+                                            cast_sheet_names=cover_cast_sheets(
+                                                cast_sheets, scenes, min(CAST_SHEET_LIMIT, REF_LIMIT - len(sheet_plan(char, None)[0]))))
+            else:
+                # 직전 그림이 **실제로 있는지**를 본다. 차례로 그릴 때는 늘 있지만,
+                # 장면을 동시에 그리면 옆 장이 아직 안 끝나 없을 수 있다 — 그때
+                # "첨부한 직전 그림" 이라고 적으면 없는 그림을 가리키게 된다.
+                has_prev = page_path(run_dir, page_no - 1).exists()
+                one = scenes[n_ - 1]
+                lore = lorebook.page_block(lorebook.page_entries(
+                    lore_world, " ".join(str(one.get(k) or "") for k in ("where", "what", "acting", "prev", "ends"))
+                )) if lore_world else ""
+                who, room = sheet_plan(char, one)
+                page_cast = cast_sheets_in_scene(cast_sheets, one, room)
+                prompt = imageprompt.apply_style_sections(
+                    build_continue_prompt(direction, scenes, char, spec, cast,
+                                          scene_no=n_, has_prev=has_prev, fixed_names=fixed_names,
+                                          lang=lang, lore=lore, cast_sheet_names=page_cast, narration_none=bool(scene_data.get("narration_stage")), co=co_people, attached=who),
+                    style).replace("{style}", imageprompt.load_style(style))
+            # 사람이 적어 보낸 것은 **맨 뒤**에 붙인다 — 모델은 뒤에 온 것을 더
+            # 세게 듣는다. 그리라고 준 장면을 바꾸는 것이 아니라, 같은 장면을
+            # 그 사람 말대로 다시 그리는 것이다.
+            import userbook
+            # 설정집 항목은 이 장의 장면 글로 고른다 — 그림체 설명까지 든 프롬프트 전체로 고르면 거의 모든 항목이 걸려
+            # 그림 모델 한도(32,000자)를 넘겼다(2026-10-26, 마법학교 2화 2쪽 실패). 표지는 소개 글로.
+            scene_text = intro if n_ == 0 else " ".join(str(one.get(k) or "") for k in ("where", "what", "acting", "look", "prev", "ends"))
+            cont = (run_dir / "continuation.json").is_file()
+            memory = ""
+            if cont:
+                import continuation
+                memory = continuation.memory_block(run_dir)
+            if textless:
+                prompt += "\n\n" + TEXTLESS
+            note_text = note_block(note) if note.strip() else ""
+            # 키워드 항목은 한도 안에 남는 자리만큼만 고른다(돈 안 듦). 항상 참고 · 진행 상태는 늘 넣는다.
+            room0 = IMAGE_PROMPT_MAX - len(prompt) - len(note_text) - len(memory) - 8
+            # 시트가 있는 사람(주인공 · 함께 주인공 · 조연 시트)은 설정집의 머리 · 얼굴 · 체형 글을 빼고 넣는다 — 시트와 싸워 이겼다(2026-11-20).
+            hero = str((char or {}).get("name") or "").strip() if (run_dir / "sheet.png").exists() else ""
+            co_sheeted = [str(o.get("name") or "").strip() for o in (char or {}).get("co") or []
+                          if isinstance(o, dict) and (run_dir / "sheets" / f"{str(o.get('name') or '').strip()}.png").exists()]
+            sheet_people = tuple(x for x in [hero] + co_sheeted + list(cast_sheets or {}) if x)
+            fixed = userbook.block(char, scene_text, "image", cont, budget=0, sheeted=sheet_people)          # 항상 참고 · 진행 상태만
+            book = userbook.block(char, scene_text, "image", cont, budget=max(0, room0 - len(fixed)), sheeted=sheet_people)
+            extra = "\n\n".join(x for x in (book, memory) if x)
+            base_prompt = prompt
 
-        def assemble(more: str = "") -> str:
-            """그림 모델에 보낼 글. 한도(32,000자)를 실제로 넘을 때만 설정집 · 연재 기억을 AI 로 한 번 줄인다
-            (2026-10-26) — 그림체 · 인물 · 이 장면 지시 · 사람이 적은 말 · 검수 메모는 그대로 둔다. 안 넘으면 부르지 않는다."""
-            nonlocal_extra = extra
-            whole = base_prompt + ("\n\n" + nonlocal_extra if nonlocal_extra else "") + ("\n\n" + note_text if note_text else "") + ("\n\n" + more if more else "")
-            if len(whole) <= IMAGE_PROMPT_MAX or not nonlocal_extra:
-                return whole
-            room = IMAGE_PROMPT_MAX - len(base_prompt) - len(note_text) - len(more) - 8
-            short = fit_extra(nonlocal_extra, scene_text, room, run_dir, dry_run)
-            return base_prompt + ("\n\n" + short if short else "") + ("\n\n" + note_text if note_text else "") + ("\n\n" + more if more else "")
+            def assemble(more: str = "") -> str:
+                """그림 모델에 보낼 글. 한도(32,000자)를 실제로 넘을 때만 설정집 · 연재 기억을 AI 로 한 번 줄인다
+                (2026-10-26) — 그림체 · 인물 · 이 장면 지시 · 사람이 적은 말 · 검수 메모는 그대로 둔다. 안 넘으면 부르지 않는다."""
+                nonlocal_extra = extra
+                whole = base_prompt + ("\n\n" + nonlocal_extra if nonlocal_extra else "") + ("\n\n" + note_text if note_text else "") + ("\n\n" + more if more else "")
+                if len(whole) <= IMAGE_PROMPT_MAX or not nonlocal_extra:
+                    return whole
+                room = IMAGE_PROMPT_MAX - len(base_prompt) - len(note_text) - len(more) - 8
+                short = fit_extra(nonlocal_extra, scene_text, room, run_dir, dry_run)
+                return base_prompt + ("\n\n" + short if short else "") + ("\n\n" + note_text if note_text else "") + ("\n\n" + more if more else "")
 
-        # 줄이기(AI 호출)는 이 프로세스가 실제로 그릴 장에만 — 장을 동시에 그리면 프로세스마다 이 반복문을 다 돌아서,
-        # 모든 장을 줄이면 같은 호출이 장 수의 제곱만큼 나갔다(2026-10-26, 6장에 36번 · 947원).
-        if only and page_no not in only:
-            continue
-        prompt = assemble()
-        # 프롬프트는 **그릴 장의 것만 쓴다.** 장면을 동시에 그리면 프로세스마다
-        # 이 반복문을 다 도는데, 자기가 안 그릴 장의 파일까지 쓰면 여럿이 같은
-        # 파일에 동시에 써서 반 토막이 남는다.
-        if only and page_no not in only:
-            continue
+            prompt = assemble()
         (dest / f"page{page_no:02d}.txt").write_text(prompt, encoding="utf-8")
         if dry_run:
+            if textless and do_review:
+                if n_:
+                    pagecheck.review_page(run_dir, page_no, scene_no=n_, direction=direction, char=char,
+                                          cast=cast, prev_is_cover=n_ == 1, next_from=opens_at(scenes, n_),
+                                          scenes=scenes, textless=True, dry_run=True)
+                else:
+                    covercheck.review_cover(run_dir, "", textless=True, dry_run=True)
             continue
 
         out = page_path(run_dir, page_no)
         label = "표지" if n_ == 0 else f"장면 {n_}/{len(scenes)}"
-        if out.exists():
+        if out.exists() and not keep_from:
             log(f"  {label}: 이미 있습니다 (다시 그리려면 지우세요)")
             continue
 
-        prev_img = page_path(run_dir, page_no - 1)
-        # 참조 순서: 주인공 시트 → 이 장면(표지면 이 화)의 조연 시트 → 직전 장.
-        who, room = sheet_plan(char, scenes[n_ - 1] if n_ > 0 else None)
-        page_refs = [cast_sheets[nm] for nm in (cast_sheets_in_scene(cast_sheets, scenes[n_ - 1], room) if n_ > 0 else
-                                                cover_cast_sheets(cast_sheets, scenes, min(CAST_SHEET_LIMIT, REF_LIMIT - len(who))))]
-        refs = sheet_refs(who) + page_refs + ([prev_img] if page_no > 1 and prev_img.exists() else [])
+        if not keep_from:
+            prev_img = page_path(run_dir, page_no - 1)
+            # 참조 순서: 주인공 시트 → 이 장면(표지면 이 화)의 조연 시트 → 직전 장.
+            who, room = sheet_plan(char, scenes[n_ - 1] if n_ > 0 else None)
+            page_refs = [cast_sheets[nm] for nm in (cast_sheets_in_scene(cast_sheets, scenes[n_ - 1], room) if n_ > 0 else
+                                                    cover_cast_sheets(cast_sheets, scenes, min(CAST_SHEET_LIMIT, REF_LIMIT - len(who))))]
+            refs = sheet_refs(who) + page_refs + ([prev_img] if page_no > 1 and prev_img.exists() else [])
         log(f"[{label}] 참조 {len(refs)}장 …")
         meta = None
         for attempt in (1, 2):
             try:
-                meta = imagegen.paint(STAGE, prompt, out, refs=refs, kind=imagegen.PAGE_KIND)
+                if keep_from:
+                    from tempfile import TemporaryDirectory
+                    from PIL import Image
+                    with TemporaryDirectory(dir=dest) as tmp:
+                        painted = Path(tmp) / out.name
+                        meta = imagegen.paint(STAGE, prompt, painted, refs=refs, kind=imagegen.PAGE_KIND)
+                        with Image.open(keep_from) as original, Image.open(painted) as result:
+                            if result.size != original.size:
+                                result.resize(original.size, Image.Resampling.LANCZOS).save(painted)
+                        # 글자 지키기는 루가 만든 지시(바꿀 글을 늘 「」로 적는다)로 고칠 때만 — 사람이 쓴 메모는 바꿀 글을
+                        # 정확히 안 적기도 해서, 시킨 변화를 시키지 않은 것으로 보고 되돌릴 수 있다(2026-11-22 하은 결정).
+                        for old, new in (guard_text(run_dir, keep_from, painted, text_guard) if text_guard else []):
+                            log(f"  [글자 지키기] 「{new}」 → 「{old}」 로 되살림")
+                        painted.replace(out)
+                        meta["output_path"] = str(out)
+                else:
+                    meta = imagegen.paint(STAGE, prompt, out, refs=refs, kind=imagegen.PAGE_KIND)
                 break
             except BaseException as exc:                             # noqa: BLE001
                 # 실패해도 무엇에 얼마나 썼는지는 남겨야 나중에 비용을 정산할 수
@@ -1063,7 +1150,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
         if n_ == 0:
             for attempt in range(tries + 1):
                 got, rmeta = covercheck.review_cover(
-                    run_dir, title, suffix="" if attempt == 0 else f".{attempt + 1}")
+                    run_dir, title, textless=textless, suffix="" if attempt == 0 else f".{attempt + 1}")
                 if rmeta and on_page:
                     on_page(rmeta)
                 if not got or got["verdict"] == "통과":
@@ -1109,7 +1196,7 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
             got, rmeta = pagecheck.review_page(
                 run_dir, page_no, scene_no=n_, direction=direction,
                 char=char, cast=cast, prev_is_cover=(n_ == 1),
-                next_from=prev_from,
+                next_from=prev_from, textless=textless,
                 suffix="" if attempt == 0 else f".{attempt + 1}",
                 # 그림이 보고 그린 것과 **같은 장면**을 검수에게 준다.
                 # direction 만 넘기던 때는 검수 쪽 장면 목록이 통째로
