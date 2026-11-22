@@ -143,6 +143,34 @@ class LouReviewTest(unittest.TestCase):
         self.assertEqual([(2, False, True)], [(it["page"], it["recommend"], it.get("unverified")) for it in result["items"]])
         self.assertEqual([2], result["failed_pages"])
 
+    def test_items_against_a_settings_fix_are_not_recommended(self):
+        """설정이 틀렸다고 본 제안이 있으면, 그림을 그 틀린 설정 쪽으로 바꾸자는 장 항목은 권하지 않는다."""
+        def answer(prompt):
+            what = self.kind(prompt)
+            if what in (2, 3, 4):
+                return dict(items=[dict(kind="person", sev="P1", what="설정과 머리색이 다름", note="머리를 붉게 바꾼다.")])
+            if what == "story":
+                self.assertIn('"id": "r1"', prompt)                       # 장 항목을 번호로 가리킬 수 있다
+                return dict(reply="설정부터 보세요.", items=[], settings=[
+                    dict(target="cast", who="마바 사아", now="붉은 머리", change="흰 머리", why="그림이 모두 흰 머리예요.",
+                         pages=[2, 3], instead_of=["r1", "r2", "r3", "r9", 7, {}]),
+                    dict(target="cast", who="가나 다라", change="검은 머리", pages=[3, 4], instead_of=1)])
+            if what == "verify":
+                return self.all_real(prompt, unless=("r2",))
+            return dict(reply="", items=[])
+        result, prompts = self.call(answer)
+        by_page = {it["page"]: it for it in result["items"]}
+        self.assertEqual((False, "s1"), (by_page[2]["recommend"], by_page[2].get("instead_of_setting")))
+        self.assertTrue(by_page[4]["recommend"])                          # 제안이 가리키지 않은 것은 그대로
+        # 재확인이 뺀 것에도 권하지 않음 · 표시가 붙는다(작가가 뺀 것을 골라도 한꺼번에 고치기로 갈 수 있다)
+        self.assertEqual([("r2", False, "s1")],
+                         [(it["id"], it["recommend"], it.get("instead_of_setting")) for it in result["dropped"]])
+        # 제안이 걸친 장(2 · 3)의 항목 번호만 남긴다 — 4장 항목 · 없는 번호 · 이상한 값은 버린다
+        self.assertEqual(["r1", "r2"], result["settings"][0]["instead_of"])
+        self.assertEqual([], result["settings"][1]["instead_of"])
+        verify2 = next(p for p in prompts if "정말 그런지 확인한다" in p and '"page"' not in p and "r1" in p)
+        self.assertIn('"change": "흰 머리"', verify2)                       # 다시 확인할 때도 설정 제안을 본다
+
     def test_plan_groups_by_page(self):
         request = self.root / "plan.json"
         out = self.root / "jobs.json"

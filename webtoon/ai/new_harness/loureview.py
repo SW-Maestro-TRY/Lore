@@ -108,8 +108,11 @@ def clean_items(data, pages, every=None):
     return out
 
 
-def clean_settings(raw, pages):
-    """설정 층 제안 — 같은 문제가 두 장 이상에서 되풀이될 때만. 고치지는 않는다(작가가 고르면 서버가 설정을 고친다)."""
+def clean_settings(raw, pages, ids=None):
+    """설정 층 제안 — 같은 문제가 두 장 이상에서 되풀이될 때만. 고치지는 않는다(작가가 고르면 서버가 설정을 고친다).
+    instead_of — 이 설정을 고치면 필요 없어지는 장 항목(그림을 지금 설정 쪽으로 바꾸자는 것)의 id.
+    ids — {장 항목 id: 장}. 제안이 걸친 장의 항목만 받는다(다른 장 항목은 그 장 재확인에 제안이 안 간다)."""
+    ids = ids or {}
     out = []
     for s in raw if isinstance(raw, list) else []:
         if not isinstance(s, dict) or s.get("target") not in ("cast", "progress", "name"):
@@ -118,13 +121,15 @@ def clean_settings(raw, pages):
         if len(set(where)) < 2 or not lou.string(s, "change") or not lou.string(s, "who"):
             continue
         out.append(dict(id=f"s{len(out) + 1}", target=s["target"], who=lou.string(s, "who"), now=lou.string(s, "now"),
-                        change=lou.string(s, "change"), why=lou.string(s, "why"), pages=sorted(set(where))))
+                        change=lou.string(s, "change"), why=lou.string(s, "why"), pages=sorted(set(where)),
+                        instead_of=[i for i in s["instead_of"] if isinstance(i, str) and ids.get(i) in where]
+                        if isinstance(s.get("instead_of"), list) else []))
     return out
 
 
 # ── 검토 ─────────────────────────────────────────────────────────────────────
 
-def _verify_page(run, dest, page, items, script, state, lang):
+def _verify_page(run, dest, page, items, script, state, lang, settings=()):
     """한 장의 항목을 크게 보고 다시 판단한다. (id → (real, why, fixed_note), 호출 기록)."""
     source = dict(page_paths(run))[page]
     paths = [shrink(source, dest / f"verify{page:02}.png", 1536)]
@@ -137,7 +142,8 @@ def _verify_page(run, dest, page, items, script, state, lang):
             named.append(png)
     paths += named
     context = dict(lang=lang, items=[{k: it[k] for k in ("id", "where", "what", "note", "basis")} for it in items],
-                   script=script["pages"].get(page), state=state)
+                   script=script["pages"].get(page), state=state,
+                   settings=[{k: s[k] for k in ("who", "now", "change", "why")} for s in settings if page in s["pages"]])
     prompt = (lou.PROMPTS / "verify_prompt").read_text(encoding="utf-8")
     prompt += "\n" + json.dumps(context, ensure_ascii=False) + "\n" + str([p.name for p in paths])
     call = llm.Call("LOU_REVIEW")
@@ -235,15 +241,17 @@ def review(run, request, output, dry=False):
             items += got
             if broke:
                 failed.append(n)
+        for i, it in enumerate(items):
+            it["id"] = f"r{i + 1}"                          # 화 전체 쪽이 장 항목을 번호로 가리킨다(instead_of)
         # 2) 화 전체 — 이해
         story_paths = [shrink(p, dest / f"story{n:02}.jpg", 700) for n, p in shown]
         context = dict(lang=lang, pages=numbers, script=script, state=state, cast=cast,
-                       found=[{k: it[k] for k in ("page", "what")} for it in items])
+                       found=[{k: it[k] for k in ("id", "page", "what")} for it in items])
         data, metas = _ask((lou.PROMPTS / "review_story_prompt").read_text(encoding="utf-8"), story_paths, context)
         for meta in metas:
             record(run, meta)
+        settings = clean_settings((data or {}).get("settings"), numbers, {it["id"]: it["page"] for it in items})
         items += clean_items(dict(items=(data or {}).get("items", [])), numbers)
-        settings = clean_settings((data or {}).get("settings"), numbers)
         reply = lou.string(data or {}, "reply") or (f"{len(items)}곳을 찾았어요." if items else "고칠 곳을 찾지 못했어요.")
         for i, it in enumerate(items):
             it["id"] = f"r{i + 1}"
@@ -252,7 +260,7 @@ def review(run, request, output, dry=False):
         for it in items:
             by_page.setdefault(it["page"], []).append(it)
         with ThreadPoolExecutor(4) as pool:
-            checked = list(pool.map(lambda kv: _verify_page(run, dest, kv[0], kv[1], script, state, lang),
+            checked = list(pool.map(lambda kv: _verify_page(run, dest, kv[0], kv[1], script, state, lang, settings),
                                     by_page.items()))
         verdict = {}
         for (page, its), (got, meta) in zip(by_page.items(), checked):
@@ -271,6 +279,14 @@ def review(run, request, output, dry=False):
             if fixed:
                 it["note"] = fixed if fixed.endswith(KEEP_TAIL) else f"{fixed} {KEEP_TAIL}"
             (kept if real else dropped).append(it if real else dict(it, why=why))
+        # 설정을 고치자는 제안과 반대 방향(그림을 지금 설정 쪽으로)인 항목은 권하지 않는다 — 둘 다 고르면 서로 되돌린다.
+        # 작가가 설정이 맞다고 보면 이 항목을 고르면 된다.
+        # 뺀 것도 권하지 않는다(작가가 직접 고르면 고칠 수는 있다).
+        against = {i: s["id"] for s in settings for i in s["instead_of"]}
+        kept = [dict(it, recommend=False, instead_of_setting=against[it["id"]]) if it["id"] in against else it
+                for it in kept]
+        dropped = [dict(it, recommend=False, **({"instead_of_setting": against[it["id"]]} if it["id"] in against else {}))
+                   for it in dropped]
         order = {"P1": 0, "P2": 1}
         kept.sort(key=lambda it: (not it["recommend"], order[it["sev"]], it["page"]))
         lou.safe_output(output)

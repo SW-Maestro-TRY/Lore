@@ -110,12 +110,20 @@ public class LouService {
             require(!id.isBlank());
             var versions=regen.versionsOf(run,no);
             if(versions.isEmpty()) throw new BusinessException(ErrorCode.NOT_FOUND,"지난 판이 없습니다.");
+            Map<String,Object> job;
             try {
-                var job=regen.statusOf(id);
+                job=regen.statusOf(id);
                 require(run.equals(job.get("run_id")) && Objects.equals(no,job.get("page")) && "done".equals(job.get("status")));
             } catch(NoSuchElementException e) { throw new BusinessException(ErrorCode.NOT_FOUND); }
-            before=runDir(run).resolve("pages/versions/page%02d.v%d.png".formatted(no,versions.getFirst().get("version")));
-            safety.checkText("webtoon-lou-check",text(input,"note",80));
+            /* 견주는 그림은 그 다시 그리기의 고치기 전 판과 지금 장이다. 그 뒤에 되돌리거나 또 그렸으면
+               지시와 그림이 어긋나므로 받지 않는다. */
+            before=regen.beforeIfCurrent(run,no,id).orElseThrow(()->new BusinessException(ErrorCode.INVALID_INPUT,
+                    "이 장은 그 뒤에 바뀌어서(되돌리기 · 다시 그리기) 확인할 수 없어요."));
+            /* 견줄 지시는 그 다시 그리기에 실제로 쓴 메모다. 루가 낸 지시는 80자를 넘기 일쑤라,
+               화면이 보낸 글을 받으면 잘리거나(→ 「지시가 끊겨 확인 못 함」) 400 으로 막혔다(2026-11-22 실측). */
+            String used=String.valueOf(job.getOrDefault("note",""));
+            if(used.isBlank()) safety.checkText("webtoon-lou-check",text(input,"note",80));
+            else input.put("note",used);
         }
         ObjectNode request=input.deepCopy();
         var day=LocalDate.now(ZoneId.of("Asia/Seoul"));
@@ -229,7 +237,7 @@ public class LouService {
     }
 
     void perform(String id,String run,String kind,ObjectNode input,Path before) {
-        Path dir=null;
+        Path dir=null, snap=null;
         try {
             db.update("update webtoon_lou_turn set status='running',updated_at=now() where id=?",id);
             dir=Files.createTempDirectory("lou-");
@@ -241,9 +249,16 @@ public class LouService {
                 files.restore(run, no);
             }
             if(before!=null) {
+                /* 지금 장을 먼저 떠 두고, 그다음에 아직 그 다시 그리기가 그린 그대로인지 본다. 되돌리기 · 다시 그리기는
+                   장을 바꾸기 전에 지금 그림을 판으로 남겨 판 번호부터 키우므로, 떠 두는 사이에 바뀌었으면 여기서 걸린다.
+                   하네스는 작품 폴더 밖의 그림을 견주지 않아 작품 폴더 안에 뜬다(이름이 pageNN 이 아니라 장으로 안 잡힌다). */
+                snap=runDir(run).resolve("pages/.lou-after-%s.png".formatted(id));
+                Files.copy(runDir(run).resolve("pages/page%02d.png".formatted(no)),snap,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                if(regen.beforeIfCurrent(run,no,input.path("regen_id").asText()).isEmpty())
+                    throw new IOException("확인하기 전에 장이 바뀌었습니다");
                 input.put("before",before.toString());
-                /* 하네스는 작품 폴더 밖의 그림을 견주지 않는다 — 지금 걸린 장을 그 자리에서 넘긴다. */
-                input.put("after",runDir(run).resolve("pages/page%02d.png".formatted(no)).toString());
+                input.put("after",snap.toString());
             }
             Path request=dir.resolve("input.json"), result=dir.resolve("result.json");
             json.writeValue(request.toFile(),input);
@@ -257,6 +272,7 @@ public class LouService {
             db.update("update webtoon_lou_turn set status='error',error=?,updated_at=now() where id=?","확인하지 못했어요. 다시 보내 주세요.",id);
             if(e instanceof InterruptedException) Thread.currentThread().interrupt();
         } finally {
+            if(snap!=null) try { Files.deleteIfExists(snap); } catch(IOException e) { log.warn("루 확인 사본 정리 실패 {}",snap,e); }
             try {
                 usage.ingestMetaFile(run,runDir(run).resolve("meta.json"));
             } catch(Exception e) { log.warn("루 원가 적재 실패 {}",id,e); }

@@ -242,6 +242,46 @@ public class RegenService {
         return out;
     }
 
+    /* ---- 다시 그리기 한 번의 전 · 후 (루 확인이 견준다) ------------------- */
+
+    /**
+     * 다시 그리기 하나가 끝난 자리를 적는다 — 고치기 전 판과, 그때 이 장의 가장 큰 판 번호.
+     * 그 뒤에 되돌리거나 또 그리면 지금 그림이 판으로 남아 가장 큰 번호가 커진다. 그러면 이 다시 그리기의
+     * 지시로 지금 그림을 견주면 안 된다(루 확인). 그림 바이트로 견주지 않는 것은, 배포 서버는 창고에서
+     * 되받은 그림이 다시 인코딩되어 바이트가 달라서다.
+     */
+    private void writePair(String runId, int pageNo, String regenId, Path before) {
+        try {
+            int latest = versionsOf(runId, pageNo).stream().mapToInt(r -> (int) r.get("version")).max().orElse(0);
+            Files.writeString(versionsDir(runId).resolve("regen-" + regenId + ".json"),
+                    json.writeValueAsString(Map.of("before", before.getFileName().toString(), "latest", latest)));
+        } catch (IOException | RuntimeException e) {
+            log.warn("다시 그리기 전후 기록을 못 남겼습니다 (run={}, 장={})", runId, pageNo, e);   // 그림은 이미 됐다
+        }
+    }
+
+    /**
+     * 이 다시 그리기의 고치기 전 판 — 지금 장이 아직 그 다시 그리기가 그린 그대로일 때만.
+     * 기록이 없거나, 그 뒤에 되돌리거나 또 그렸으면 비어 있다.
+     */
+    public java.util.Optional<Path> beforeIfCurrent(String runId, int pageNo, String regenId) {
+        if (regenId == null || !regenId.matches("[A-Za-z0-9-]{1,64}")) {
+            return java.util.Optional.empty();
+        }
+        try {
+            var pair = json.readTree(versionsDir(runId).resolve("regen-" + regenId + ".json").toFile());
+            Matcher m = VERSION_FILE.matcher(pair.path("before").asText(""));
+            int latest = versionsOf(runId, pageNo).stream().mapToInt(r -> (int) r.get("version")).max().orElse(0);
+            if (!m.matches() || Integer.parseInt(m.group(1)) != pageNo || latest != pair.path("latest").asInt(-1)) {
+                return java.util.Optional.empty();
+            }
+            Path before = versionsDir(runId).resolve(m.group());
+            return Files.isRegularFile(before) ? java.util.Optional.of(before) : java.util.Optional.empty();
+        } catch (IOException | RuntimeException e) {
+            return java.util.Optional.empty();
+        }
+    }
+
     /** 판본 하나를 그림으로. 없으면 {@code null}. */
     public byte[] versionImage(String runId, int pageNo, int version, int width) {
         Path src = versionsDir(runId).resolve("page%02d.v%d.png".formatted(pageNo, version));
@@ -419,6 +459,9 @@ public class RegenService {
                 fail(id, wasDrawn ? "다시 그리지 못했습니다 — 원래 그림은 그대로입니다"
                         : "이 장을 그리지 못했습니다 — 크레딧은 돌려드렸어요");
                 return;
+            }
+            if (previous != null) {
+                writePair(runId, no, id, previous);
             }
             reupload(runId);
             bakery.invalidate(runId, no);

@@ -107,6 +107,44 @@ class RegenServiceTest {
         return id;
     }
 
+    @Test
+    @DisplayName("루 확인에는 그 다시 그리기의 고치기 전 판만 준다 — 되돌리거나 또 그린 뒤에는 주지 않는다")
+    void 루_확인은_그_다시_그리기의_전후만() throws Exception {
+        페이지파일(1, "원본".getBytes());
+        when(harness.run(any(), any(), anyMap(), any())).thenAnswer(call -> {
+            페이지파일(1, "고친 것".getBytes());
+            return 0;
+        });
+        String id = service.queue("run-1", 1, "손", null, null, "keep", null, false);
+        service.go(id);
+        큐를_바로_돌린다();
+        assertThat(service.beforeIfCurrent("run-1", 1, id)).hasValueSatisfying(p -> assertThat(p).hasContent("원본"));
+        assertThat(service.beforeIfCurrent("run-1", 2, id)).isEmpty();          // 다른 장 번호로는 안 준다
+        assertThat(service.beforeIfCurrent("run-1", 1, "../x")).isEmpty();
+        service.revert("run-1", 1, 1);                                          // 「고친 것」이 판으로 남는다
+        assertThat(service.beforeIfCurrent("run-1", 1, id)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("같은 장을 또 그리면 앞선 다시 그리기로는 루 확인을 못 하고, 새 것으로만 한다")
+    void 또_그리면_앞선_다시_그리기로는_확인하지_않는다() throws Exception {
+        페이지파일(1, "원본".getBytes());
+        var drawn = new java.util.concurrent.atomic.AtomicInteger();
+        when(harness.run(any(), any(), anyMap(), any())).thenAnswer(call -> {
+            페이지파일(1, ("고친 것 " + drawn.incrementAndGet()).getBytes());
+            return 0;
+        });
+        String first = service.queue("run-1", 1, "손", null, null, "keep", null, false);
+        service.go(first);
+        String second = service.queue("run-1", 1, "발", null, null, "keep", null, false);
+        service.go(second);
+        ArgumentCaptor<Runnable> steps = ArgumentCaptor.forClass(Runnable.class);
+        verify(runner, org.mockito.Mockito.times(2)).enqueue(steps.capture());
+        steps.getAllValues().forEach(Runnable::run);
+        assertThat(service.beforeIfCurrent("run-1", 1, first)).isEmpty();
+        assertThat(service.beforeIfCurrent("run-1", 1, second)).hasValueSatisfying(p -> assertThat(p).hasContent("고친 것 1"));
+    }
+
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(ints = {0, 1})
     void verifiedKeepRecordsOnlySuccessfulDrawing(int exit) throws Exception {

@@ -79,16 +79,25 @@ class LouTest {
         Path before=pagesDir.resolve("versions/page02.v12.png");
         Files.writeString(before,"before");
         when(regen.versionsOf("run",2)).thenReturn(List.of(Map.of("version",12),Map.of("version",9)));
-        when(regen.statusOf("regen")).thenReturn(Map.of("run_id","run","page",2,"status","done"));
+        // 루가 낸 지시는 80자를 넘는다 — 견줄 때는 화면이 보낸 글이 아니라 그 다시 그리기에 쓴 메모를 쓴다
+        String used="1컷 남자의 상의를 흰 셔츠로 바꾼다. ".repeat(6)+"나머지는 그대로.";
+        when(regen.statusOf("regen")).thenReturn(Map.of("run_id","run","page",2,"status","done","note",used));
         when(db.update(anyString(),any(Object[].class))).thenReturn(1);
+        // 그 뒤에 되돌리거나 또 그렸으면 그 다시 그리기 번호로는 확인하지 않는다(지시와 견줄 그림이 어긋난다)
+        when(regen.beforeIfCurrent("run",2,"regen")).thenReturn(Optional.empty());
+        assertEquals(ErrorCode.INVALID_INPUT,assertThrows(BusinessException.class,
+                ()->controller.check("run",Map.of("page",2,"regen_id","regen","method","keep"))).getErrorCode());
+        when(regen.beforeIfCurrent("run",2,"regen")).thenReturn(Optional.of(before));
         doAnswer(i->{Files.writeString(pagesDir.resolve("page02.png"),"after");return null;})
                 .when(files).restore("run",2);
         var captured=new CompletableFuture<List<String>>();
+        var afterPath=new java.util.concurrent.atomic.AtomicReference<Path>();
         when(harness.run(isNull(),anyList(),anyMap(),any())).thenAnswer(invocation->{
             List<String> args=invocation.getArgument(1);
             var input=new ObjectMapper().readTree(Path.of(args.get(3)).toFile());
+            afterPath.set(Path.of(input.path("after").asText()));
             captured.complete(List.of(args.get(2),Files.readString(Path.of(input.path("before").asText())),
-                    Files.readString(Path.of(input.path("after").asText()))));
+                    Files.readString(Path.of(input.path("after").asText())),input.path("note").asText()));
             Files.writeString(Path.of(args.getLast()),"{\"ok\":true,\"reply\":\"확인했어요\"}");
             return 0;
         });
@@ -98,8 +107,35 @@ class LouTest {
         try {
             controller.check("run",Map.of("page",2,"regen_id","regen","method","keep","note","손"));
             TransactionSynchronizationManager.getSynchronizations().getFirst().afterCommit();
-            assertEquals(List.of("--lou-check","before","after"),captured.get(5,TimeUnit.SECONDS));
+            assertEquals(List.of("--lou-check","before","after",used),captured.get(5,TimeUnit.SECONDS));
             assertTrue(finished.await(5,TimeUnit.SECONDS));
+            assertEquals(pagesDir,afterPath.get().getParent());              // 지금 장을 작품 폴더 안에 떠 두고 견준다
+            assertTrue(afterPath.get().getFileName().toString().startsWith(".lou-after-"));
+            assertFalse(Files.exists(afterPath.get()));                       // 떠 둔 사본은 치운다
+        } finally { TransactionSynchronizationManager.clearSynchronization(); }
+    }
+
+    @Test void pageChangedBeforeTheCheckRunsIsNotCompared() throws Exception {
+        // 받을 때는 그 다시 그리기 그대로였는데, 확인이 돌기 전에 되돌렸다 — 견주지 않고 오류로 남긴다
+        Path pagesDir=root.resolve("run/pages");
+        Files.createDirectories(pagesDir.resolve("versions"));
+        Path before=pagesDir.resolve("versions/page02.v12.png");
+        Files.writeString(before,"before");
+        Files.writeString(pagesDir.resolve("page02.png"),"reverted");
+        when(regen.versionsOf("run",2)).thenReturn(List.of(Map.of("version",12)));
+        when(regen.statusOf("regen")).thenReturn(Map.of("run_id","run","page",2,"status","done","note","손"));
+        when(regen.beforeIfCurrent("run",2,"regen")).thenReturn(Optional.of(before),Optional.empty());
+        when(db.update(anyString(),any(Object[].class))).thenReturn(1);
+        var finished=new CountDownLatch(1);
+        doAnswer(i->{finished.countDown();return 1;}).when(usage).ingestMetaFile(eq("run"),any());
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            controller.check("run",Map.of("page",2,"regen_id","regen","method","keep"));
+            TransactionSynchronizationManager.getSynchronizations().getFirst().afterCommit();
+            assertTrue(finished.await(5,TimeUnit.SECONDS));
+            verify(harness,never()).run(any(),anyList(),anyMap(),any());
+            verify(db).update(contains("status='error'"),any(Object[].class));
+            try(var left=Files.list(pagesDir)) { assertTrue(left.noneMatch(f->f.getFileName().toString().startsWith(".lou-after-"))); }
         } finally { TransactionSynchronizationManager.clearSynchronization(); }
     }
 
