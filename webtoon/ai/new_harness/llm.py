@@ -316,6 +316,9 @@ _PROXY_REFUSAL_MARKERS = (
     "moderation_blocked", "content_policy", "safety system", "safety_violation",
     "rejected as a result of our safety system", "content_policy_violation",
 )
+# openai.OpenAI(base_url=None) 은 환경변수 OPENAI_BASE_URL 을 다시 읽어 프록시로 보내 버린다.
+# 공식 API 폴백에는 반드시 공식 엔드포인트 URL 을 명시한다.
+OPENAI_OFFICIAL_BASE_URL = "https://api.openai.com/v1"
 
 
 def can_fallback_to_api_key() -> bool:
@@ -342,6 +345,9 @@ def mark_codex_proxy_tripped(reason: object) -> None:
         if not _codex_proxy_tripped:
             _codex_proxy_tripped = True
             _codex_proxy_trip_reason = text
+            if FALLBACK_OPENAI_API_KEY:
+                os.environ["OPENAI_API_KEY"] = FALLBACK_OPENAI_API_KEY
+                os.environ.pop("OPENAI_BASE_URL", None)
 
 
 def using_codex_proxy(provider: str) -> bool:
@@ -364,7 +370,7 @@ def make_direct_openai_backend(max_retries: int = 3):
     """프록시 URL 을 건너뛰고 공식 OpenAI API 키로 직접 부르는 백엔드."""
     return story.OpenAIBackend(
         api_key=FALLBACK_OPENAI_API_KEY,
-        base_url=None,
+        base_url=OPENAI_OFFICIAL_BASE_URL,
         max_retries=max_retries,
     )
 

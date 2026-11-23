@@ -160,7 +160,7 @@ with patch.object(llm.story, "OpenAIBackend", DirectOpenAIBackend):
     text, meta = call("hello")
     assert text == "direct-ok"
     assert FailingProxyBackend.calls == 1
-    assert direct_calls == [("real-openai-key", None, "gpt-5.1")]
+    assert direct_calls == [("real-openai-key", llm.OPENAI_OFFICIAL_BASE_URL, "gpt-5.1")]
     assert meta["model"] == "gpt-5.1"
     assert meta["codex_proxy_fallback"] is True
     assert "429" in meta["codex_proxy_fallback_reason"]
@@ -182,7 +182,7 @@ with patch.object(llm.story, "OpenAIBackend", DirectOpenAIBackend):
     assert text2 == "direct-ok"
     assert FailingProxyBackend.calls == 1
     assert len(direct_calls) == 2
-    assert direct_calls[1] == ("real-openai-key", None, "gpt-5.1")
+    assert direct_calls[1] == ("real-openai-key", llm.OPENAI_OFFICIAL_BASE_URL, "gpt-5.1")
     assert meta2["codex_proxy_fallback"] is True
     assert meta2["cost"]["total"] > 0
 '''
@@ -307,11 +307,32 @@ with patch.object(imagegen.story, "make_sheet_painter", side_effect=fake_make_sh
         assert out.read_bytes() == b"PNGDATA"
         assert len(painter_calls) == 2
         assert painter_calls[0][2] is None and painter_calls[0][3] is None
-        assert painter_calls[1][2] == "real-openai-key" and painter_calls[1][3] == ""
+        assert painter_calls[1][2] == "real-openai-key" and painter_calls[1][3] == llm.OPENAI_OFFICIAL_BASE_URL
         assert res["codex_proxy_fallback"] is True
         assert res["cost"]["cost_basis"] != "codex_subscription", res["cost"]
         assert res["cost"]["total"] > 0, res["cost"]
         assert llm.is_codex_proxy_tripped()
+'''
+        env = {**os.environ, "WEBTOON_CODEX_PROXY": "true",
+               "CODEX_PROXY_API_KEY": "proxy-test-key",
+               "CODEX_PROXY_BASE_URL": "http://127.0.0.1:8317/v1",
+               "WEBTOON_API_KEY": "real-openai-key"}
+        result = subprocess.run([sys.executable, "-c", script], cwd=HERE,
+                                env=env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_direct_backend_ignores_proxy_openai_base_url_env(self):
+        script = r'''
+import os
+import llm
+
+assert os.environ["OPENAI_BASE_URL"] == "http://127.0.0.1:8317/v1"
+backend = llm.make_direct_openai_backend(max_retries=1)
+assert str(backend.client.base_url).startswith("https://api.openai.com/v1"), backend.client.base_url
+assert backend.client.api_key == "real-openai-key"
+llm.mark_codex_proxy_tripped("400 model_not_found")
+assert os.environ["OPENAI_API_KEY"] == "real-openai-key"
+assert "OPENAI_BASE_URL" not in os.environ
 '''
         env = {**os.environ, "WEBTOON_CODEX_PROXY": "true",
                "CODEX_PROXY_API_KEY": "proxy-test-key",
