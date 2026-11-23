@@ -1573,3 +1573,26 @@ export function savePrivateLorebook(book:LoreBook):Promise<LoreBook>{
  const path=book.library_id?`/lorebooks/mine/${encodeURIComponent(book.library_id)}`:"/lorebooks/mine";
  return call(path,{method:book.library_id?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(book)});
 }
+
+/** 개별 사용자에게 1회 띄우는 사과·보상 크레딧 알림. */
+export interface UserGift {
+  id: number;
+  ref_key: string;
+  title: string;
+  message: string;
+  credits: number;
+  created_at: string;
+}
+export interface UserGiftClaimResult {
+  id: number;
+  ref_key: string;
+  title: string;
+  granted: number;
+  balance: number;
+}
+export function pendingUserGifts(): Promise<{ gifts: UserGift[] }> {
+  return call("/gifts/pending");
+}
+export function claimUserGift(id: number): Promise<UserGiftClaimResult> {
+  return post(`/gifts/${encodeURIComponent(String(id))}/claim`, {});
+}
