@@ -140,7 +140,7 @@ def paint(stage: str, prompt: str, out_path: Path, refs=None,
             and llm.can_fallback_to_api_key()):
         painter, label = story.make_sheet_painter(
             provider, model, quality, refs,
-            api_key=llm.FALLBACK_OPENAI_API_KEY, base_url="")
+            api_key=llm.FALLBACK_OPENAI_API_KEY, base_url=llm.OPENAI_OFFICIAL_BASE_URL)
         used_fallback = True
         fallback_reason = llm.codex_proxy_trip_reason()
     elif provider == "openai" and llm.using_codex_proxy(provider) and llm.can_fallback_to_api_key():
@@ -167,7 +167,7 @@ def paint(stage: str, prompt: str, out_path: Path, refs=None,
                 llm.mark_codex_proxy_tripped(reason)
                 fb_painter, label = story.make_sheet_painter(
                     provider, model, quality, refs,
-                    api_key=llm.FALLBACK_OPENAI_API_KEY, base_url="")
+                    api_key=llm.FALLBACK_OPENAI_API_KEY, base_url=llm.OPENAI_OFFICIAL_BASE_URL)
                 used_fallback = True
                 fallback_reason = reason
                 data, meta = fb_painter(prompt, kind)
