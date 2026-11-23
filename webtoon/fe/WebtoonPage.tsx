@@ -53,6 +53,7 @@ import AdminWorks from "./screens/admin/AdminWorks";
 import AdminPayments from "./screens/admin/AdminPayments";
 import AdminDashboard from "./screens/admin/AdminDashboard";
 import RevisitPrompt from "./ui/RevisitPrompt";
+import UserGiftPopup from "./ui/UserGiftPopup";
 import RunningBubble from "./ui/RunningBubble";
 import DevNav from "./ui/DevNav";
 import "./final-theme.css";
@@ -315,6 +316,8 @@ function WebtoonScreens() {
       {route.view === "admin-works" && <AdminWorks go={go} />}
       {route.view === "admin-payments" && <AdminPayments go={go} />}
       <RevisitPrompt authenticated={authenticated} view={route.view} go={go} />
+      {/* 개별 사용자 사과·보상 크레딧 팝업 */}
+      <UserGiftPopup authenticated={authenticated} view={route.view} />
       {/* 출석 이벤트 — 로그인한 사람에게 하루 한 번(#862) */}
       <AttendancePopup authenticated={authenticated} view={route.view} go={go} />
       {/* 만드는 중이면 어느 화면에서든 돌아갈 동그라미(#507) */}
