@@ -86,6 +86,25 @@ CloudFront WAF의 `Block-LargeBody-Except-PieceMaker`에 막혀, 2026-11-10
 `PUT /api/webtoon/v1/play/worlds/*`만 이 규칙의 예외로 추가했다. 관리형 WAF
 규칙은 계속 적용된다. 이 예외는 프록시 스위치와 독립적이다.
 
+## 자동 API 키 폴백
+
+`WEBTOON_CODEX_PROXY=true`일 때 Codex 프록시 호출이 실패하면(프록시 중단·연결 오류·타임아웃·
+OAuth 만료·401/403·429 한도 초과·5xx 오류 등) 서버에 남아 있는 기존 공식 API 키
+(`WEBTOON_API_KEY` → `HAEUN_OPENAI_API_KEY` → `OPENAI_API_KEY`)로 공식 OpenAI API
+(`api.openai.com`)에 자동 폴백한다.
+
+- **모델 전환:** 텍스트 단계는 프록시 모델(`gpt-6-sol`) 대신 각 단계가 원래 쓰던 공식 OpenAI
+  모델(`gpt-5.1` 등)로 전환되고, 이미지 단계는 기존 이미지 모델(`gpt-image-2.5-flare`) 그대로
+  공식 API를 호출한다.
+- **안전 필터 거절 제외:** `TextRefused`나 `moderation_blocked`/`content_policy` 같은 안전
+  필터 거절은 프록시 장애가 아니므로 폴백하지 않는다.
+- **비용 기록:** 폴백된 호출은 `codex_subscription`($0)으로 덮어쓰지 않고 실제 API 비용을
+  그대로 기록하며, `meta.json`에 `codex_proxy_fallback: true`와 사유를 남긴다.
+- **프로세스 단위 전환:** 한 생성 프로세스(run)에서 프록시가 한 번 실패해 폴백되면, 같은 run 안의
+  후속 호출은 프록시 타임아웃을 반복하지 않고 공식 API 키로 직행한다. 다음 작업(새 프로세스)은
+  다시 프록시부터 시도하므로 Codex 한도가 리셋되거나 프록시가 복구되면 자동 복귀한다.
+- 폴백을 끄려면 `WEBTOON_CODEX_PROXY_FALLBACK=false`를 준다(기본 `true`).
+
 ## 복귀
 
 `WEBTOON_CODEX_PROXY=false`로 바꾸고 app 또는 `lore-api`를 재기동한다.

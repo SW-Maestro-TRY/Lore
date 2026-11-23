@@ -1072,7 +1072,10 @@ def _webtoon_provider_options() -> dict:
 
 
 def make_sheet_painter(provider: str, model: str, quality: str,
-                       photos: list[Path] | None = None):
+                       photos: list[Path] | None = None,
+                       *, api_key: str | None = None,
+                       base_url: str | None = None,
+                       max_retries: int | None = None):
     """(prompt, kind) -> (PNG 바이트, meta). 어느 provider 든 같은 모양으로 부른다.
 
     meta 는 성공이든 실패든 응답이 말해 준 것(finish_reason·텍스트 등)을 담는다
@@ -1087,8 +1090,12 @@ def make_sheet_painter(provider: str, model: str, quality: str,
         return paint_openrouter, "openrouter"
 
     if provider == "openai":
-        client = openai.OpenAI(api_key=env("OPENAI_API_KEY"),
-                               base_url=env("OPENAI_BASE_URL") or None)
+        resolved_key = env("OPENAI_API_KEY") if api_key is None else api_key
+        resolved_url = (env("OPENAI_BASE_URL") or None) if base_url is None else (base_url or None)
+        client_kwargs = {"api_key": resolved_key, "base_url": resolved_url}
+        if max_retries is not None:
+            client_kwargs["max_retries"] = max_retries
+        client = openai.OpenAI(**client_kwargs)
 
         def paint_openai(prompt: str, kind: str) -> tuple[bytes, dict]:
             return generate_sheet_image_openai(

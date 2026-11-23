@@ -22,6 +22,7 @@ Gemini 로 두려면 .env 에 이렇게 적는다:
 from __future__ import annotations
 
 import os
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -55,14 +56,41 @@ load_dotenv(HERE / ".env")
 # 서버별 Codex 프록시 전환. Java moderation 은 WEBTOON_API_KEY 로 공식 API 를
 # 계속 사용한다(무료 엔드포인트). 생성 파이썬에만 별도 프록시 키를 적용한다.
 # 켜도 장면 나누기와 검수 넷은 OpenRouter 의 Gemini 에 남는다(_proxy_keeps_stage_default).
+# 프록시가 죽거나 Codex 한도·인증에 막히면 기존 공식 키(WEBTOON_API_KEY / OPENAI_API_KEY)로
+# 자동 폴백한다(WEBTOON_CODEX_PROXY_FALLBACK=false 로 끌 수 있다).
+_RAW_FALLBACK_OPENAI_KEY = (
+    os.environ.get("WEBTOON_API_KEY")
+    or os.environ.get("HAEUN_OPENAI_API_KEY")
+    or os.environ.get("OPENAI_API_KEY")
+    or ""
+).strip()
+
 CODEX_PROXY_ENABLED = os.environ.get("WEBTOON_CODEX_PROXY", "").lower() in ("1", "true", "yes", "on")
+CODEX_PROXY_FALLBACK_ENABLED = (
+    os.environ.get("WEBTOON_CODEX_PROXY_FALLBACK", "true").strip().lower()
+    not in ("0", "false", "no", "off")
+)
+FALLBACK_OPENAI_API_KEY = ""
+_codex_proxy_lock = threading.Lock()
+_codex_proxy_tripped = False
+_codex_proxy_trip_reason = ""
+
 if CODEX_PROXY_ENABLED:
     proxy_key = os.environ.get("CODEX_PROXY_API_KEY", "").strip()
     proxy_url = os.environ.get("CODEX_PROXY_BASE_URL", "").strip()
+    if _RAW_FALLBACK_OPENAI_KEY and _RAW_FALLBACK_OPENAI_KEY != proxy_key:
+        FALLBACK_OPENAI_API_KEY = _RAW_FALLBACK_OPENAI_KEY
     if not proxy_key or not proxy_url:
-        raise SystemExit("WEBTOON_CODEX_PROXY 에 CODEX_PROXY_API_KEY 와 CODEX_PROXY_BASE_URL 이 필요합니다")
-    os.environ["OPENAI_API_KEY"] = proxy_key
-    os.environ["OPENAI_BASE_URL"] = proxy_url
+        if CODEX_PROXY_FALLBACK_ENABLED and FALLBACK_OPENAI_API_KEY:
+            _codex_proxy_tripped = True
+            _codex_proxy_trip_reason = "missing CODEX_PROXY_API_KEY or CODEX_PROXY_BASE_URL"
+            os.environ["OPENAI_API_KEY"] = FALLBACK_OPENAI_API_KEY
+            os.environ.pop("OPENAI_BASE_URL", None)
+        else:
+            raise SystemExit("WEBTOON_CODEX_PROXY 에 CODEX_PROXY_API_KEY 와 CODEX_PROXY_BASE_URL 이 필요합니다")
+    else:
+        os.environ["OPENAI_API_KEY"] = proxy_key
+        os.environ["OPENAI_BASE_URL"] = proxy_url
 
 # 운영 서버(EC2)는 Parameter Store 에서 키 하나(WEBTOON_API_KEY)만 받는다
 # (/opt/lore/load-secrets.sh → systemd EnvironmentFile → 자바 프로세스 →
@@ -282,11 +310,67 @@ STAGE_DEFAULT_MODELS[("SHEET_IMAGE", "openai")] = "gpt-image-2.5-flare"
 STAGE_DEFAULT_MODELS[("CAST_SHEET_IMAGE", "openai")] = "gpt-image-2.5-flare"
 
 
-def model_for(stage: str, provider: str) -> str:
-    """이 단계가 쓸 모델 이름."""
-    # 구독 경로의 글 단계는 gpt-6-sol 하나다. OpenRouter 에 남긴 단계(장면 · 검수 넷)는 원래 모델 그대로.
-    if CODEX_PROXY_ENABLED and stage.upper() not in IMAGE_STAGES and provider == "openai":
-        return env("CODEX_PROXY_TEXT_MODEL", "gpt-6-sol")
+# 안전 필터 거절 표식(openai_images.py 와 같은 기준). 거절은 프록시 장애가 아니므로
+# 공식 API 키로 다시 보내지 않는다 — 같은 프롬프트로 이중 과금만 난다.
+_PROXY_REFUSAL_MARKERS = (
+    "moderation_blocked", "content_policy", "safety system", "safety_violation",
+    "rejected as a result of our safety system", "content_policy_violation",
+)
+
+
+def can_fallback_to_api_key() -> bool:
+    """Codex 프록시가 안 될 때 공식 OpenAI API 키로 폴백할 수 있는가."""
+    return CODEX_PROXY_ENABLED and CODEX_PROXY_FALLBACK_ENABLED and bool(FALLBACK_OPENAI_API_KEY)
+
+
+def is_codex_proxy_tripped() -> bool:
+    """이 프로세스에서 프록시가 이미 실패해 공식 API 키로 전환되었는가."""
+    with _codex_proxy_lock:
+        return _codex_proxy_tripped
+
+
+def codex_proxy_trip_reason() -> str:
+    with _codex_proxy_lock:
+        return _codex_proxy_trip_reason
+
+
+def mark_codex_proxy_tripped(reason: object) -> None:
+    """같은 프로세스의 뒤따르는 호출도 프록시 타임아웃을 반복하지 않게 전환한다."""
+    global _codex_proxy_tripped, _codex_proxy_trip_reason
+    text = str(reason or "codex proxy error").strip()[:300]
+    with _codex_proxy_lock:
+        if not _codex_proxy_tripped:
+            _codex_proxy_tripped = True
+            _codex_proxy_trip_reason = text
+
+
+def using_codex_proxy(provider: str) -> bool:
+    return (CODEX_PROXY_ENABLED
+            and (provider or "").strip().lower() == "openai"
+            and not is_codex_proxy_tripped())
+
+
+def should_fallback_from_proxy(exc: BaseException) -> bool:
+    """프록시 장애·인증 만료·한도 초과 등일 때만 True. 안전 필터 거절은 False."""
+    if isinstance(exc, (KeyboardInterrupt, SystemExit, story.TextRefused)):
+        return False
+    low = str(exc or "").lower()
+    if any(m in low for m in _PROXY_REFUSAL_MARKERS):
+        return False
+    return True
+
+
+def make_direct_openai_backend(max_retries: int = 3):
+    """프록시 URL 을 건너뛰고 공식 OpenAI API 키로 직접 부르는 백엔드."""
+    return story.OpenAIBackend(
+        api_key=FALLBACK_OPENAI_API_KEY,
+        base_url=None,
+        max_retries=max_retries,
+    )
+
+
+def direct_model_for(stage: str, provider: str = "openai") -> str:
+    """Codex 프록시를 거치지 않을 때 이 단계가 원래 쓰는 모델 이름."""
     if stage.upper() in IMAGE_STAGES:
         model, _ = _pick(stage, "MODEL", ("NH_IMAGE_MODEL",))
         return model or STAGE_DEFAULT_MODELS.get((stage.upper(), provider)) or image_default(provider)
@@ -297,6 +381,21 @@ def model_for(stage: str, provider: str) -> str:
         model = ""
     return (model or STAGE_DEFAULT_MODELS.get((stage.upper(), provider))
             or story.default_model_for(provider))
+
+
+def _fallback_text_model(stage: str, explicit_model: str | None) -> str:
+    proxy_model = env("CODEX_PROXY_TEXT_MODEL", "gpt-6-sol")
+    if explicit_model and explicit_model != proxy_model:
+        return explicit_model
+    return direct_model_for(stage, "openai")
+
+
+def model_for(stage: str, provider: str) -> str:
+    """이 단계가 쓸 모델 이름."""
+    # 구독 경로의 글 단계는 gpt-6-sol 하나다. OpenRouter 에 남긴 단계(장면 · 검수 넷)는 원래 모델 그대로.
+    if using_codex_proxy(provider) and stage.upper() not in IMAGE_STAGES:
+        return env("CODEX_PROXY_TEXT_MODEL", "gpt-6-sol")
+    return direct_model_for(stage, provider)
 
 
 def load_images(paths) -> list:
@@ -310,26 +409,37 @@ class Call:
     def __init__(self, stage: str, provider: str = None, model: str = None,
                  max_retries: int = 3):
         self.stage = stage.upper()
+        self.max_retries = max_retries
+        self._explicit_model = model
         self.provider = (provider or provider_for(self.stage)).strip().lower()
         if self.provider not in PROVIDERS:
             raise SystemExit(f"알 수 없는 provider: {self.provider}")
-        self.model = model or model_for(self.stage, self.provider)
-        self.backend = story.make_backend(self.provider, max_retries=max_retries)
+        self._started_on_fallback = (
+            CODEX_PROXY_ENABLED
+            and self.provider == "openai"
+            and is_codex_proxy_tripped()
+            and can_fallback_to_api_key()
+        )
+        if self._started_on_fallback:
+            self.model = _fallback_text_model(self.stage, model)
+            self.backend = make_direct_openai_backend(max_retries=max_retries)
+        else:
+            self.model = model or model_for(self.stage, self.provider)
+            backend_retries = (min(max_retries, 1)
+                               if (using_codex_proxy(self.provider) and can_fallback_to_api_key())
+                               else max_retries)
+            self.backend = story.make_backend(self.provider, max_retries=backend_retries)
         self.temp_ok = self.backend.supports_temperature(self.model)
 
     def describe(self) -> str:
         return f"{self.provider}:{self.model}"
 
-    def __call__(self, prompt: str, images=None, temperature: float = None,
-                 max_tokens: int = None) -> tuple[str, dict]:
-        temp = DEFAULT_TEMPERATURE if temperature is None else temperature
-        started = time.monotonic()
-        at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
-        limit = max_tokens or STAGE_MAX_TOKENS.get(self.stage) or DEFAULT_MAX_TOKENS
-        text, usage, stop = self.backend.complete(
-            self.model,
+    def _run_complete(self, backend, model: str, temp_ok: bool, prompt: str,
+                      images, temp: float, limit: int) -> tuple[str, dict, str]:
+        text, usage, stop = backend.complete(
+            model,
             prompt,
-            temp if self.temp_ok else None,
+            temp if temp_ok else None,
             limit,
             images=images or None,
         )
@@ -338,13 +448,62 @@ class Call:
             story.warn(f"[{self.stage}] 응답이 길이 제한({limit})에서 끊겨 상한을 올려 한 번 다시 부릅니다.")
             first = usage
             limit = min(limit * 2, RETRY_MAX_TOKENS)
-            text, usage, stop = self.backend.complete(
-                self.model, prompt, temp if self.temp_ok else None, limit, images=images or None)
+            text, usage, stop = backend.complete(
+                model, prompt, temp if temp_ok else None, limit, images=images or None)
             usage = _add_usage(first, usage)
-        cost = story.cost_of(self.model, usage)
-        # 구독에 든 것은 openai(프록시)로 간 호출뿐이다. OpenRouter 로 간 장면 · 검수는 실제로 청구되므로
-        # 그 금액을 그대로 남긴다 — 0 으로 덮으면 하루 지출 상한과 원가 집계에서 빠진다.
-        if CODEX_PROXY_ENABLED and self.provider == "openai":
+        return text, usage, stop
+
+    def __call__(self, prompt: str, images=None, temperature: float = None,
+                 max_tokens: int = None) -> tuple[str, dict]:
+        temp = DEFAULT_TEMPERATURE if temperature is None else temperature
+        started = time.monotonic()
+        at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+        limit = max_tokens or STAGE_MAX_TOKENS.get(self.stage) or DEFAULT_MAX_TOKENS
+
+        used_fallback = self._started_on_fallback
+        fallback_reason = codex_proxy_trip_reason() if used_fallback else ""
+        active_backend = self.backend
+        actual_model = self.model
+        active_temp_ok = self.temp_ok
+
+        # Call 생성 뒤에 다른 호출에서 프록시가 이미 실패했다면 프록시를 다시 치지 않는다.
+        if (not used_fallback
+                and CODEX_PROXY_ENABLED
+                and self.provider == "openai"
+                and is_codex_proxy_tripped()
+                and can_fallback_to_api_key()):
+            active_backend = make_direct_openai_backend(max_retries=self.max_retries)
+            actual_model = _fallback_text_model(self.stage, self._explicit_model)
+            active_temp_ok = active_backend.supports_temperature(actual_model)
+            used_fallback = True
+            fallback_reason = codex_proxy_trip_reason()
+
+        try:
+            text, usage, stop = self._run_complete(
+                active_backend, actual_model, active_temp_ok, prompt, images, temp, limit)
+        except Exception as exc:
+            if (not used_fallback
+                    and CODEX_PROXY_ENABLED
+                    and self.provider == "openai"
+                    and can_fallback_to_api_key()
+                    and should_fallback_from_proxy(exc)):
+                reason = f"{type(exc).__name__}: {str(exc).strip()}"[:300]
+                story.warn(f"[{self.stage}] Codex 프록시 호출 실패({reason[:160]}) — 공식 OpenAI API 키로 폴백합니다.")
+                mark_codex_proxy_tripped(reason)
+                fb_backend = make_direct_openai_backend(max_retries=self.max_retries)
+                actual_model = _fallback_text_model(self.stage, self._explicit_model)
+                fb_temp_ok = fb_backend.supports_temperature(actual_model)
+                used_fallback = True
+                fallback_reason = reason
+                text, usage, stop = self._run_complete(
+                    fb_backend, actual_model, fb_temp_ok, prompt, images, temp, limit)
+            else:
+                raise
+
+        cost = story.cost_of(actual_model, usage)
+        # 구독에 든 것은 openai(프록시)로 성공한 호출뿐이다. OpenRouter 로 간 장면 · 검수나
+        # 공식 API 키로 폴백된 호출은 실제로 청구되므로 그 금액을 그대로 남긴다.
+        if CODEX_PROXY_ENABLED and self.provider == "openai" and not used_fallback:
             cost = {"input": 0.0, "output": 0.0, "cache_read": 0.0,
                     "cache_write": 0.0, "total": 0.0, "total_krw": 0,
                     "cost_basis": "codex_subscription"}
@@ -361,7 +520,7 @@ class Call:
         meta = {
             "stage": self.stage,
             "provider": self.provider,
-            "model": self.model,
+            "model": actual_model,
             # 언제 · 얼마나 걸렸는지. 한 편을 뽑는 데 걸리는 시간을 나중에
             # 재려면 호출마다 박혀 있어야 한다 — 로그로만 스쳐 가면 run 이
             # 끝난 뒤에는 알아낼 방법이 없다.
@@ -371,6 +530,9 @@ class Call:
             "stop": stop,
             "cost": cost,
         }
+        if used_fallback:
+            meta["codex_proxy_fallback"] = True
+            meta["codex_proxy_fallback_reason"] = fallback_reason
         if stop == "max_tokens":
             story.warn(f"[{self.stage}] 응답이 길이 제한에서 끊겼습니다 (상한 {limit}).")
         return text, meta

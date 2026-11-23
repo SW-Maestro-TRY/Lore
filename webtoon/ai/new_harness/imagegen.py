@@ -132,16 +132,50 @@ def paint(stage: str, prompt: str, out_path: Path, refs=None,
     provider, model, quality = backend_for(stage)
     refs = [Path(r) for r in (refs or []) if Path(r).exists()]
 
-    painter, label = story.make_sheet_painter(provider, model, quality, refs)
+    used_fallback = False
+    fallback_reason = ""
+    if (provider == "openai"
+            and llm.CODEX_PROXY_ENABLED
+            and llm.is_codex_proxy_tripped()
+            and llm.can_fallback_to_api_key()):
+        painter, label = story.make_sheet_painter(
+            provider, model, quality, refs,
+            api_key=llm.FALLBACK_OPENAI_API_KEY, base_url="")
+        used_fallback = True
+        fallback_reason = llm.codex_proxy_trip_reason()
+    elif provider == "openai" and llm.using_codex_proxy(provider) and llm.can_fallback_to_api_key():
+        painter, label = story.make_sheet_painter(
+            provider, model, quality, refs, max_retries=1)
+    else:
+        painter, label = story.make_sheet_painter(provider, model, quality, refs)
+
     started = time.monotonic()
     at = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
     # Logfire 에 그림 한 장이 한 span 으로 남는다(tracing.image_span). 실패하면
     # 예외가 그 span 에 기록되고 그대로 위로 던져진다.
     with tracing.image_span(stage, provider, model, quality, kind, prompt, refs) as span:
-        data, meta = painter(prompt, kind)
+        try:
+            data, meta = painter(prompt, kind)
+        except Exception as exc:
+            if (not used_fallback
+                    and provider == "openai"
+                    and llm.CODEX_PROXY_ENABLED
+                    and llm.can_fallback_to_api_key()
+                    and llm.should_fallback_from_proxy(exc)):
+                reason = f"{type(exc).__name__}: {str(exc).strip()}"[:300]
+                story.warn(f"[{stage}] Codex 프록시 이미지 호출 실패({reason[:160]}) — 공식 OpenAI API 키로 폴백합니다.")
+                llm.mark_codex_proxy_tripped(reason)
+                fb_painter, label = story.make_sheet_painter(
+                    provider, model, quality, refs,
+                    api_key=llm.FALLBACK_OPENAI_API_KEY, base_url="")
+                used_fallback = True
+                fallback_reason = reason
+                data, meta = fb_painter(prompt, kind)
+            else:
+                raise
         seconds = round(time.monotonic() - started, 2)
         cost_info = cost.cost_fields(provider, model, quality, (meta or {}).get("usage_dict"))
-        if llm.CODEX_PROXY_ENABLED:
+        if llm.CODEX_PROXY_ENABLED and provider == "openai" and not used_fallback:
             cost_info = {**cost_info, "total": 0.0, "total_krw": 0,
                          "cost_basis": "codex_subscription"}
         if span is not None:
@@ -150,13 +184,20 @@ def paint(stage: str, prompt: str, out_path: Path, refs=None,
             span.set_attribute("backend", label)
             span.set_attribute("cost", cost_info)
             span.set_attribute("meta", meta or {})
+            if used_fallback:
+                span.set_attribute("codex_proxy_fallback", True)
+                span.set_attribute("codex_proxy_fallback_reason", fallback_reason)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(data)
     # `at`·`seconds` — 그림 한 장에 몇 초가 걸리는지는 재시도·모델 교체를
     # 판단할 때 비용만큼 자주 쓰는 값인데, 남기지 않으면 run 이 끝난 뒤에는
     # 알아낼 방법이 없다. `chars` 는 이 호출에 실제로 들어간 프롬프트 길이다.
-    return {"stage": stage, "provider": provider, "model": model, "backend": label,
-            "quality": quality, "bytes": len(data), "at": at, "seconds": seconds,
-            "chars": len(prompt), "refs": [r.name for r in refs],
-            "meta": meta or {}, "cost": cost_info,
-            "output_path": str(out_path)}
+    result = {"stage": stage, "provider": provider, "model": model, "backend": label,
+              "quality": quality, "bytes": len(data), "at": at, "seconds": seconds,
+              "chars": len(prompt), "refs": [r.name for r in refs],
+              "meta": meta or {}, "cost": cost_info,
+              "output_path": str(out_path)}
+    if used_fallback:
+        result["codex_proxy_fallback"] = True
+        result["codex_proxy_fallback_reason"] = fallback_reason
+    return result
