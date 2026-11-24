@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -636,6 +637,9 @@ def stage_scenes(run_dir: Path, char: dict, dry_run: bool, note: str = "", lang:
     """본문 + 인물 + 원문 → 장면. scenes.json 에 쓴다(기존과 같은 모양)."""
     template = "series/scene_prompt" if (run_dir / "continuation.json").is_file() else "own/scene_prompt"
     prompt = R.compose(template, scenes_input(run_dir, char, note), lang=lang)
+    if os.environ.get("NH_NARRATION") == "label":
+        # 작품이 「나레이션은 장소 · 시간 표지만」을 고른 경우(기본은 꺼짐 — 예전 run 의 프롬프트는 그대로다).
+        prompt += (Path(__file__).resolve().parent / "prompt" / "narration_label").read_text(encoding="utf-8")
     R.write_text(run_dir / "scene_prompt.txt", prompt)
     if dry_run:
         log(f"[장면] 프롬프트만 썼습니다 -> {run_dir / 'scene_prompt.txt'}")
