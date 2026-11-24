@@ -111,4 +111,15 @@ async function cardMetadata(card: string): Promise<Metadata> {
   }
 }
 
-export default WebtoonPage;
+export default function Page() {
+  return (
+    <>
+      <aside aria-label="웹툰 서비스 이전 안내" style={{ padding: "12px 16px", textAlign: "center", background: "#fff3da", color: "#352814", lineHeight: 1.6 }}>
+        로어 웹툰이 곧 새 주소로 이전해요.{" "}
+        <a href="https://loretoon.kr/webtoon" style={{ color: "inherit", fontWeight: 700, textDecoration: "underline" }}>loretoon.kr/webtoon</a>
+        <span style={{ display: "block", fontSize: "0.9em" }}>이전이 끝날 때까지는 지금처럼 이곳에서 이용해 주세요.</span>
+      </aside>
+      <WebtoonPage />
+    </>
+  );
+}
