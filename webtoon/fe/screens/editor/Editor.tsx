@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { creditBalance, creditHistory, type CreditLine } from "@common/api/credits";
-import { pageUrl, readAllowance, readResult, type RunResult } from "../../lib/api";
+import { readAllowance, readResult, type RunResult } from "../../lib/api";
 import { CREDIT_SHORT_EVENT, mountEditor, setEditorTranslator } from "../../lib/editorCore";
 import CreditShort from "../../ui/CreditShort";
-import { sceneParts } from "../../lib/sceneText";
 import { useLang } from "../../lib/i18n";
 import { track } from "../../lib/track";
 import type { Go } from "../../lib/nav";
@@ -27,7 +26,7 @@ import "./EditorFinal.css";
  * 엔진이 직접 그리는 것: #worksList(작품 목록) · #scenes(장 카드 전부, 세로) ·
  * #edEpTabs(회차) · #dockGrid(말풍선·스티커·효과음·그리기 도구) · #paintBar(그리기 모드 줄) · #regenAsk(다시 그리기 창) ·
  * #bakeResult(구운 결과) · 지난 판(.page-versions) · 여백 막대(.scene-gap).
- * React 가 더 그리는 것: 왼쪽 페이지 썸네일, 오른쪽 「다시 그리기」 단(활성 장의
+ * React 가 더 그리는 것: 오른쪽 「루에게」 단(#1037), 「다시 그리기」 단(활성 장의
  * 장면 한 줄 + 단추 — 누르면 엔진의 그 장 다시 그리기 단추를 대신 누른다),
  * 크레딧 딱지, 공유, 「완성본으로」. */
 
@@ -182,7 +181,6 @@ export default function Editor({ runId, go, authStatus = "loading" }:
     btn?.click();
   };
 
-  const activeNote = info?.pages.find((p) => p.no === active)?.caption || "";
 
   /* 편집실은 로그인해야 쓴다 (서버도 같은 규칙 — RunController.mustOwn).
      게스트 브라우저 uid 는 같은 컴퓨터를 쓰는 사람끼리 겹치고 지우면 사라져서
@@ -243,40 +241,8 @@ export default function Editor({ runId, go, authStatus = "loading" }:
         <div className="bake-result" id="bakeResult" hidden />
       </header>
 
-      <div className="ed-body wt-ed-body" style={{ ["--ed-left-w" as string]: `${sideW.left}px`, ["--ed-right-w" as string]: `${rightW}px` }}>
-        <aside className="ed-works wt-ed-left" id="edWorks">
-          <div className="wt-ed-pages">
-            <b className="wt-ed-lefthead">{t("페이지")}</b>
-            <div className="wt-ed-pagegrid">
-              {info ? info.pages.map((p) => (
-                <button key={p.no} type="button" className={`wt-ed-thumb${p.no === active ? " on" : ""}`}
-                        onClick={() => pickScene(p.no)} aria-label={t("{n}번째 장", { n: p.no })} aria-current={p.no === active}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={pageUrl(runId, p.no, 320)} alt="" loading="lazy" />
-                  <span>{p.no}</span>
-                </button>
-              )) : [1, 2, 3].map((i) => <div key={i} className="skeleton wt-ed-thumb" />)}
-            </div>
-          </div>
-          {/* 고른 장이 무슨 장면인지(#548) — 페이지 칸 바로 아래. 다시 그리기 칸에 있던 것을 옮겼다. */}
-          <div className="wt-ed-sceneinfo">
-            <b className="wt-ed-lefthead">{t("{n}번째 장", { n: active })}</b>
-            {activeNote ? (
-              /* 그림 밑에는 「장소와 상황」만 — 전체는 여기서 소제목별로(#548) */
-              <div className="wt-ed-sceneparts">
-                {sceneParts(activeNote).map((p, i) => (
-                  <div key={i} className="part">
-                    {p.label && <span>{t(p.label)}</span>}
-                    <p>{p.text}</p>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="dim">{t("이 장의 장면 설명이 없어요")}</p>}
-          </div>
-        </aside>
-
-        <div className="wt-ed-resize" role="separator" aria-orientation="vertical" aria-label={t("왼쪽 단 폭 조절")}
-             onPointerDown={(e) => startResize(e, "left")} onDoubleClick={() => resetSide("left")} />
+      <div className="ed-body wt-ed-body" style={{ ["--ed-left-w" as string]: "0px", ["--ed-right-w" as string]: `${rightW}px` }}>
+        {/* 왼쪽 페이지 칸(썸네일 · 장면 설명)은 뺐다 — 그림과 루가 넓게 보이게(#1037, 하은 2026-11-24 「옆에 이런 거 안 뜨는 게 나을 듯, 폰에서도」). */}
         <main className="ed-stage wt-ed-stage" id="stageCol">
           <div className="ep-tabs wt-ed-eptabs" id="edEpTabs" hidden />
           <div id="scenes" className="wt-ed-scenes" />
