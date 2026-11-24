@@ -11,6 +11,8 @@ import { track } from "../../lib/track";
 import type { Go } from "../../lib/nav";
 import { IconClose, IconEdit, IconMenu } from "../../ui/Icons";
 import ShareMenu from "../result/ShareMenu";
+import LouPanel from "./LouPanel";
+import "./LouPanel.css";
 import AuthModal from "@common/auth/AuthModal";
 import "./i18n";
 import "./Editor.css";
@@ -90,6 +92,18 @@ export default function Editor({ runId, go, authStatus = "loading" }:
   };
   const resetSide = (side: "left" | "right") => saveSides({ ...sideW, [side]: SIDE_DEFAULT[side] });
 
+  /* 오른쪽 단은 「루」(대화)와 「꾸미기」(말풍선 · 스티커 · 효과음 · 그리기 — 엔진의 서랍) 둘 중 하나를 보여 준다(#1037).
+     꾸미기 쪽 DOM 은 엔진이 붙잡고 있어서 숨기기만 하고 빼지 않는다. 루는 대화라 좁으면 읽기 어려워 최소 폭을 둔다. */
+  const [rightMode, setRightMode] = useState<"lou" | "tools">("lou");
+  useEffect(() => {
+    try { const m = localStorage.getItem("lore_editor_right"); if (m === "lou" || m === "tools") setRightMode(m); } catch { /* 비공개 창 */ }
+  }, []);
+  const pickRight = (m: "lou" | "tools") => {
+    setRightMode(m);
+    try { localStorage.setItem("lore_editor_right", m); } catch { /* 비공개 창 */ }
+  };
+  const rightW = rightMode === "lou" ? Math.max(sideW.right, 360) : sideW.right;
+
   /* 크레딧이 모자랄 때 엔진이 보내는 사건을 받아 안내를 띄운다(#548). */
   const [creditShort, setCreditShort] = useState<string | null>(null);
   useEffect(() => {
@@ -103,6 +117,7 @@ export default function Editor({ runId, go, authStatus = "loading" }:
   const [info, setInfo] = useState<RunResult | null>(null);
   useEffect(() => {
     let alive = true;
+    setInfo(null);                    // 작품을 바꾸면 앞 작품의 값 · 썸네일을 들고 있지 않는다
     readResult(runId).then((r) => { if (alive) setInfo(r); }).catch(() => {});
     return () => { alive = false; };
   }, [runId]);
@@ -228,7 +243,7 @@ export default function Editor({ runId, go, authStatus = "loading" }:
         <div className="bake-result" id="bakeResult" hidden />
       </header>
 
-      <div className="ed-body wt-ed-body" style={{ ["--ed-left-w" as string]: `${sideW.left}px`, ["--ed-right-w" as string]: `${sideW.right}px` }}>
+      <div className="ed-body wt-ed-body" style={{ ["--ed-left-w" as string]: `${sideW.left}px`, ["--ed-right-w" as string]: `${rightW}px` }}>
         <aside className="ed-works wt-ed-left" id="edWorks">
           <div className="wt-ed-pages">
             <b className="wt-ed-lefthead">{t("페이지")}</b>
@@ -271,14 +286,26 @@ export default function Editor({ runId, go, authStatus = "loading" }:
 
         <button type="button" className="dock-open wt-ed-dockopen" id="dockOpen"
                 aria-controls="edDock" aria-expanded="false">
-          <IconMenu size={18} /> {t("도구")}
+          <IconMenu size={18} /> {rightMode === "lou" ? t("루에게") : t("도구")}
         </button>
         <div className="dock-scrim" id="dockScrim" hidden />
 
         <div className="wt-ed-resize" role="separator" aria-orientation="vertical" aria-label={t("오른쪽 단 폭 조절")}
              onPointerDown={(e) => startResize(e, "right")} onDoubleClick={() => resetSide("right")} />
-        <aside className="ed-dock wt-ed-dock" id="edDock" aria-label={t("말풍선 · 스티커 · 효과음 · 그리기")}>
+        <aside className="ed-dock wt-ed-dock" id="edDock" data-mode={rightMode} aria-label={t("루와 꾸미기 도구")}>
           <div className="dock-handle" id="dockHandle" aria-hidden="true" />
+          <div className="wt-ed-modes" role="tablist" aria-label={t("오른쪽 단")}>
+            <button type="button" role="tab" aria-selected={rightMode === "lou"} className={`wt-ed-mode${rightMode === "lou" ? " on" : ""}`}
+                    onClick={() => pickRight("lou")}>{t("루에게")}</button>
+            <button type="button" role="tab" aria-selected={rightMode === "tools"} className={`wt-ed-mode${rightMode === "tools" ? " on" : ""}`}
+                    onClick={() => pickRight("tools")}>{t("꾸미기")}</button>
+          </div>
+          {/* 꾸미기로 옮겨도 루 대화 · 고치는 중인 일은 그대로 둔다(숨기기만). 작품이 바뀌면 새 대화다. */}
+          <div className="lou-wrap" hidden={rightMode !== "lou"}>
+            {/* 다시 그리기 값은 **이 작품의** 화질 값만 쓴다 — 모르면 돈 드는 단추를 잠근다(계정 기본값을 보여 주고 다른 값을 받지 않게). */}
+            <LouPanel key={runId} runId={runId} active={active} visible={rightMode === "lou"}
+                      regenCost={typeof info?.regen_cost === "number" ? info.regen_cost : null} onPick={pickScene} />
+          </div>
           <div className="dock-bar wt-ed-dockbar">
             <div className="dock-tabs wt-ed-docktabs" id="dockTabs">
               <button type="button" className="dock-tab chip is-on" data-tab="bubble">{t("말풍선")}</button>

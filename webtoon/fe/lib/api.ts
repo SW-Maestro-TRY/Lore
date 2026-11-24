@@ -785,6 +785,8 @@ export interface RunResult {
   inputs?: RunInputs;
   /** 이미지 안전 기준에 걸려 빈 장으로 완성된 장 번호들(#626) */
   unsafe_pages?: number[];
+  /** 이 작품의 한 장 다시 그리기 값 — 화질마다 다르다(#787) */
+  regen_cost?: number;
   /** 그 장마다 걸린 이유(선정성·폭력·잔혹 …) — 장 번호 → 사람이 읽는 말(2026-10-27) */
   unsafe_reasons?: Record<string, string>;
   /** 같은 이유를 코드로(sexual · violence …) — 화면이 언어마다 이름을 붙인다. 빈 목록이면 「안전 기준」 */

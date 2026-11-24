@@ -143,6 +143,9 @@ class RegenServiceTest {
         steps.getAllValues().forEach(Runnable::run);
         assertThat(service.beforeIfCurrent("run-1", 1, first)).isEmpty();
         assertThat(service.beforeIfCurrent("run-1", 1, second)).hasValueSatisfying(p -> assertThat(p).hasContent("고친 것 1"));
+        // 화면에 주는 진행 상태: 앞선 것은 자기 고치기 전 판(v1)을 그대로 알려 주고, 지금 그림이 아니라고 알린다
+        assertThat(service.statusOf(first)).containsEntry("before_version", 1).containsEntry("current", false);
+        assertThat(service.statusOf(second)).containsEntry("before_version", 2).containsEntry("current", true);
     }
 
     /** 그리는 실과 다른 실에서 부른다 — 잠금은 실마다 쥔다. */

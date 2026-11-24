@@ -37,6 +37,8 @@ const fillVars = (s: string, v?: Record<string, string | number>) =>
 let tr: Tr = fillVars;
 /** 편집실에서 크레딧이 모자랄 때 화면에 알리는 사건 이름 — detail 은 서버 원문. */
 export const CREDIT_SHORT_EVENT = "lore:editor-credit-short";
+/** 엔진 밖(루 대화)에서 장 그림을 바꿨을 때 — detail 은 {no, versions?}. 엔진이 그 장을 새로 받고 지난 판 줄을 다시 그린다. */
+export const SCENE_CHANGED_EVENT = "lore:editor-scene-changed";
 
 export function setEditorTranslator(fn: Tr | null): void {
   tr = fn || fillVars;
@@ -2604,6 +2606,18 @@ export function mountEditor(
       }
     });
   })();
+
+  /* 루가 장을 고치거나 되돌린 뒤 — 엔진이 쥔 장 그림 · 지난 판 줄을 새로 받는다. */
+  on(window, SCENE_CHANGED_EVENT, ((e: CustomEvent) => {
+    const no = Number(e.detail?.no);
+    if (!RUN_ID || !Number.isInteger(no) || !$(`#scene-${no}`)) return;
+    bustScene(no);
+    /* 지난 판 줄은 innerHTML 로 그린다 — 밖에서 온 판 목록은 정수 판 번호만 받는다. */
+    const given = e.detail?.versions;
+    const versions = Array.isArray(given) && given.every(v => Number.isInteger(v?.version))
+      ? given.map(v => ({ version: v.version, at: Number(v.at) || 0 })) : undefined;
+    void paintVersions(no, versions);
+  }) as EventListener);
 
   return () => {
     if (followRaf) cancelAnimationFrame(followRaf);

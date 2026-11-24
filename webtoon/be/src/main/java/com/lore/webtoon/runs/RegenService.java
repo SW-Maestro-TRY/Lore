@@ -225,6 +225,10 @@ public class RegenService {
         out.put("status", one.getStatus());
         out.put("error", one.getError());
         out.put("note", noteOf(one));
+        /* 이 다시 그리기의 고치기 전 판과, 지금 장이 아직 이 다시 그리기의 그림인지 — 루 화면의 전 · 후와 되돌리기가 쓴다(#1037).
+           가장 큰 판 번호로 짐작하면 다른 탭에서 같은 장을 또 고친 뒤 엉뚱한 판으로 되돌린다. */
+        beforeOf(one.getRunId(), one.getPageNo(), one.getId()).ifPresent(v -> out.put("before_version", v));
+        out.put("current", beforeIfCurrent(one.getRunId(), one.getPageNo(), one.getId()).isPresent());
         out.put("versions", versionsOf(one.getRunId(), one.getPageNo()));
         return out;
     }
@@ -269,10 +273,26 @@ public class RegenService {
      */
     private void markDrawn(String runId, int pageNo, String regenId, Path before) {
         try {
-            Files.writeString(drawnMark(runId, pageNo),
-                    json.writeValueAsString(Map.of("regen", regenId, "before", before.getFileName().toString())));
+            String mark = json.writeValueAsString(Map.of("regen", regenId, "before", before.getFileName().toString()));
+            Files.writeString(drawnMark(runId, pageNo), mark);
+            Files.writeString(versionsDir(runId).resolve("regen-" + regenId + ".json"), mark);   // 그 뒤에 장이 바뀌어도 남는다
         } catch (IOException | RuntimeException e) {
             log.warn("다시 그리기 전후 기록을 못 남겼습니다 (run={}, 장={})", runId, pageNo, e);   // 그림은 이미 됐다
+        }
+    }
+
+    /** 이 다시 그리기가 고치기 전에 떠 둔 판 번호. 그 뒤에 장이 바뀌어도 그대로다. 기록이 없으면 비어 있다. */
+    java.util.Optional<Integer> beforeOf(String runId, int pageNo, String regenId) {
+        if (regenId == null || !regenId.matches("[A-Za-z0-9]{1,32}")) {
+            return java.util.Optional.empty();
+        }
+        try {
+            var mark = json.readTree(versionsDir(runId).resolve("regen-" + regenId + ".json").toFile());
+            Matcher m = VERSION_FILE.matcher(mark.path("before").asText(""));
+            return m.matches() && Integer.parseInt(m.group(1)) == pageNo
+                    ? java.util.Optional.of(Integer.parseInt(m.group(2))) : java.util.Optional.empty();
+        } catch (IOException | RuntimeException e) {
+            return java.util.Optional.empty();
         }
     }
 
