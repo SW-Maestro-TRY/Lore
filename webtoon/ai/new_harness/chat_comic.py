@@ -187,7 +187,9 @@ SCENE_RULES = (
     "- 피·상처는 작은 얼룩이나 그림자로만.\n"
     "- 「두 번 뽀뽀한다」「여러 번 때린다」처럼 같은 동작을 되풀이하는 말은 「연달아 ~한다」로 쓴다 — "
     "그림 모델이 횟수만큼 같은 인물을 한 컷에 여러 번 그린다.\n"
-    "- 우스운 순간은 그렇게 보이게(과장된 표정, 개그 톤) 적는다.\n"
+    "- 우스운 순간은 그렇게 보이게(과장된 표정, 개그 톤) 적는다.\n"    "- 흐름은 천천히 차분하게: 말과 말 사이에 말 없는 컷(표정, 반응, 손짓, 풍경, 둘 사이의 거리)을 넣어 숨 쉴 틈을 준다. "
+    "말풍선이 몰리는 컷을 만들지 않는다.\n"
+
     "- wear: 이 장면에 나오는 인물마다 지금 입고 있는 옷(이름 → 옷차림). 시트의 옷은 기본값일 뿐이고 그림은 이 칸을 따른다. "
     "대화에 옷이 나오거나 갈아입으면 그 장면부터 바꿔 적고, 안 나오면 앞 장면 옷을 그대로 적는다. "
     "첫 장면은 대화와 상황(장소, 직전에 한 일)에서 정하고, 그래도 알 수 없을 때만 등장인물 설명·사용자 메모의 기본 옷을 쓴다.\n"
@@ -238,6 +240,30 @@ def _check_plan(plan: dict, total: int) -> list[dict]:
             out.append({"subtitle": str(ep.get("subtitle") or "").strip(), "ranges": ranges[k:k + MAX_SCENES_PER_EPISODE]})
     if cursor != total + 1:
         raise ValueError("장면에 빠진 메시지가 있습니다")
+    return out
+
+
+PAGE_LINES = 6   # 한 장(장면)에 담는 말 줄 수의 상한 — 넘으면 코드가 메시지 경계에서 장면을 나눈다
+
+
+def _pace(episodes: list[dict], dialogue: list[dict]) -> list[dict]:
+    """말이 많은 장면을 나눈다. 짧은 대사를 여러 메시지로 쪼개 보내는 대화(제타 VN 등)는 한 장에 말풍선이
+    여섯 개씩 몰렸다(2026-11-24, 「말 너무 많아 보여, 천천히 차분하게」). 프롬프트에 숫자를 적는 대신 코드로 자른다.
+    나눈 뒤 한 화가 MAX_SCENES_PER_EPISODE 를 넘으면 화를 더 나눈다."""
+    out = []
+    for ep in episodes:
+        ranges = []
+        for a, b in ep["ranges"]:
+            start, lines = a, 0
+            for i in range(a, b + 1):
+                n = len(speech_lines(dialogue[i - 1].get("text", "")))
+                if lines and lines + n > PAGE_LINES:
+                    ranges.append((start, i - 1))
+                    start, lines = i, 0
+                lines += n
+            ranges.append((start, b))
+        for k in range(0, len(ranges), MAX_SCENES_PER_EPISODE):
+            out.append({"subtitle": ep.get("subtitle", ""), "ranges": ranges[k:k + MAX_SCENES_PER_EPISODE]})
     return out
 
 
@@ -381,6 +407,7 @@ def prepare(run_dir: Path) -> None:
         plan, meta = _plan(dialogue, title, cast)
     _write(run_dir / "plan-meta.json", meta)
     episodes = _check_plan(plan, len(dialogue))
+    episodes = _pace(episodes, dialogue)
 
     def photos(i: int) -> list[str]:
         legacy = {0: "main.jpg", 1: "co.jpg"}.get(i)
