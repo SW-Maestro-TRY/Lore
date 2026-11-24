@@ -486,7 +486,8 @@ def build_cover_prompt(*, title: str, genre: str, intro: str,
     # 그 화에 입지 않은 옷으로 그렸다(2026-11-24). 겉모습이 없거나 「시트 그대로」면 예전과 같다.
     if look and look.strip() not in ("시트 그대로", "시트 그대로.", "없음", "없음."):
         lines += ["", "이 화의 인물 겉모습(옷 · 상처 · 소지품) — 표지의 인물도 이 차림으로 그린다. "
-                      "시트에 옷이 여러 벌이면 이 글에 맞는 옷을 고른다:", look.strip()]
+                      "시트에 옷이 여러 벌이면 이 글에 맞는 옷을 고른다. 표지에 누구를 그릴지는 이 글로 정하지 않는다 — "
+                      "이 글에만 나오는 인물을 표지에 더 그리지 않고, 그리는 인물의 차림만 맞춘다:", look.strip()]
     work = "\n".join(x for x in lines if x is not None).strip()
 
     return (imageprompt.apply_style_sections(text, style)
