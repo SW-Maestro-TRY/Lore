@@ -450,7 +450,8 @@ def fixed_block(fixed) -> str:
 
 def build_cover_prompt(*, title: str, genre: str, intro: str,
                        char: dict | None, spec: dict | None, cast: list[dict],
-                       style: str, fixed_names=(), lang: str = "ko", co=(), attached=None, cast_sheet_names=()) -> str:
+                       style: str, fixed_names=(), lang: str = "ko", co=(), attached=None, cast_sheet_names=(),
+                       look: str = "") -> str:
     """표지 한 장. 컷을 나누지 않는 **한 장짜리 그림**이라 프롬프트 파일부터 다르다
     (`prompt/cover_prompt`).
 
@@ -481,6 +482,11 @@ def build_cover_prompt(*, title: str, genre: str, intro: str,
     if intro:
         lines += ["", "이 작품 소개 (이 안의 사건을 그리는 것이 아니다 — 주인공이 "
                       "어떤 처지인지 읽어 내는 데만 쓴다):", intro]
+    # 이 화 첫 장면의 겉모습(옷 · 상처 · 소지품). 표지는 시트만 보고 그려서, 시트에 옷이 여러 벌이면
+    # 그 화에 입지 않은 옷으로 그렸다(2026-11-24). 겉모습이 없거나 「시트 그대로」면 예전과 같다.
+    if look and look.strip() not in ("시트 그대로", "시트 그대로.", "없음", "없음."):
+        lines += ["", "이 화의 인물 겉모습(옷 · 상처 · 소지품) — 표지의 인물도 이 차림으로 그린다. "
+                      "시트에 옷이 여러 벌이면 이 글에 맞는 옷을 고른다:", look.strip()]
     work = "\n".join(x for x in lines if x is not None).strip()
 
     return (imageprompt.apply_style_sections(text, style)
@@ -933,7 +939,8 @@ def draw_continue(run_dir: Path, dry_run: bool = False, only=None,
                                         fixed_names=fixed_names, lang=lang, co=co_people,
                                         attached=sheet_plan(char, None)[0],
                                         cast_sheet_names=cover_cast_sheets(
-                                            cast_sheets, scenes, min(CAST_SHEET_LIMIT, REF_LIMIT - len(sheet_plan(char, None)[0]))))
+                                            cast_sheets, scenes, min(CAST_SHEET_LIMIT, REF_LIMIT - len(sheet_plan(char, None)[0]))),
+                                        look=str((scenes[0].get("look") if scenes else "") or ""))
         else:
             # 직전 그림이 **실제로 있는지**를 본다. 차례로 그릴 때는 늘 있지만,
             # 장면을 동시에 그리면 옆 장이 아직 안 끝나 없을 수 있다 — 그때
