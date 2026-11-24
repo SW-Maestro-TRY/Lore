@@ -899,6 +899,8 @@ def rescene(run_dir: Path, char: dict, n: int, reasons: list[str], note: str,
     if not path.exists():
         raise SystemExit(f"장면이 없습니다: {path}")
     prompt = R.compose("own/rescene_prompt", rescene_input(run_dir, char, n, reasons, note), lang=lang)
+    if os.environ.get("NH_NARRATION") == "label":   # 처음 장면을 나눌 때와 같은 나레이션 규칙(stage_scenes)
+        prompt += (Path(__file__).resolve().parent / "prompt" / "narration_label").read_text(encoding="utf-8")
     R.write_text(run_dir / f"rescene{n:02d}_prompt.txt", prompt)
     if dry_run:
         log(f"[장면 {n}] 프롬프트만 썼습니다 -> {run_dir / f'rescene{n:02d}_prompt.txt'}")
