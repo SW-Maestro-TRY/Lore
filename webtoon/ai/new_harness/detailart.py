@@ -584,7 +584,14 @@ def build_continue_prompt(direction: dict, scenes: list[dict], char: dict | None
                       "처음 알게 되는 것만 적는다. 무슨 말을 쓸지는 네가 정한다."]
     elif scenes:
         lines += ["", "[장면들 — 순서대로 일어나는 사건들이다]"]
+        # 한 화가 길면(화를 합쳐 30장이 넘는 경우) 모든 장면 요약이 32,000자 한도에 닿는다 —
+        # 그릴 자리 앞뒤 10장면만 준다.
+        lo, hi = (1, len(scenes)) if len(scenes) <= 24 else (max(1, scene_no - 10), min(len(scenes), scene_no + 10))
+        if lo > 1:
+            lines.append(f"(앞의 {lo - 1}장면 생략)")
         for i, s in enumerate(scenes, 1):
+            if not lo <= i <= hi:
+                continue
             mark = " ← 이 장에서 그릴 자리" if i == scene_no else ""
             summary = s.get("what") or ""
             lines.append(f"{i}. {summary}{mark}")
