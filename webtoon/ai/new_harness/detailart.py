@@ -242,9 +242,17 @@ def outfit_sheet(run_dir: Path, name: str, wear_text: str, base: Path, style: st
         if body:
             prompt += ("\n\nThe SECOND attached image shows this same person's body tattoos, drawn on him in swim trunks so every "
                        "tattoo is visible. Wherever skin shows in the new clothing (chest, belly, shoulders, arms, forearms, hands, "
-                       "legs), draw exactly those tattoos in the same places and shapes; anything the clothing covers stays covered. "
+                       "legs), draw exactly those tattoos in the same places, shapes and sizes; anything the clothing covers stays covered. "
                        "Take only the tattoos from the second image — not its clothing, face, pose or drawing style. "
-                       "The words written inside tattoos are part of the tattoos, not labels.")
+                       "The words written inside tattoos are part of the tattoos, not labels — copy them exactly as written below, "
+                       "never invent other words or another language.")
+            spec_f = body.with_suffix(".spec.json")
+            try:
+                tattoos = str(json.loads(spec_f.read_text(encoding="utf-8")).get("tattoos_en") or "").strip() if spec_f.is_file() else ""
+            except ValueError:
+                tattoos = ""
+            if tattoos:
+                prompt += "\n\nTattoos (exact):\n" + tattoos
         (folder / f"{out.stem}.prompt.txt").write_text(prompt, encoding="utf-8")
         log(f"[옷 시트] {name} · {wear_text[:40]} 그리는 중" + (" · 몸 문신 시트 같이" if body else ""))
         imagegen.paint("SHEET_IMAGE", prompt, out, refs=[base] + ([body] if body else []), kind=imagegen.SHEET_KIND)
