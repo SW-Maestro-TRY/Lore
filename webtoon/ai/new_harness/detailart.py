@@ -188,6 +188,17 @@ def sheet_stem(name: str) -> str:
     return re.sub(r"[\\/]", "_", (name or "").strip())
 
 
+def body_sheet(name: str) -> Path | None:
+    """옷에 가려 평소 시트에 안 보이는 몸 문신을 보여 주는 시트(수영복 차림). 부르는 쪽이 NH_BODY_SHEETS={"이름": 경로}로 준다.
+    옷 시트를 평소 시트에서 옷만 바꿔 그리면 가려져 있던 가슴·팔 문신을 모델이 알 수 없어 맨몸 장면에서 빠졌다(2026-11-26)."""
+    try:
+        table = json.loads(os.environ.get("NH_BODY_SHEETS") or "{}")
+    except ValueError:
+        return None
+    p = Path(str(table.get(name) or ""))
+    return p if str(p) not in ("", ".") and p.is_file() else None
+
+
 def outfit_sheet(run_dir: Path, name: str, wear_text: str, base: Path, style: str, log=print) -> Path:
     """옷 상태(채팅 만화)별 시트 — 같은 얼굴·머리·체형·문신에 옷만 바꾼 시트를 한 번 그려 두고 같은 옷 장면마다 쓴다.
 
@@ -202,7 +213,9 @@ def outfit_sheet(run_dir: Path, name: str, wear_text: str, base: Path, style: st
         return base
     folder = run_dir / "sheets" / "outfits"
     folder.mkdir(parents=True, exist_ok=True)
-    key = hashlib.sha1(f"{name}|{wear_text}|{style}".encode("utf-8")).hexdigest()[:12]
+    body = body_sheet(name)
+    body_tag = f"|{hashlib.md5(body.read_bytes()).hexdigest()[:8]}" if body else ""
+    key = hashlib.sha1(f"{name}|{wear_text}|{style}{body_tag}".encode("utf-8")).hexdigest()[:12]
     out = folder / f"{sheet_stem(name)}-{key}.png"
     if out.exists():
         return out
@@ -226,9 +239,15 @@ def outfit_sheet(run_dir: Path, name: str, wear_text: str, base: Path, style: st
                   "Anything the reference wears that is not part of this clothing (hood, hat, animal ears, ribbons, jacket, accessories) "
                   "is removed — the head shows the bare natural hair. Front full-body view and a face close-up side by side, "
                   "plain white background. No text, no labels, no speech bubbles.")
+        if body:
+            prompt += ("\n\nThe SECOND attached image shows this same person's body tattoos, drawn on him in swim trunks so every "
+                       "tattoo is visible. Wherever skin shows in the new clothing (chest, belly, shoulders, arms, forearms, hands, "
+                       "legs), draw exactly those tattoos in the same places and shapes; anything the clothing covers stays covered. "
+                       "Take only the tattoos from the second image — not its clothing, face, pose or drawing style. "
+                       "The words written inside tattoos are part of the tattoos, not labels.")
         (folder / f"{out.stem}.prompt.txt").write_text(prompt, encoding="utf-8")
-        log(f"[옷 시트] {name} · {wear_text[:40]} 그리는 중")
-        imagegen.paint("SHEET_IMAGE", prompt, out, refs=[base], kind=imagegen.SHEET_KIND)
+        log(f"[옷 시트] {name} · {wear_text[:40]} 그리는 중" + (" · 몸 문신 시트 같이" if body else ""))
+        imagegen.paint("SHEET_IMAGE", prompt, out, refs=[base] + ([body] if body else []), kind=imagegen.SHEET_KIND)
     except BaseException as exc:  # noqa: BLE001 — 못 그리면 원래 시트로
         log(f"[옷 시트] {name} 실패 — 원래 시트로 그린다: {type(exc).__name__}: {str(exc)[:160]}")
     finally:
